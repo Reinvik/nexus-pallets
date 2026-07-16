@@ -959,59 +959,59 @@ export default function App({ user }: { user: any }) {
                                       </span>
                                     </div>
 
-                                    {/* CONTADORES DE PALLETS (TÁCTILES) */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* CONTADORES DE PALLETS (TÁCTILES COMPACTOS EN EJE Y) */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                       
                                       {/* COLUMNA: PALLETS MADERA */}
-                                      <div className="bg-amber-50/20 border border-amber-100 p-2.5 rounded-lg space-y-2.5">
-                                        <div className="flex justify-between items-center">
+                                      <div className="bg-amber-50/20 border border-amber-100 p-2.5 rounded-xl space-y-2">
+                                        <div className="flex justify-between items-center select-none">
                                           <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">
                                             Pallet Madera
                                           </span>
-                                          <span className="text-xs font-black text-amber-900 font-mono">
-                                            PXP: {catData.wood_bases}+{catData.wood_extra} ({catData.wood_bases + catData.wood_extra})
+                                          <span className="text-[11px] font-black text-amber-950 font-mono bg-amber-100/50 px-1.5 py-0.5 rounded">
+                                            {catData.wood_bases}+{catData.wood_extra} ({catData.wood_bases + catData.wood_extra})
                                           </span>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-2">
-                                          {/* Bases */}
-                                          <div className="bg-white p-2 rounded border border-slate-200/60 text-center">
-                                            <span className="text-[9px] font-bold text-slate-400 block mb-1">Base</span>
-                                            <div className="flex items-center justify-center gap-1.5">
+                                        <div className="space-y-1.5 bg-white p-2 rounded-lg border border-slate-100/60">
+                                          {/* Base */}
+                                          <div className="flex items-center justify-between text-xs">
+                                            <span className="text-[10px] font-bold text-slate-400">Base</span>
+                                            <div className="flex items-center gap-2 select-none">
                                               <button
                                                 type="button"
                                                 onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_bases', catData.wood_bases - 1)}
-                                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 w-6 h-6 rounded flex items-center justify-center text-xs font-bold cursor-pointer"
+                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
                                               >
                                                 -
                                               </button>
-                                              <span className="font-mono text-sm font-black w-5">{catData.wood_bases}</span>
+                                              <span className="font-mono text-xs font-black w-6 text-center">{catData.wood_bases}</span>
                                               <button
                                                 type="button"
                                                 onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_bases', catData.wood_bases + 1)}
-                                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 w-6 h-6 rounded flex items-center justify-center text-xs font-bold cursor-pointer"
+                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
                                               >
                                                 +
                                               </button>
                                             </div>
                                           </div>
                                           
-                                          {/* Segunda Base (Extra) */}
-                                          <div className="bg-white p-2 rounded border border-slate-200/60 text-center">
-                                            <span className="text-[9px] font-bold text-slate-400 block mb-1">2da Base (Extra)</span>
-                                            <div className="flex items-center justify-center gap-1.5">
+                                          {/* Extra */}
+                                          <div className="flex items-center justify-between text-xs border-t border-slate-50 pt-1.5">
+                                            <span className="text-[10px] font-bold text-slate-400">2da Base (Extra)</span>
+                                            <div className="flex items-center gap-2 select-none">
                                               <button
                                                 type="button"
                                                 onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_extra', catData.wood_extra - 1)}
-                                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 w-6 h-6 rounded flex items-center justify-center text-xs font-bold cursor-pointer"
+                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
                                               >
                                                 -
                                               </button>
-                                              <span className="font-mono text-sm font-black w-5">{catData.wood_extra}</span>
+                                              <span className="font-mono text-xs font-black w-6 text-center">{catData.wood_extra}</span>
                                               <button
                                                 type="button"
                                                 onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_extra', catData.wood_extra + 1)}
-                                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 w-6 h-6 rounded flex items-center justify-center text-xs font-bold cursor-pointer"
+                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
                                               >
                                                 +
                                               </button>
@@ -1021,55 +1021,55 @@ export default function App({ user }: { user: any }) {
                                       </div>
 
                                       {/* COLUMNA: PALLETS PLÁSTICOS */}
-                                      <div className="bg-emerald-50/20 border border-emerald-100 p-2.5 rounded-lg space-y-2.5">
-                                        <div className="flex justify-between items-center">
+                                      <div className="bg-emerald-50/20 border border-emerald-100 p-2.5 rounded-xl space-y-2">
+                                        <div className="flex justify-between items-center select-none">
                                           <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider">
                                             Pallet Plástico
                                           </span>
-                                          <span className="text-xs font-black text-emerald-900 font-mono">
-                                            PXP: {catData.plastic_bases}+{catData.plastic_extra} ({catData.plastic_bases + catData.plastic_extra})
+                                          <span className="text-[11px] font-black text-emerald-950 font-mono bg-emerald-100/50 px-1.5 py-0.5 rounded">
+                                            {catData.plastic_bases}+{catData.plastic_extra} ({catData.plastic_bases + catData.plastic_extra})
                                           </span>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-2">
-                                          {/* Bases */}
-                                          <div className="bg-white p-2 rounded border border-slate-200/60 text-center">
-                                            <span className="text-[9px] font-bold text-slate-400 block mb-1">Base</span>
-                                            <div className="flex items-center justify-center gap-1.5">
+                                        <div className="space-y-1.5 bg-white p-2 rounded-lg border border-slate-100/60">
+                                          {/* Base */}
+                                          <div className="flex items-center justify-between text-xs">
+                                            <span className="text-[10px] font-bold text-slate-400">Base</span>
+                                            <div className="flex items-center gap-2 select-none">
                                               <button
                                                 type="button"
                                                 onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_bases', catData.plastic_bases - 1)}
-                                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 w-6 h-6 rounded flex items-center justify-center text-xs font-bold cursor-pointer"
+                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
                                               >
                                                 -
                                               </button>
-                                              <span className="font-mono text-sm font-black w-5">{catData.plastic_bases}</span>
+                                              <span className="font-mono text-xs font-black w-6 text-center">{catData.plastic_bases}</span>
                                               <button
                                                 type="button"
                                                 onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_bases', catData.plastic_bases + 1)}
-                                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 w-6 h-6 rounded flex items-center justify-center text-xs font-bold cursor-pointer"
+                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
                                               >
                                                 +
                                               </button>
                                             </div>
                                           </div>
                                           
-                                          {/* Segunda Base (Extra) */}
-                                          <div className="bg-white p-2 rounded border border-slate-200/60 text-center">
-                                            <span className="text-[9px] font-bold text-slate-400 block mb-1">2da Base (Extra)</span>
-                                            <div className="flex items-center justify-center gap-1.5">
+                                          {/* Extra */}
+                                          <div className="flex items-center justify-between text-xs border-t border-slate-50 pt-1.5">
+                                            <span className="text-[10px] font-bold text-slate-400">2da Base (Extra)</span>
+                                            <div className="flex items-center gap-2 select-none">
                                               <button
                                                 type="button"
                                                 onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_extra', catData.plastic_extra - 1)}
-                                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 w-6 h-6 rounded flex items-center justify-center text-xs font-bold cursor-pointer"
+                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
                                               >
                                                 -
                                               </button>
-                                              <span className="font-mono text-sm font-black w-5">{catData.plastic_extra}</span>
+                                              <span className="font-mono text-xs font-black w-6 text-center">{catData.plastic_extra}</span>
                                               <button
                                                 type="button"
                                                 onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_extra', catData.plastic_extra + 1)}
-                                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 w-6 h-6 rounded flex items-center justify-center text-xs font-bold cursor-pointer"
+                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
                                               >
                                                 +
                                               </button>
@@ -1077,7 +1077,6 @@ export default function App({ user }: { user: any }) {
                                           </div>
                                         </div>
                                       </div>
-
                                     </div>
 
                                     {/* Si es categoría BANDEJAS, agregar el contador de bandejas físicas */}
