@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --color-light-bg: #f1f5f9; /* Slate-100 */
+  --color-light-card: #ffffff;
+  --color-brand-primary: #0a5c36; /* Verde CIAL */
+  --color-brand-secondary: #08482a; /* Verde Oscuro CIAL */
+  --color-brand-light: #e6f4ea; /* Verde Claro */
+  --color-brand-border: #a3cfb6;
+  --color-brand-emerald: #10b981; /* Emerald-500 */
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-light-bg);
+  color: #1e293b; /* Slate-800 */
+  margin: 0;
+  padding: 0;
+}
