@@ -57,6 +57,7 @@ interface CategoryData {
 
 interface ZonalDetail {
   zonal_name: string;
+  viaje_numero?: number; // Número de viaje o carga (ej: 2, 3)
   lugar_camion: string;
   congelados: CategoryData;
   estandar: CategoryData;
@@ -213,14 +214,11 @@ export default function App({ user }: { user: any }) {
       return;
     }
 
-    // Buscar un zonal que no esté ya seleccionado
-    const availableZonal = ZONALES_LIST.find(
-      z => !selectedZonals.some(sz => sz.zonal_name === z)
-    ) || ZONALES_LIST[0];
-
+    const availableZonal = ZONALES_LIST[0]; // Primer zonal de la lista por defecto
     const posiciones = ["1° (Fondo)", "2°", "3°", "4° (Puerta)"];
     const newZonal: ZonalDetail = {
       zonal_name: availableZonal,
+      viaje_numero: 1,
       lugar_camion: posiciones[selectedZonals.length] || '1° (Fondo)',
       congelados: { kilos: 0, wood_bases: 0, wood_extra: 0, plastic_bases: 0, plastic_extra: 0 },
       estandar: { kilos: 0, wood_bases: 0, wood_extra: 0, plastic_bases: 0, plastic_extra: 0 },
@@ -393,6 +391,15 @@ export default function App({ user }: { user: any }) {
     const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
     try {
+      // Mapear zonales para concatenar el número de viaje/carga si es mayor que 1
+      const formattedZonals = selectedZonals.map(sz => {
+        const viajeNum = sz.viaje_numero || 1;
+        return {
+          ...sz,
+          zonal_name: viajeNum > 1 ? `${sz.zonal_name} ${viajeNum}` : sz.zonal_name
+        };
+      });
+
       const { error } = await supabase
         .from('pallet_dispatches')
         .insert([{
@@ -403,7 +410,7 @@ export default function App({ user }: { user: any }) {
           inspection_time: timeStr,
           positions_occupied: positionsOccupied,
           checklist: checklist,
-          zonals_detail: selectedZonals,
+          zonals_detail: formattedZonals,
           observations: observations,
           completed_at: now.toISOString(),
           temp_1er: temp1er,
@@ -875,7 +882,7 @@ export default function App({ user }: { user: any }) {
                               #{zonalIndex + 1}
                             </span>
                             <span className="font-extrabold text-sm tracking-wide">
-                              {zonal.zonal_name || "Seleccionar Zonal..."}
+                              {zonal.zonal_name || "Seleccionar Zonal..."} {zonal.viaje_numero && zonal.viaje_numero > 1 ? `${zonal.viaje_numero}` : ''}
                             </span>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${isExpanded ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
                               {zonal.lugar_camion}
@@ -910,8 +917,8 @@ export default function App({ user }: { user: any }) {
                         {/* Detalle del Zonal (Cuerpo del Acordeón) */}
                         {isExpanded && (
                           <div className="p-4 space-y-5 border-t border-slate-100">
-                            {/* Selector de Zonal y Andén */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                            {/* Selector de Zonal, N° Viaje y Andén */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                               <div>
                                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Zonal</label>
                                 <select
@@ -923,6 +930,26 @@ export default function App({ user }: { user: any }) {
                                     <option key={idx} value={z}>{z}</option>
                                   ))}
                                 </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">N° Viaje / Carga</label>
+                                <div className="flex items-center gap-1.5 select-none bg-white border border-slate-200 rounded-lg p-1 justify-between">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateZonal(zonalIndex, 'viaje_numero', Math.max(1, (zonal.viaje_numero || 1) - 1))}
+                                    className="bg-slate-100 active:bg-slate-200 text-slate-700 w-7.5 h-7.5 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="font-mono text-xs font-black text-slate-800 w-6 text-center">{zonal.viaje_numero || 1}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateZonal(zonalIndex, 'viaje_numero', (zonal.viaje_numero || 1) + 1)}
+                                    className="bg-slate-100 active:bg-slate-200 text-slate-700 w-7.5 h-7.5 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
+                                  >
+                                    +
+                                  </button>
+                                </div>
                               </div>
                               <div>
                                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Lugar en el Camión (1° = Fondo)</label>
