@@ -18,7 +18,8 @@ import {
   ChevronUp,
   RotateCcw,
   Package,
-  LogOut
+  LogOut,
+  Edit2
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -86,6 +87,7 @@ interface DispatchRecord {
   temp_1er: number;
   temp_2do: number;
   temp_3er: number;
+  close_time?: string | null;
 }
 
 interface PalletReturnRecord {
@@ -126,6 +128,11 @@ export default function App({ user }: { user: any }) {
   const [temp1er, setTemp1er] = useState<number>(0);
   const [temp2do, setTemp2do] = useState<number>(-18);
   const [temp3er, setTemp3er] = useState<number>(0);
+  const [closeTime, setCloseTime] = useState<string>('');
+
+  // Estados para edición diferida de hora de cierre de camión en historial
+  const [editingCloseTimes, setEditingCloseTimes] = useState<{ [key: string]: string }>({});
+  const [savingCloseTimeId, setSavingCloseTimeId] = useState<string | null>(null);
 
   // Checklist de 5 items
   const [checklist, setChecklist] = useState({
@@ -369,6 +376,32 @@ export default function App({ user }: { user: any }) {
   };
 
   // Enviar Despacho a Supabase
+  const handleSaveCloseTime = async (recordId: string, time: string) => {
+    setSavingCloseTimeId(recordId);
+    try {
+      const { error } = await supabase
+        .from('pallet_dispatches')
+        .update({ close_time: time || null })
+        .eq('id', recordId);
+
+      if (error) throw error;
+      
+      // Actualizar estado local para evitar recarga completa
+      setRecords(prev => prev.map(r => r.id === recordId ? { ...r, close_time: time || null } : r));
+      
+      // Salir del modo edición
+      setEditingCloseTimes(prev => {
+        const copy = { ...prev };
+        delete copy[recordId];
+        return copy;
+      });
+    } catch (err: any) {
+      alert("Error al actualizar la hora de cierre: " + err.message);
+    } finally {
+      setSavingCloseTimeId(null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supervisorName) {
@@ -416,7 +449,8 @@ export default function App({ user }: { user: any }) {
           completed_at: now.toISOString(),
           temp_1er: temp1er,
           temp_2do: temp2do,
-          temp_3er: temp3er
+          temp_3er: temp3er,
+          close_time: closeTime || null
         }]);
 
       if (error) throw error;
@@ -431,6 +465,7 @@ export default function App({ user }: { user: any }) {
       setTemp1er(0);
       setTemp2do(-18);
       setTemp3er(0);
+      setCloseTime('');
       setChecklist({
         postura_anden: true,
         limpieza_estructura: true,
@@ -633,7 +668,7 @@ export default function App({ user }: { user: any }) {
                 1. Datos del Camión & Supervisor
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Supervisor (Autenticado)</label>
                   <input 
@@ -662,6 +697,29 @@ export default function App({ user }: { user: any }) {
                     onChange={(e) => setTruckNumber(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-mono font-bold"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Hora Cierre (Opcional)</label>
+                  <div className="flex gap-1.5 select-none">
+                    <input 
+                      type="time" 
+                      value={closeTime} 
+                      onChange={(e) => setCloseTime(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-mono font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const pad = (n: number) => n.toString().padStart(2, '0');
+                        setCloseTime(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
+                      }}
+                      className="bg-brand-primary hover:bg-brand-secondary text-white px-2.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center"
+                      title="Poner Hora Actual"
+                    >
+                      Ahora
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1309,6 +1367,69 @@ export default function App({ user }: { user: any }) {
                           </span>
                           <div className="text-[10px] text-slate-500 font-bold font-mono mt-1 bg-slate-50 border border-slate-100 px-2 py-1 rounded inline-block">
                             Termos Camión: 1er: {rec.temp_1er}°C | 2do: {rec.temp_2do}°C | 3er: {rec.temp_3er}°C
+                          </div>
+
+                          {/* Hora de Cierre Camión en Historial */}
+                          <div className="mt-1.5 flex items-center gap-2 select-none">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-brand-primary" />
+                              Cierre Camión:
+                            </span>
+                            
+                            {editingCloseTimes[rec.id] !== undefined ? (
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="time"
+                                  value={editingCloseTimes[rec.id]}
+                                  onChange={(e) => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: e.target.value }))}
+                                  className="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] font-mono font-bold focus:outline-none focus:border-brand-primary"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const now = new Date();
+                                    const pad = (n: number) => n.toString().padStart(2, '0');
+                                    setEditingCloseTimes(prev => ({ ...prev, [rec.id]: `${pad(now.getHours())}:${pad(now.getMinutes())}` }));
+                                  }}
+                                  className="bg-slate-200 hover:bg-slate-300 text-slate-750 px-1.5 py-0.5 rounded text-[10px] font-black cursor-pointer"
+                                >
+                                  Ahora
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={savingCloseTimeId === rec.id}
+                                  onClick={() => handleSaveCloseTime(rec.id, editingCloseTimes[rec.id])}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 rounded text-[10px] font-black shadow-sm flex items-center gap-0.5 cursor-pointer disabled:opacity-50"
+                                >
+                                  {savingCloseTimeId === rec.id ? '...' : 'OK'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCloseTimes(prev => {
+                                    const copy = { ...prev };
+                                    delete copy[rec.id];
+                                    return copy;
+                                  })}
+                                  className="bg-slate-100 hover:bg-slate-200 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer"
+                                >
+                                  X
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[11px] font-mono font-black ${rec.close_time ? 'text-brand-primary bg-emerald-50 border border-emerald-100 px-1.5 py-0.2 rounded' : 'text-slate-400 italic font-bold'}`}>
+                                  {rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: rec.close_time || '' }))}
+                                  className="text-slate-400 hover:text-brand-primary p-0.5 rounded transition-all cursor-pointer"
+                                  title="Editar Hora de Cierre"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="text-right text-xs text-slate-400 font-mono">
