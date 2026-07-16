@@ -50,7 +50,7 @@ function Root() {
     );
   }
 
-  return user ? <App /> : <LoginPage />;
+  return user ? <App user={user} /> : <LoginPage />;
 }
 
 createRoot(document.getElementById('root')!).render(

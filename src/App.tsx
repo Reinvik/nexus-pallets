@@ -96,7 +96,16 @@ interface PalletReturnRecord {
   created_at: string;
 }
 
-export default function App() {
+const formatSupervisorName = (email: string | undefined): string => {
+  if (!email) return 'Supervisor';
+  const username = email.split('@')[0];
+  return username
+    .split('.')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+export default function App({ user }: { user: any }) {
   const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales'>('nuevo');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -108,7 +117,7 @@ export default function App() {
   const [returnsList, setReturnsList] = useState<PalletReturnRecord[]>([]);
 
   // Datos del Formulario actual de Despacho
-  const [supervisorName, setSupervisorName] = useState('');
+  const [supervisorName, setSupervisorName] = useState(() => formatSupervisorName(user?.email));
   const [truckNumber, setTruckNumber] = useState('');
   const [truckPlate, setTruckPlate] = useState('');
   const [positionsOccupied, setPositionsOccupied] = useState<number>(26);
@@ -131,7 +140,7 @@ export default function App() {
 
   // State para el modal de registrar retorno táctil
   const [showReturnModal, setShowReturnModal] = useState<string | null>(null); // Nombre del zonal seleccionado
-  const [returnSupervisor, setReturnSupervisor] = useState('');
+  const [returnSupervisor, setReturnSupervisor] = useState(() => formatSupervisorName(user?.email));
   const [returnWood, setReturnWood] = useState(0);
   const [returnPlastic, setReturnPlastic] = useState(0);
 
@@ -157,6 +166,13 @@ export default function App() {
     fetchHistory();
     fetchReturns();
   }, []);
+
+  useEffect(() => {
+    if (user?.email) {
+      setSupervisorName(formatSupervisorName(user.email));
+      setReturnSupervisor(formatSupervisorName(user.email));
+    }
+  }, [user]);
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -596,14 +612,12 @@ export default function App() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Supervisor *</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Supervisor (Autenticado)</label>
                   <input 
                     type="text" 
-                    placeholder="Ej. Juan Pérez" 
                     value={supervisorName} 
-                    onChange={(e) => setSupervisorName(e.target.value)}
-                    required
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-semibold"
+                    disabled
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 cursor-not-allowed select-none"
                   />
                 </div>
                 <div>
@@ -1528,14 +1542,12 @@ export default function App() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Supervisor Receptor *</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Supervisor Receptor (Autenticado)</label>
                 <input 
                   type="text" 
-                  placeholder="Nombre de quien recibe en CD" 
                   value={returnSupervisor} 
-                  onChange={(e) => setReturnSupervisor(e.target.value)}
-                  required
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:border-brand-primary focus:bg-white"
+                  disabled
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-500 cursor-not-allowed select-none"
                 />
               </div>
 
