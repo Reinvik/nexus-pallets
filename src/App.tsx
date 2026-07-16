@@ -19,7 +19,8 @@ import {
   RotateCcw,
   Package,
   LogOut,
-  Edit2
+  Edit2,
+  FileDown
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -376,6 +377,259 @@ export default function App({ user }: { user: any }) {
   };
 
   // Enviar Despacho a Supabase
+  const handleDownloadPDF = (rec: DispatchRecord) => {
+    // 1. Obtener los renglones correspondientes a los 4 zonales (con vacíos si son menos de 4)
+    const rows: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const z = rec.zonals_detail[i];
+      if (z) {
+        const wood = z.congelados.wood_bases + z.congelados.wood_extra +
+                     z.estandar.wood_bases + z.estandar.wood_extra +
+                     z.bandejas.wood_bases + z.bandejas.wood_extra;
+        const plastic = z.congelados.plastic_bases + z.congelados.plastic_extra +
+                        z.estandar.plastic_bases + z.estandar.plastic_extra +
+                        z.bandejas.plastic_bases + z.bandejas.plastic_extra;
+        const bandejas = z.bandejas.bandejas_count || 0;
+        
+        rows.push(`
+          <tr style="text-align: center; font-size: 11px; height: 35px;">
+            <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace;">${i + 1}</td>
+            <td style="border: 1px solid #000; padding: 6px; text-align: left; font-weight: bold; text-transform: uppercase; font-family: sans-serif;">
+              ${z.zonal_name} ${z.viaje_numero && z.viaje_numero > 1 ? z.viaje_numero : ''} 
+              <span style="font-size: 8px; color: #555; font-weight: normal; margin-left: 4px;">(${z.lugar_camion})</span>
+            </td>
+            <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${bandejas > 0 ? bandejas : '—'}</td>
+            <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${wood > 0 ? wood : 'X'}</td>
+            <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${plastic > 0 ? plastic : 'X'}</td>
+            <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${z.sello || ''}</td>
+            ${i === 0 ? `
+            <td rowspan="4" style="border: 1px solid #000; padding: 0; vertical-align: middle;">
+              <table style="width: 100%; height: 100%; border-collapse: collapse; border: none; text-align: center; font-size: 9px; font-family: sans-serif;">
+                <tr style="border-bottom: 1px solid #000; height: 33.3%;">
+                  <td style="padding: 4px; font-weight: bold; width: 45%; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">1ER</td>
+                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_1er}°C</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #000; height: 33.3%;">
+                  <td style="padding: 4px; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">2DO</td>
+                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_2do}°C</td>
+                </tr>
+                <tr style="height: 33.3%;">
+                  <td style="padding: 4px; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">3ER</td>
+                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_3er}°C</td>
+                </tr>
+              </table>
+            </td>
+            ` : ''}
+          </tr>
+        `);
+      } else {
+        rows.push(`
+          <tr style="text-align: center; font-size: 11px; height: 35px;">
+            <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; color: #ccc;">${i + 1}</td>
+            <td style="border: 1px solid #000; padding: 6px; text-align: left; color: #ccc;">—</td>
+            <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
+            <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
+            <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
+            <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
+            ${i === 0 ? `
+            <td rowspan="4" style="border: 1px solid #000; padding: 0; vertical-align: middle;">
+              <table style="width: 100%; height: 100%; border-collapse: collapse; border: none; text-align: center; font-size: 9px; font-family: sans-serif;">
+                <tr style="border-bottom: 1px solid #000; height: 33.3%;">
+                  <td style="padding: 4px; font-weight: bold; width: 45%; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">1ER</td>
+                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_1er}°C</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #000; height: 33.3%;">
+                  <td style="padding: 4px; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">2DO</td>
+                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_2do}°C</td>
+                </tr>
+                <tr style="height: 33.3%;">
+                  <td style="padding: 4px; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">3ER</td>
+                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_3er}°C</td>
+                </tr>
+              </table>
+            </td>
+            ` : ''}
+          </tr>
+        `);
+      }
+    }
+
+    // Totales agregados
+    const totalW = rec.zonals_detail.reduce((sum, z) => sum + z.congelados.wood_bases + z.congelados.wood_extra + z.estandar.wood_bases + z.estandar.wood_extra + z.bandejas.wood_bases + z.bandejas.wood_extra, 0);
+    const totalP = rec.zonals_detail.reduce((sum, z) => sum + z.congelados.plastic_bases + z.congelados.plastic_extra + z.estandar.plastic_bases + z.estandar.plastic_extra + z.bandejas.plastic_bases + z.bandejas.plastic_extra, 0);
+    const totalB = rec.zonals_detail.reduce((sum, z) => sum + (z.bandejas.bandejas_count || 0), 0);
+
+    const pdfHtml = `
+      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 9.5px; padding: 20px; color: #000; background-color: #fff; line-height: 1.25;">
+        
+        <!-- Header -->
+        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px;">
+          <tr>
+            <td style="width: 25%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle;">
+              <img src="${cialLogo}" style="height: 48px; width: auto; object-fit: contain;" />
+            </td>
+            <td style="width: 50%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle;">
+              <div style="font-size: 13px; font-weight: 900; letter-spacing: 0.5px; font-family: sans-serif;">CHECK LIST CAMIONES SUR Y NORTE</div>
+              <div style="font-size: 8.5px; margin-top: 2px; font-weight: bold; color: #444; font-family: sans-serif;">En oficina del Jefe de turno (Carpeta)</div>
+            </td>
+            <td style="width: 25%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle; background-color: #fafafa;">
+              <div style="font-size: 7.5px; font-weight: 800; color: #666; text-transform: uppercase; letter-spacing: 0.5px; font-family: sans-serif;">NUMERO CAMIÓN / ANDÉN</div>
+              <div style="font-size: 17px; font-weight: 900; margin-top: 2px; font-family: monospace;">${rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'}</div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Datos generales -->
+        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
+          <tr style="height: 24px;">
+            <td style="width: 33.3%; border: 1px solid #000; padding: 5px;"><strong>HORA ENTREGA HOJA:</strong> </td>
+            <td style="width: 33.3%; border: 1px solid #000; padding: 5px;"><strong>HORA INICIO PROCESO:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.inspection_time}</span></td>
+            <td style="width: 33.3%; border: 1px solid #000; padding: 5px;"><strong>HORA ENTREGA DOCUMENTOS:</strong> </td>
+          </tr>
+          <tr style="height: 24px;">
+            <td colspan="2" style="border: 1px solid #000; padding: 5px;"><strong>ZONALES:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.zonals_detail.map(z => {
+              const viajeNum = z.viaje_numero || 1;
+              return viajeNum > 1 ? `${z.zonal_name} ${viajeNum}` : z.zonal_name;
+            }).join(' - ')}</span></td>
+            <td style="border: 1px solid #000; padding: 5px;"><strong>PATENTE:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.truck_plate !== 'N/A' ? rec.truck_plate : 'S/A'}</span></td>
+          </tr>
+          <tr style="height: 24px;">
+            <td style="border: 1px solid #000; padding: 5px;"><strong>Hora Inspección:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.inspection_time}</span></td>
+            <td colspan="2" style="border: 1px solid #000; padding: 5px;"><strong>FECHA:</strong> <span style="font-family: monospace; font-weight: bold;">${getFormatDate(rec.inspection_date)}</span></td>
+          </tr>
+        </table>
+
+        <!-- Checklist de rampa -->
+        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
+          <thead>
+            <tr style="background-color: #f3f4f6; font-weight: 900; text-align: center; height: 24px;">
+              <th style="border: 1px solid #000; padding: 5px; text-align: left; width: 70%; font-size: 8.5px; letter-spacing: 0.5px;">ITEMS DE INSPECCIÓN</th>
+              <th style="border: 1px solid #000; padding: 5px; width: 15%; font-size: 8px;">CUMPLE</th>
+              <th style="border: 1px solid #000; padding: 5px; width: 15%; font-size: 8px;">NO CUMPLE</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="height: 22px;">
+              <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">1. Horario de postura en el Andén</td>
+              <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${rec.checklist.postura_anden ? 'X' : ''}</td>
+              <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${!rec.checklist.postura_anden ? 'X' : ''}</td>
+            </tr>
+            <tr style="height: 22px;">
+              <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">2. Estado de camión a Cargar (Limpieza, Daño estructural)</td>
+              <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${rec.checklist.limpieza_estructura ? 'X' : ''}</td>
+              <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${!rec.checklist.limpieza_estructura ? 'X' : ''}</td>
+            </tr>
+            <tr style="height: 22px;">
+              <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">3. Estado de Luces (ENCENDIDAS)</td>
+              <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${rec.checklist.luces_encendidas ? 'X' : ''}</td>
+              <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${!rec.checklist.luces_encendidas ? 'X' : ''}</td>
+            </tr>
+            <tr style="height: 22px;">
+              <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">4. Verificación Separador Térmico</td>
+              <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${rec.checklist.separador_termico ? 'X' : ''}</td>
+              <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${!rec.checklist.separador_termico ? 'X' : ''}</td>
+            </tr>
+            <tr style="height: 22px;">
+              <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">5. Verificación Lingas por camión</td>
+              <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${rec.checklist.lingas_camion ? 'X' : ''}</td>
+              <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${!rec.checklist.lingas_camion ? 'X' : ''}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Posiciones ocupadas -->
+        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
+          <tr style="height: 24px;">
+            <td style="width: 50%; border: 1px solid #000; padding: 5px;"><strong>Posiciones ocupadas dentro del camión:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 10.5px;">${rec.positions_occupied}</span></td>
+            <td style="width: 50%; border: 1px solid #000; padding: 5px;"><strong>Alto de Bandejas:</strong> </td>
+          </tr>
+          <tr style="height: 24px;">
+            <td colspan="2" style="border: 1px solid #000; padding: 5px;"><strong>Motivos del alto:</strong> </td>
+          </tr>
+        </table>
+
+        <!-- Tabla principal de carga -->
+        <div style="font-size: 10px; font-weight: 900; text-align: center; margin-top: 15px; margin-bottom: 5px; letter-spacing: 0.5px; text-transform: uppercase; font-family: sans-serif;">CARGA ADICIONAL ZONAL</div>
+        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 12px; font-size: 9px;">
+          <thead>
+            <tr style="background-color: #f3f4f6; font-weight: 900; text-align: center; font-size: 8px; height: 24px;">
+              <th style="border: 1px solid #000; padding: 4px; width: 5%;">N°</th>
+              <th style="border: 1px solid #000; padding: 4px; width: 28%; text-align: left;">ZONAL</th>
+              <th style="border: 1px solid #000; padding: 4px; width: 14%;">BANDEJAS</th>
+              <th style="border: 1px solid #000; padding: 4px; width: 13%;">PALLET MADERA</th>
+              <th style="border: 1px solid #000; padding: 4px; width: 13%;">PALLET PLÁSTICO</th>
+              <th style="border: 1px solid #000; padding: 4px; width: 15%;">N° DE SELLO</th>
+              <th style="border: 1px solid #000; padding: 4px; width: 12%;">TEMPERATURA TERMO / °C</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.join('')}
+          </tbody>
+        </table>
+
+        <!-- Observaciones y firmas -->
+        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 9px;">
+          <tr>
+            <td colspan="2" style="border: 1px solid #000; padding: 6px; height: 35px; vertical-align: top; font-size: 8.5px;">
+              <strong>OBSERVACIONES:</strong> <span style="font-weight: 600;">${rec.observations || ''}</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="width: 55%; border: 1px solid #000; padding: 5px; vertical-align: top; height: 24px;">
+              <strong>SUPERVISOR:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.supervisor_name}</span>
+            </td>
+            <td rowspan="3" style="width: 45%; border: 1px solid #000; padding: 6px; text-align: center; vertical-align: middle; height: 80px; background-color: #fafafa;">
+              <div style="font-size: 7.5px; color: #555; font-weight: bold; text-transform: uppercase; margin-bottom: 30px; letter-spacing: 0.5px;">Timbre y Firma</div>
+              <div style="border-top: 1.5px dashed #000; width: 85%; margin: 0 auto;"></div>
+            </td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #000; padding: 5px; height: 24px;">
+              <strong>HORA CIERRE CAMIÓN:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 10.5px;">${rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #000; padding: 5px; height: 24px;">
+              <strong>HORA ENTREGA:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.close_time || ''}</span>
+            </td>
+          </tr>
+          <tr style="height: 24px;">
+            <td colspan="2" style="border: 1px solid #000; padding: 5px; background-color: #fcfcfc;">
+              <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 8.5px; text-transform: uppercase;">
+                <span>KILOS TOTALES DEL CAMIÓN: _______________</span>
+                <span style="font-family: monospace; padding-right: 10px;">TOTALES DESPACHO: M:${totalW} | P:${totalP} | B:${totalB}</span>
+              </div>
+            </td>
+          </tr>
+        </table>
+        
+        <div style="font-size: 7.5px; font-weight: bold; color: #666; text-align: center; margin-top: 15px; letter-spacing: 1px; text-transform: uppercase;">CONTROL UNIDADES LOGÍSTICAS — CIAL ALIMENTOS</div>
+      </div>
+    `;
+
+    // Configurar y guardar el PDF usando html2pdf
+    const element = document.createElement('div');
+    element.innerHTML = pdfHtml;
+    
+    // Opciones del documento PDF
+    const opt = {
+      margin:       [10, 10, 10, 10],
+      filename:     `Despacho_Camion_${rec.truck_plate || 'SinPatente'}_${rec.inspection_date}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2.5, useCORS: true, logging: false },
+      jsPDF:        { unit: 'mm', format: 'letter', orientation: 'portrait' }
+    };
+
+    // Usar la librería global cargada en window
+    // @ts-ignore
+    if (window.html2pdf) {
+      // @ts-ignore
+      window.html2pdf().from(element).set(opt).save();
+    } else {
+      alert("Error: No se pudo cargar la librería html2pdf.js. Inténtalo de nuevo.");
+    }
+  };
+
   const handleSaveCloseTime = async (recordId: string, time: string) => {
     setSavingCloseTimeId(recordId);
     try {
@@ -1460,8 +1714,16 @@ export default function App({ user }: { user: any }) {
                         </div>
                       </div>
 
-                      {/* Botón interactivo de ver/ocultar detalles */}
-                      <div className="flex justify-end pt-0.5 select-none">
+                      {/* Botón interactivo de ver/ocultar detalles y PDF */}
+                      <div className="flex justify-end gap-2 pt-0.5 select-none">
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadPDF(rec)}
+                          className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-emerald-600 bg-brand-emerald text-white flex items-center gap-1.5 hover:bg-emerald-600"
+                        >
+                          <FileDown className="w-4 h-4" />
+                          PDF
+                        </button>
                         <button
                           type="button"
                           onClick={() => setExpandedRecords(prev => ({ ...prev, [rec.id]: !prev[rec.id] }))}
