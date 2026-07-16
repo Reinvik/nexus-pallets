@@ -382,48 +382,6 @@ export default function App({ user }: { user: any }) {
     const rows: string[] = [];
     for (let i = 0; i < 4; i++) {
       const z = rec.zonals_detail[i];
-      
-      // Determinar la celda de temperatura correspondiente a cada fila (eliminando rowspan complejos que rompen canvas)
-      let tempCell = '';
-      if (i === 0) {
-        tempCell = `
-          <td style="border: 1px solid #000; padding: 0; background-color: #fff; vertical-align: middle;">
-            <table style="width: 100%; border-collapse: collapse; border: none; text-align: center; font-size: 8.5px;">
-              <tr>
-                <td style="width: 45%; padding: 6px 0; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">1ER</td>
-                <td style="padding: 6px 0; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_1er}°C</td>
-              </tr>
-            </table>
-          </td>
-        `;
-      } else if (i === 1) {
-        tempCell = `
-          <td style="border: 1px solid #000; padding: 0; background-color: #fff; vertical-align: middle;">
-            <table style="width: 100%; border-collapse: collapse; border: none; text-align: center; font-size: 8.5px;">
-              <tr>
-                <td style="width: 45%; padding: 6px 0; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">2DO</td>
-                <td style="padding: 6px 0; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_2do}°C</td>
-              </tr>
-            </table>
-          </td>
-        `;
-      } else if (i === 2) {
-        tempCell = `
-          <td style="border: 1px solid #000; padding: 0; background-color: #fff; vertical-align: middle;">
-            <table style="width: 100%; border-collapse: collapse; border: none; text-align: center; font-size: 8.5px;">
-              <tr>
-                <td style="width: 45%; padding: 6px 0; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">3ER</td>
-                <td style="padding: 6px 0; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_3er}°C</td>
-              </tr>
-            </table>
-          </td>
-        `;
-      } else {
-        tempCell = `
-          <td style="border: 1px solid #000; padding: 6px; background-color: #fafafa; color: #ccc; font-weight: bold; text-align: center;">—</td>
-        `;
-      }
-
       if (z) {
         const wood = z.congelados.wood_bases + z.congelados.wood_extra +
                      z.estandar.wood_bases + z.estandar.wood_extra +
@@ -444,7 +402,6 @@ export default function App({ user }: { user: any }) {
             <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${wood > 0 ? wood : 'X'}</td>
             <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${plastic > 0 ? plastic : 'X'}</td>
             <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${z.sello || ''}</td>
-            ${tempCell}
           </tr>
         `);
       } else {
@@ -456,7 +413,6 @@ export default function App({ user }: { user: any }) {
             <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
             <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
             <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
-            ${tempCell}
           </tr>
         `);
       }
@@ -558,22 +514,55 @@ export default function App({ user }: { user: any }) {
 
         <!-- Tabla principal de carga -->
         <div style="font-size: 10px; font-weight: 900; text-align: center; margin-top: 15px; margin-bottom: 5px; letter-spacing: 0.5px; text-transform: uppercase; font-family: sans-serif;">CARGA ADICIONAL ZONAL</div>
-        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 12px; font-size: 9px;">
-          <thead>
-            <tr style="background-color: #f3f4f6; font-weight: 900; text-align: center; font-size: 8px; height: 24px;">
-              <th style="border: 1px solid #000; padding: 4px; width: 5%;">N°</th>
-              <th style="border: 1px solid #000; padding: 4px; width: 28%; text-align: left;">ZONAL</th>
-              <th style="border: 1px solid #000; padding: 4px; width: 14%;">BANDEJAS</th>
-              <th style="border: 1px solid #000; padding: 4px; width: 13%;">PALLET MADERA</th>
-              <th style="border: 1px solid #000; padding: 4px; width: 13%;">PALLET PLÁSTICO</th>
-              <th style="border: 1px solid #000; padding: 4px; width: 15%;">N° DE SELLO</th>
-              <th style="border: 1px solid #000; padding: 4px; width: 12%;">TEMPERATURA TERMO / °C</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.join('')}
-          </tbody>
-        </table>
+        <div style="display: flex; width: 100%; margin-bottom: 12px; gap: 0; box-sizing: border-box; align-items: stretch;">
+          
+          <!-- Tabla de Zonales (6 celdas por fila, ancho 86%) -->
+          <table style="width: 86%; border-collapse: collapse; border: 2px solid #000; border-right: none; font-size: 9px; box-sizing: border-box; table-layout: fixed;">
+            <thead>
+              <tr style="background-color: #f3f4f6; font-weight: 900; text-align: center; font-size: 8px; height: 24px;">
+                <th style="border: 1px solid #000; padding: 4px; width: 6%;">N°</th>
+                <th style="border: 1px solid #000; padding: 4px; width: 34%; text-align: left;">ZONAL</th>
+                <th style="border: 1px solid #000; padding: 4px; width: 15%;">BANDEJAS</th>
+                <th style="border: 1px solid #000; padding: 4px; width: 15%;">PALLET MADERA</th>
+                <th style="border: 1px solid #000; padding: 4px; width: 15%;">PALLET PLÁSTICO</th>
+                <th style="border: 1px solid #000; padding: 4px; width: 15%;">N° DE SELLO</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.join('')}
+            </tbody>
+          </table>
+
+          <!-- Cuadro de Temperaturas de Termos (ancho 14%, acoplado) -->
+          <div style="width: 14%; border: 2px solid #000; display: flex; flex-direction: column; box-sizing: border-box; background-color: #fff;">
+            <div style="background-color: #f3f4f6; border-bottom: 1px solid #000; padding: 4px; text-align: center; font-weight: 900; font-size: 7.5px; height: 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; line-height: 1.1;">
+              TEMPERATURA TERMO / °C
+            </div>
+            
+            <div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; height: 140px; box-sizing: border-box;">
+              
+              <!-- 1ER -->
+              <div style="display: flex; height: 33.3%; align-items: center; border-bottom: 1px solid #000; box-sizing: border-box;">
+                <div style="width: 45%; font-weight: bold; font-size: 7.5px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">1ER</div>
+                <div style="width: 55%; font-weight: bold; font-family: monospace; font-size: 10px; text-align: center;">${rec.temp_1er}°C</div>
+              </div>
+              
+              <!-- 2DO -->
+              <div style="display: flex; height: 33.3%; align-items: center; border-bottom: 1px solid #000; box-sizing: border-box;">
+                <div style="width: 45%; font-weight: bold; font-size: 7.5px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">2DO</div>
+                <div style="width: 55%; font-weight: bold; font-family: monospace; font-size: 10px; text-align: center;">${rec.temp_2do}°C</div>
+              </div>
+              
+              <!-- 3ER -->
+              <div style="display: flex; height: 33.3%; align-items: center; box-sizing: border-box;">
+                <div style="width: 45%; font-weight: bold; font-size: 7.5px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">3ER</div>
+                <div style="width: 55%; font-weight: bold; font-family: monospace; font-size: 10px; text-align: center;">${rec.temp_3er}°C</div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
 
         <!-- Observaciones y firmas -->
         <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 9px;">
