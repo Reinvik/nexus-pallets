@@ -382,6 +382,48 @@ export default function App({ user }: { user: any }) {
     const rows: string[] = [];
     for (let i = 0; i < 4; i++) {
       const z = rec.zonals_detail[i];
+      
+      // Determinar la celda de temperatura correspondiente a cada fila (eliminando rowspan complejos que rompen canvas)
+      let tempCell = '';
+      if (i === 0) {
+        tempCell = `
+          <td style="border: 1px solid #000; padding: 0; background-color: #fff; vertical-align: middle;">
+            <table style="width: 100%; border-collapse: collapse; border: none; text-align: center; font-size: 8.5px;">
+              <tr>
+                <td style="width: 45%; padding: 6px 0; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">1ER</td>
+                <td style="padding: 6px 0; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_1er}°C</td>
+              </tr>
+            </table>
+          </td>
+        `;
+      } else if (i === 1) {
+        tempCell = `
+          <td style="border: 1px solid #000; padding: 0; background-color: #fff; vertical-align: middle;">
+            <table style="width: 100%; border-collapse: collapse; border: none; text-align: center; font-size: 8.5px;">
+              <tr>
+                <td style="width: 45%; padding: 6px 0; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">2DO</td>
+                <td style="padding: 6px 0; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_2do}°C</td>
+              </tr>
+            </table>
+          </td>
+        `;
+      } else if (i === 2) {
+        tempCell = `
+          <td style="border: 1px solid #000; padding: 0; background-color: #fff; vertical-align: middle;">
+            <table style="width: 100%; border-collapse: collapse; border: none; text-align: center; font-size: 8.5px;">
+              <tr>
+                <td style="width: 45%; padding: 6px 0; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">3ER</td>
+                <td style="padding: 6px 0; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_3er}°C</td>
+              </tr>
+            </table>
+          </td>
+        `;
+      } else {
+        tempCell = `
+          <td style="border: 1px solid #000; padding: 6px; background-color: #fafafa; color: #ccc; font-weight: bold; text-align: center;">—</td>
+        `;
+      }
+
       if (z) {
         const wood = z.congelados.wood_bases + z.congelados.wood_extra +
                      z.estandar.wood_bases + z.estandar.wood_extra +
@@ -402,24 +444,7 @@ export default function App({ user }: { user: any }) {
             <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${wood > 0 ? wood : 'X'}</td>
             <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${plastic > 0 ? plastic : 'X'}</td>
             <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${z.sello || ''}</td>
-            ${i === 0 ? `
-            <td rowspan="4" style="border: 1px solid #000; padding: 0; vertical-align: middle;">
-              <table style="width: 100%; height: 100%; border-collapse: collapse; border: none; text-align: center; font-size: 9px; font-family: sans-serif;">
-                <tr style="border-bottom: 1px solid #000; height: 33.3%;">
-                  <td style="padding: 4px; font-weight: bold; width: 45%; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">1ER</td>
-                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_1er}°C</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #000; height: 33.3%;">
-                  <td style="padding: 4px; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">2DO</td>
-                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_2do}°C</td>
-                </tr>
-                <tr style="height: 33.3%;">
-                  <td style="padding: 4px; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">3ER</td>
-                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_3er}°C</td>
-                </tr>
-              </table>
-            </td>
-            ` : ''}
+            ${tempCell}
           </tr>
         `);
       } else {
@@ -431,24 +456,7 @@ export default function App({ user }: { user: any }) {
             <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
             <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
             <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
-            ${i === 0 ? `
-            <td rowspan="4" style="border: 1px solid #000; padding: 0; vertical-align: middle;">
-              <table style="width: 100%; height: 100%; border-collapse: collapse; border: none; text-align: center; font-size: 9px; font-family: sans-serif;">
-                <tr style="border-bottom: 1px solid #000; height: 33.3%;">
-                  <td style="padding: 4px; font-weight: bold; width: 45%; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">1ER</td>
-                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_1er}°C</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #000; height: 33.3%;">
-                  <td style="padding: 4px; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">2DO</td>
-                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_2do}°C</td>
-                </tr>
-                <tr style="height: 33.3%;">
-                  <td style="padding: 4px; font-weight: bold; border-right: 1px solid #000; background-color: #f9f9f9; font-size: 8px;">3ER</td>
-                  <td style="padding: 4px; font-weight: bold; font-family: monospace; font-size: 11px;">${rec.temp_3er}°C</td>
-                </tr>
-              </table>
-            </td>
-            ` : ''}
+            ${tempCell}
           </tr>
         `);
       }
@@ -460,7 +468,7 @@ export default function App({ user }: { user: any }) {
     const totalB = rec.zonals_detail.reduce((sum, z) => sum + (z.bandejas.bandejas_count || 0), 0);
 
     const pdfHtml = `
-      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 9.5px; padding: 20px; color: #000; background-color: #fff; line-height: 1.25;">
+      <div style="font-family: Arial, sans-serif; font-size: 9.5px; width: 750px; padding: 25px; box-sizing: border-box; background-color: #fff; color: #000; margin: 0 auto; line-height: 1.25;">
         
         <!-- Header -->
         <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px;">
@@ -610,13 +618,21 @@ export default function App({ user }: { user: any }) {
     // Configurar y guardar el PDF usando html2pdf
     const element = document.createElement('div');
     element.innerHTML = pdfHtml;
+    element.style.position = 'absolute';
+    element.style.left = '-9999px';
+    element.style.top = '0';
+    element.style.width = '750px';
+    element.style.boxSizing = 'border-box';
+    element.style.backgroundColor = '#fff';
+    
+    document.body.appendChild(element);
     
     // Opciones del documento PDF
     const opt = {
-      margin:       [10, 10, 10, 10],
+      margin:       8,
       filename:     `Despacho_Camion_${rec.truck_plate || 'SinPatente'}_${rec.inspection_date}.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2.5, useCORS: true, logging: false },
+      html2canvas:  { scale: 2, useCORS: true, logging: false },
       jsPDF:        { unit: 'mm', format: 'letter', orientation: 'portrait' }
     };
 
@@ -624,9 +640,15 @@ export default function App({ user }: { user: any }) {
     // @ts-ignore
     if (window.html2pdf) {
       // @ts-ignore
-      window.html2pdf().from(element).set(opt).save();
+      window.html2pdf().from(element).set(opt).save().then(() => {
+        document.body.removeChild(element);
+      }).catch((err: any) => {
+        console.error("Error al generar PDF:", err);
+        document.body.removeChild(element);
+      });
     } else {
       alert("Error: No se pudo cargar la librería html2pdf.js. Inténtalo de nuevo.");
+      document.body.removeChild(element);
     }
   };
 
