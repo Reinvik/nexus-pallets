@@ -668,6 +668,30 @@ export default function App({ user }: { user: any }) {
                     onChange={(e) => setTemp1er(parseInt(e.target.value) || 0)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono font-bold focus:outline-none focus:border-brand-primary focus:bg-white transition-all"
                   />
+                  <div className="flex gap-2 mt-2 select-none">
+                    <button
+                      type="button"
+                      onClick={() => setTemp1er(0)}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-black border transition-all active:scale-95 cursor-pointer ${
+                        temp1er === 0 
+                          ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' 
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-55'
+                      }`}
+                    >
+                      Refri (0°C)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTemp1er(-18)}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-black border transition-all active:scale-95 cursor-pointer ${
+                        temp1er === -18 
+                          ? 'bg-sky-600 border-sky-600 text-white shadow-sm' 
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-55'
+                      }`}
+                    >
+                      Congel (-18°C)
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Temp. 2do Termo (ºC)</label>
@@ -678,6 +702,30 @@ export default function App({ user }: { user: any }) {
                     onChange={(e) => setTemp2do(parseInt(e.target.value) || 0)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono font-bold focus:outline-none focus:border-brand-primary focus:bg-white transition-all"
                   />
+                  <div className="flex gap-2 mt-2 select-none">
+                    <button
+                      type="button"
+                      onClick={() => setTemp2do(0)}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-black border transition-all active:scale-95 cursor-pointer ${
+                        temp2do === 0 
+                          ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' 
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-55'
+                      }`}
+                    >
+                      Refri (0°C)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTemp2do(-18)}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-black border transition-all active:scale-95 cursor-pointer ${
+                        temp2do === -18 
+                          ? 'bg-sky-600 border-sky-600 text-white shadow-sm' 
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-55'
+                      }`}
+                    >
+                      Congel (-18°C)
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Temp. 3er Termo (ºC)</label>
@@ -688,10 +736,34 @@ export default function App({ user }: { user: any }) {
                     onChange={(e) => setTemp3er(parseInt(e.target.value) || 0)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono font-bold focus:outline-none focus:border-brand-primary focus:bg-white transition-all"
                   />
+                  <div className="flex gap-2 mt-2 select-none">
+                    <button
+                      type="button"
+                      onClick={() => setTemp3er(0)}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-black border transition-all active:scale-95 cursor-pointer ${
+                        temp3er === 0 
+                          ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' 
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-55'
+                      }`}
+                    >
+                      Refri (0°C)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTemp3er(-18)}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-black border transition-all active:scale-95 cursor-pointer ${
+                        temp3er === -18 
+                          ? 'bg-sky-600 border-sky-600 text-white shadow-sm' 
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-55'
+                      }`}
+                    >
+                      Congel (-18°C)
+                    </button>
                 </div>
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
                 {/* Check list */}
                 <div className="space-y-2">
                   <span className="block text-xs font-bold text-slate-500 uppercase">Check List de Inspección</span>
