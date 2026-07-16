@@ -115,6 +115,7 @@ export default function App({ user }: { user: any }) {
   // Datos Históricos de Despachos y Devoluciones
   const [records, setRecords] = useState<DispatchRecord[]>([]);
   const [returnsList, setReturnsList] = useState<PalletReturnRecord[]>([]);
+  const [expandedRecords, setExpandedRecords] = useState<{ [key: string]: boolean }>({});
 
   // Datos del Formulario actual de Despacho
   const [supervisorName, setSupervisorName] = useState(() => formatSupervisorName(user?.email));
@@ -1338,55 +1339,84 @@ export default function App({ user }: { user: any }) {
                         </div>
                       </div>
 
-                      {/* Desglose de Zonales */}
-                      <div className="space-y-2">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block select-none">
-                          Detalle de Zonales cargados:
-                        </span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {rec.zonals_detail.map((z, idx) => {
-                            const zT = z.congelados.wood_bases + z.congelados.wood_extra +
-                                      z.estandar.wood_bases + z.estandar.wood_extra +
-                                      z.bandejas.wood_bases + z.bandejas.wood_extra;
-                            const zP = z.congelados.plastic_bases + z.congelados.plastic_extra +
-                                      z.estandar.plastic_bases + z.estandar.plastic_extra +
-                                      z.bandejas.plastic_bases + z.bandejas.plastic_extra;
-
-                            return (
-                              <div key={idx} className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 text-xs">
-                                <div className="flex justify-between items-center font-extrabold text-slate-700 mb-1.5 border-b border-slate-200/50 pb-1">
-                                  <span>{z.zonal_name} ({z.lugar_camion})</span>
-                                  {z.sello && <span className="text-[9px] bg-slate-200 px-1.5 py-0.5 rounded font-mono font-bold">Sello: {z.sello}</span>}
-                                </div>
-                                <div className="space-y-1 font-semibold text-slate-500 font-mono">
-                                  <div className="flex justify-between">
-                                    <span>Congelados:</span>
-                                    <span>M:{z.congelados.wood_bases}+{z.congelados.wood_extra} | P:{z.congelados.plastic_bases}+{z.congelados.plastic_extra}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Estándar:</span>
-                                    <span>M:{z.estandar.wood_bases}+{z.estandar.wood_extra} | P:{z.estandar.plastic_bases}+{z.estandar.plastic_extra}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Bandejas:</span>
-                                    <span>{z.bandejas.bandejas_count}B | M:{z.bandejas.wood_bases}+{z.bandejas.wood_extra} | P:{z.bandejas.plastic_bases}+{z.bandejas.plastic_extra}</span>
-                                  </div>
-                                  <div className="flex justify-between text-brand-primary font-bold border-t border-dashed border-slate-200 pt-1 mt-1 text-[11px]">
-                                    <span>Totales Zonal:</span>
-                                    <span>M:{zT} | P:{zP}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                      {/* Botón interactivo de ver/ocultar detalles */}
+                      <div className="flex justify-end pt-0.5 select-none">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRecords(prev => ({ ...prev, [rec.id]: !prev[rec.id] }))}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border flex items-center gap-1.5 ${
+                            expandedRecords[rec.id] 
+                              ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' 
+                              : 'bg-brand-primary hover:bg-brand-secondary border-brand-primary text-white'
+                          }`}
+                        >
+                          {expandedRecords[rec.id] ? (
+                            <>
+                              <ChevronUp className="w-4 h-4" />
+                              OCULTAR DETALLES
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="w-4 h-4" />
+                              VER DETALLES
+                            </>
+                          )}
+                        </button>
                       </div>
 
-                      {/* Observaciones */}
-                      {rec.observations && (
-                        <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 font-semibold text-slate-600">
-                          <span className="font-bold text-slate-700">Observaciones: </span>
-                          {rec.observations}
+                      {/* Desglose Condicional de Zonales */}
+                      {expandedRecords[rec.id] && (
+                        <div className="space-y-4 pt-3.5 border-t border-slate-100">
+                          <div className="space-y-2">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block select-none">
+                              Detalle de Zonales cargados:
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {rec.zonals_detail.map((z, idx) => {
+                                const zT = z.congelados.wood_bases + z.congelados.wood_extra +
+                                          z.estandar.wood_bases + z.estandar.wood_extra +
+                                          z.bandejas.wood_bases + z.bandejas.wood_extra;
+                                const zP = z.congelados.plastic_bases + z.congelados.plastic_extra +
+                                          z.estandar.plastic_bases + z.estandar.plastic_extra +
+                                          z.bandejas.plastic_bases + z.bandejas.plastic_extra;
+
+                                return (
+                                  <div key={idx} className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 text-xs">
+                                    <div className="flex justify-between items-center font-extrabold text-slate-700 mb-1.5 border-b border-slate-200/50 pb-1">
+                                      <span>{z.zonal_name} ({z.lugar_camion})</span>
+                                      {z.sello && <span className="text-[9px] bg-slate-200 px-1.5 py-0.5 rounded font-mono font-bold">Sello: {z.sello}</span>}
+                                    </div>
+                                    <div className="space-y-1 font-semibold text-slate-500 font-mono">
+                                      <div className="flex justify-between">
+                                        <span>Congelados:</span>
+                                        <span>M:{z.congelados.wood_bases}+{z.congelados.wood_extra} | P:{z.congelados.plastic_bases}+{z.congelados.plastic_extra}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Estándar:</span>
+                                        <span>M:{z.estandar.wood_bases}+{z.estandar.wood_extra} | P:{z.estandar.plastic_bases}+{z.estandar.plastic_extra}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Bandejas:</span>
+                                        <span>{z.bandejas.bandejas_count}B | M:{z.bandejas.wood_bases}+{z.bandejas.wood_extra} | P:{z.bandejas.plastic_bases}+{z.bandejas.plastic_extra}</span>
+                                      </div>
+                                      <div className="flex justify-between text-brand-primary font-bold border-t border-dashed border-slate-200 pt-1 mt-1 text-[11px]">
+                                        <span>Totales Zonal:</span>
+                                        <span>M:{zT} | P:{zP}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Observaciones */}
+                          {rec.observations && (
+                            <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 font-semibold text-slate-600">
+                              <span className="font-bold text-slate-700">Observaciones: </span>
+                              {rec.observations}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
