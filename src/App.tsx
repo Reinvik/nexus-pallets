@@ -17,7 +17,8 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
-  Package
+  Package,
+  LogOut
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -503,15 +504,25 @@ export default function App() {
               </span>
             </div>
           </div>
-          <div className="text-right text-xs text-emerald-100 hidden sm:block">
-            <div className="font-semibold flex items-center gap-1 justify-end">
-              <Calendar className="w-3.5 h-3.5" />
-              {currentTime.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'short' })}
+          <div className="flex items-center gap-4">
+            <div className="text-right text-xs text-emerald-100 hidden sm:block">
+              <div className="font-semibold flex items-center gap-1 justify-end">
+                <Calendar className="w-3.5 h-3.5" />
+                {currentTime.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'short' })}
+              </div>
+              <div className="font-mono flex items-center gap-1 justify-end text-[11px] mt-0.5">
+                <Clock className="w-3 h-3" />
+                {currentTime.toLocaleTimeString('es-CL')}
+              </div>
             </div>
-            <div className="font-mono flex items-center gap-1 justify-end text-[11px] mt-0.5">
-              <Clock className="w-3 h-3" />
-              {currentTime.toLocaleTimeString('es-CL')}
-            </div>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="bg-white/10 hover:bg-white/20 border border-white/20 p-2.5 rounded-xl transition-all active:scale-95 text-white cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+              title="Cerrar Sesión"
+            >
+              <LogOut className="w-4.5 h-4.5" />
+              <span className="text-xs font-bold hidden md:inline">Salir</span>
+            </button>
           </div>
         </div>
       </header>
