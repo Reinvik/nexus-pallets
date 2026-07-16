@@ -486,7 +486,7 @@ export default function App({ user }: { user: any }) {
 
       setSuccessMsg(`¡Retorno de pallets de ${showReturnModal} registrado con éxito!`);
       setShowReturnModal(null);
-      setReturnSupervisor('');
+      setReturnSupervisor(formatSupervisorName(user?.email));
       setReturnWood(0);
       setReturnPlastic(0);
 
@@ -1490,7 +1490,7 @@ export default function App({ user }: { user: any }) {
                       type="button"
                       onClick={() => {
                         setShowReturnModal(zonalName);
-                        setReturnSupervisor('');
+                        setReturnSupervisor(formatSupervisorName(user?.email));
                         setReturnWood(0);
                         setReturnPlastic(0);
                       }}
