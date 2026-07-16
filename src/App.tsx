@@ -110,7 +110,6 @@ export default function App({ user }: { user: any }) {
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Datos Históricos de Despachos y Devoluciones
   const [records, setRecords] = useState<DispatchRecord[]>([]);
@@ -144,6 +143,14 @@ export default function App({ user }: { user: any }) {
   const [returnWood, setReturnWood] = useState(0);
   const [returnPlastic, setReturnPlastic] = useState(0);
 
+  // Perfil y cambio de contraseña interno
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
   // State para modal/asistente de sumatoria de bandejas
   const [showBandejasHelper, setShowBandejasHelper] = useState<number | null>(null); // Index del zonal actual en el asistente
   const [helper40, setHelper40] = useState(0);
@@ -153,13 +160,7 @@ export default function App({ user }: { user: any }) {
   // Acordeón para colapsar zonales en edición
   const [expandedZonalIndex, setExpandedZonalIndex] = useState<number | null>(0);
 
-  // Reloj en tiempo real
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+
 
   // Cargar historial y retornos
   useEffect(() => {
@@ -520,17 +521,31 @@ export default function App({ user }: { user: any }) {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right text-xs text-emerald-100 hidden sm:block">
-              <div className="font-semibold flex items-center gap-1 justify-end">
-                <Calendar className="w-3.5 h-3.5" />
-                {currentTime.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'short' })}
+          <div className="flex items-center gap-2">
+            <div className="text-right text-xs text-emerald-100 hidden lg:block mr-2 select-none">
+              <div className="font-semibold">
+                {supervisorName}
               </div>
-              <div className="font-mono flex items-center gap-1 justify-end text-[11px] mt-0.5">
-                <Clock className="w-3 h-3" />
-                {currentTime.toLocaleTimeString('es-CL')}
+              <div className="font-mono text-[9px] opacity-80 mt-0.5">
+                {user?.email}
               </div>
             </div>
+            
+            <button
+              onClick={() => {
+                setShowProfileModal(true);
+                setPasswordSuccess(null);
+                setPasswordError(null);
+                setNewPassword('');
+                setConfirmNewPassword('');
+              }}
+              className="bg-white/10 hover:bg-white/20 border border-white/20 p-2.5 rounded-xl transition-all active:scale-95 text-white cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+              title="Mi Perfil / Configuración"
+            >
+              <User className="w-4.5 h-4.5" />
+              <span className="text-xs font-bold hidden md:inline">Perfil</span>
+            </button>
+
             <button
               onClick={() => supabase.auth.signOut()}
               className="bg-white/10 hover:bg-white/20 border border-white/20 p-2.5 rounded-xl transition-all active:scale-95 text-white cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
@@ -1651,6 +1666,129 @@ export default function App({ user }: { user: any }) {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ASISTENTE MODAL: MI PERFIL / CAMBIO DE CONTRASEÑA */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in select-none">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="text-sm font-black text-brand-primary uppercase tracking-wider flex items-center gap-1.5">
+                <User className="w-4.5 h-4.5" />
+                Mi Perfil de Supervisor
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Información del usuario */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-bold uppercase">Nombre:</span>
+                <span className="text-slate-800 font-black">{supervisorName}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs pt-1">
+                <span className="text-slate-400 font-bold uppercase">Cuenta Correo:</span>
+                <span className="text-slate-600 font-mono font-bold">{user?.email}</span>
+              </div>
+            </div>
+
+            {/* Formulario de Cambio de Clave */}
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setPasswordError(null);
+                setPasswordSuccess(null);
+                if (newPassword.length < 8) {
+                  setPasswordError("La contraseña debe tener al menos 8 caracteres.");
+                  return;
+                }
+                if (newPassword !== confirmNewPassword) {
+                  setPasswordError("Las contraseñas no coinciden.");
+                  return;
+                }
+                setPasswordLoading(true);
+                try {
+                  const { error } = await supabase.auth.updateUser({ password: newPassword });
+                  if (error) throw error;
+                  setPasswordSuccess("¡Contraseña actualizada con éxito!");
+                  setNewPassword('');
+                  setConfirmNewPassword('');
+                } catch (err: any) {
+                  setPasswordError(err.message || "Error al actualizar la contraseña.");
+                } finally {
+                  setPasswordLoading(false);
+                }
+              }}
+              className="space-y-3.5 border-t pt-4"
+            >
+              <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider">Cambiar Contraseña Internamente</h4>
+              
+              {passwordSuccess && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  {passwordSuccess}
+                </div>
+              )}
+
+              {passwordError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  {passwordError}
+                </div>
+              )}
+
+              <div className="space-y-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nueva Contraseña</label>
+                  <input
+                    type="password"
+                    placeholder="Mínimo 8 caracteres"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={passwordLoading}
+                    required
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold focus:outline-none focus:border-brand-primary focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Confirmar Nueva Contraseña</label>
+                  <input
+                    type="password"
+                    placeholder="Repite la nueva contraseña"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    disabled={passwordLoading}
+                    required
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold focus:outline-none focus:border-brand-primary focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl text-xs font-black transition-all cursor-pointer"
+                >
+                  CERRAR
+                </button>
+                <button
+                  type="submit"
+                  disabled={passwordLoading}
+                  className="flex-1 bg-brand-emerald hover:bg-emerald-600 text-white py-3 rounded-xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {passwordLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <>ACTUALIZAR CLAVE</>}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
