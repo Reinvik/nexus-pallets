@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 // Lista oficial de Zonales CIAL proporcionada por el usuario
 const ZONALES_LIST = [
@@ -417,19 +419,6 @@ export default function App({ user }: { user: any }) {
     );
   };
 
-  // Helper para asegurar que la librería html2pdf esté cargada
-  const ensureHtml2Pdf = async (): Promise<boolean> => {
-    // @ts-ignore
-    if (window.html2pdf) return true;
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.head.appendChild(script);
-    });
-  };
-
   // Helper para convertir imagen a Base64 y evitar problemas de renderizado en html2canvas
   const getLogoBase64 = async (url: string): Promise<string> => {
     try {
@@ -446,19 +435,14 @@ export default function App({ user }: { user: any }) {
     }
   };
 
-  // Generar y Descargar PDF de Despacho
+  // Generar y Descargar PDF de Despacho usando html2canvas + jsPDF directo
   const handleDownloadPDF = async (rec: DispatchRecord) => {
     if (generatingPdfId) return;
     setGeneratingPdfId(rec.id);
 
+    let container: HTMLDivElement | null = null;
     try {
-      const isLoaded = await ensureHtml2Pdf();
-      if (!isLoaded) {
-        alert("No se pudo cargar el generador de PDF. Por favor verifica tu conexión a internet.");
-        return;
-      }
-
-      // Convertir el logo a Base64 para incrustación directa
+      // Convertir el logo a Base64 para incrustación directa sin llamadas de red
       const logoBase64 = await getLogoBase64(cialLogo);
 
       // 1. Obtener los renglones correspondientes a los 4 zonales (con vacíos si son menos de 4)
@@ -676,7 +660,7 @@ export default function App({ user }: { user: any }) {
             <tr style="height: 24px;">
               <td colspan="2" style="border: 1px solid #000; padding: 5px; background-color: #fcfcfc;">
                 <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 8.5px; text-transform: uppercase;">
-                  <span>KILOS TOTALES DEL CAMIÓN: _______________</span>
+                  <span>KILOS TOTALES DEL CAMIÓN: ___________________________</span>
                   <span style="font-family: monospace; padding-right: 10px;">TOTALES DESPACHO: M:${totalW} | P:${totalP} | B:${totalB}</span>
                 </div>
               </td>
@@ -687,8 +671,8 @@ export default function App({ user }: { user: any }) {
         </div>
       `;
 
-      // Crear contenedor temporal visible en pantalla durante el procesamiento
-      const container = document.createElement('div');
+      // Crear un nodo contenedor visible
+      container = document.createElement('div');
       container.style.position = 'fixed';
       container.style.top = '0';
       container.style.left = '0';
@@ -699,7 +683,7 @@ export default function App({ user }: { user: any }) {
       container.innerHTML = pdfHtml;
       document.body.appendChild(container);
 
-      // Esperar la decodificación completa de la imagen
+      // Esperar decodificación total de imágenes
       const imgs = Array.from(container.querySelectorAll('img'));
       await Promise.all(
         imgs.map((img) => {
@@ -711,26 +695,42 @@ export default function App({ user }: { user: any }) {
         })
       );
 
-      // Opciones de html2pdf optimizadas para html2canvas
-      const opt = {
-        margin:       [5, 5, 5, 5],
-        filename:     `Despacho_Camion_${rec.truck_plate || 'SinPatente'}_${rec.inspection_date}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
-        jsPDF:        { unit: 'mm', format: 'letter', orientation: 'portrait' }
-      };
+      // Capturar usando html2canvas puro
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: 800
+      });
 
-      // @ts-ignore
-      await window.html2pdf().set(opt).from(container).save();
+      // Convertir el canvas resultante a Data URL (JPEG calidad 0.98)
+      const imgData = canvas.toDataURL('image/jpeg', 0.98);
 
-      // Limpiar contenedor
-      if (document.body.contains(container)) {
-        document.body.removeChild(container);
-      }
+      // Crear documento jsPDF de página 'letter' en milímetros
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'letter'
+      });
+
+      // Dimensiones de hoja Letter: 215.9 x 279.4 mm
+      const pageWidth = 215.9;
+      const margin = 8;
+      const printWidth = pageWidth - (margin * 2);
+      const printHeight = (canvas.height * printWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'JPEG', margin, margin, printWidth, printHeight);
+      pdf.save(`Despacho_Camion_${rec.truck_plate || 'SinPatente'}_${rec.inspection_date}.pdf`);
+
     } catch (err: any) {
       console.error("Error al generar PDF:", err);
       alert("Ocurrió un inconveniente al generar el PDF. Inténtalo nuevamente.");
     } finally {
+      if (container && document.body.contains(container)) {
+        document.body.removeChild(container);
+      }
       setGeneratingPdfId(null);
     }
   };
