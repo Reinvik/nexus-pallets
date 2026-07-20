@@ -193,11 +193,14 @@ export default function App({ user }: { user: any }) {
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  // State para modal/asistente de sumatoria de bandejas
+  // State para modal/asistente de sumatoria de bandejas (40, 35, 30, 25, 20 + restante)
   const [showBandejasHelper, setShowBandejasHelper] = useState<number | null>(null); // Index del zonal actual en el asistente
   const [helper40, setHelper40] = useState(0);
   const [helper35, setHelper35] = useState(0);
+  const [helper30, setHelper30] = useState(0);
+  const [helper25, setHelper25] = useState(0);
   const [helper20, setHelper20] = useState(0);
+  const [helperRestante, setHelperRestante] = useState(0);
 
   // Acordeón para colapsar zonales en edición
   const [expandedZonalIndex, setExpandedZonalIndex] = useState<number | null>(0);
@@ -310,23 +313,28 @@ export default function App({ user }: { user: any }) {
     setSelectedZonals(updated);
   };
 
-  // Asistente de Bandejas
+  // Asistente de Bandejas (40, 35, 30, 25, 20 + restante)
   const openBandejasHelper = (index: number) => {
     setShowBandejasHelper(index);
     setHelper40(0);
     setHelper35(0);
+    setHelper30(0);
+    setHelper25(0);
     setHelper20(0);
+    setHelperRestante(0);
   };
 
   const applyBandejasHelper = () => {
     if (showBandejasHelper === null) return;
-    const totalBandejas = (helper40 * 40) + (helper35 * 35) + (helper20 * 20);
-    const totalPallets = helper40 + helper35 + helper20;
+    const totalBandejas = (helper40 * 40) + (helper35 * 35) + (helper30 * 30) + (helper25 * 25) + (helper20 * 20) + Math.max(0, Number(helperRestante || 0));
+    const totalPallets = helper40 + helper35 + helper30 + helper25 + helper20;
     
     const updated = [...selectedZonals];
     const bandejasData = { ...updated[showBandejasHelper].bandejas };
     bandejasData.bandejas_count = totalBandejas;
-    bandejasData.plastic_bases = totalPallets;
+    if (totalPallets > 0) {
+      bandejasData.plastic_bases = totalPallets;
+    }
     
     updated[showBandejasHelper] = {
       ...updated[showBandejasHelper],
@@ -2136,17 +2144,18 @@ export default function App({ user }: { user: any }) {
             </div>
 
             <p className="text-xs text-slate-500 font-semibold">
-              Ingresa la cantidad de pallets según la cantidad de bandejas estándar por pallet para realizar el cálculo automático.
+              Ingresa la cantidad de pallets según la cantidad de bandejas por pallet (40, 35, 30, 25, 20) y agrega las bandejas sueltas o restantes.
             </p>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+              {/* Pallets 40 */}
+              <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                 <span className="text-xs font-bold text-slate-700">Pallets de 40 bandejas (1x40)</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 select-none">
                   <button
                     type="button"
                     onClick={() => setHelper40(Math.max(0, helper40 - 1))}
-                    className="bg-white border text-slate-600 w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm cursor-pointer"
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shadow-sm cursor-pointer"
                   >
                     -
                   </button>
@@ -2154,20 +2163,21 @@ export default function App({ user }: { user: any }) {
                   <button
                     type="button"
                     onClick={() => setHelper40(helper40 + 1)}
-                    className="bg-white border text-slate-600 w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm cursor-pointer"
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shadow-sm cursor-pointer"
                   >
                     +
                   </button>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+              {/* Pallets 35 */}
+              <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                 <span className="text-xs font-bold text-slate-700">Pallets de 35 bandejas (1x35)</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 select-none">
                   <button
                     type="button"
                     onClick={() => setHelper35(Math.max(0, helper35 - 1))}
-                    className="bg-white border text-slate-600 w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm cursor-pointer"
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm cursor-pointer"
                   >
                     -
                   </button>
@@ -2175,20 +2185,65 @@ export default function App({ user }: { user: any }) {
                   <button
                     type="button"
                     onClick={() => setHelper35(helper35 + 1)}
-                    className="bg-white border text-slate-600 w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm cursor-pointer"
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm cursor-pointer"
                   >
                     +
                   </button>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+              {/* Pallets 30 */}
+              <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-700">Pallets de 30 bandejas (1x30)</span>
+                <div className="flex items-center gap-2 select-none">
+                  <button
+                    type="button"
+                    onClick={() => setHelper30(Math.max(0, helper30 - 1))}
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm cursor-pointer"
+                  >
+                    -
+                  </button>
+                  <span className="font-mono font-black text-sm w-6 text-center">{helper30}</span>
+                  <button
+                    type="button"
+                    onClick={() => setHelper30(helper30 + 1)}
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm cursor-pointer"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Pallets 25 */}
+              <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-700">Pallets de 25 bandejas (1x25)</span>
+                <div className="flex items-center gap-2 select-none">
+                  <button
+                    type="button"
+                    onClick={() => setHelper25(Math.max(0, helper25 - 1))}
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm cursor-pointer"
+                  >
+                    -
+                  </button>
+                  <span className="font-mono font-black text-sm w-6 text-center">{helper25}</span>
+                  <button
+                    type="button"
+                    onClick={() => setHelper25(helper25 + 1)}
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm cursor-pointer"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Pallets 20 */}
+              <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                 <span className="text-xs font-bold text-slate-700">Pallets de 20 bandejas (1x20)</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 select-none">
                   <button
                     type="button"
                     onClick={() => setHelper20(Math.max(0, helper20 - 1))}
-                    className="bg-white border text-slate-600 w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm cursor-pointer"
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm cursor-pointer"
                   >
                     -
                   </button>
@@ -2196,20 +2251,79 @@ export default function App({ user }: { user: any }) {
                   <button
                     type="button"
                     onClick={() => setHelper20(helper20 + 1)}
-                    className="bg-white border text-slate-600 w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm cursor-pointer"
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm cursor-pointer"
                   >
                     +
                   </button>
                 </div>
               </div>
+
+              {/* Bandejas Restantes / Sueltas */}
+              <div className="bg-amber-50/60 p-3 rounded-xl border border-amber-200 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-black text-amber-900 uppercase">Restante / Bandejas Sueltas:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={helperRestante || ''}
+                    onChange={(e) => setHelperRestante(Math.max(0, parseInt(e.target.value) || 0))}
+                    placeholder="0"
+                    className="w-20 bg-white border border-amber-300 rounded-lg px-2 py-1 text-sm font-mono font-black text-right focus:outline-none focus:border-amber-500 shadow-sm"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-1.5 pt-0.5 select-none">
+                  <button
+                    type="button"
+                    onClick={() => setHelperRestante(prev => prev + 1)}
+                    className="bg-white border border-amber-200 text-amber-900 hover:bg-amber-100 px-2 py-0.5 rounded text-xs font-bold cursor-pointer"
+                  >
+                    +1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHelperRestante(prev => prev + 5)}
+                    className="bg-white border border-amber-200 text-amber-900 hover:bg-amber-100 px-2 py-0.5 rounded text-xs font-bold cursor-pointer"
+                  >
+                    +5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHelperRestante(0)}
+                    className="bg-white border border-amber-200 text-amber-900 hover:bg-amber-100 px-2 py-0.5 rounded text-xs font-bold cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="bg-brand-light p-3.5 rounded-xl border border-brand-border flex justify-between items-center text-brand-primary">
-              <span className="text-xs font-black uppercase">Suma Total Calculada:</span>
-              <span className="text-xl font-mono font-black">
-                {(helper40 * 40) + (helper35 * 35) + (helper20 * 20)} bandejas
-              </span>
-            </div>
+            {/* FÓRMULA DINÁMICA EN TIEMPO REAL */}
+            {(() => {
+              const parts = [];
+              if (helper40 > 0) parts.push(`40x${helper40}`);
+              if (helper35 > 0) parts.push(`35x${helper35}`);
+              if (helper30 > 0) parts.push(`30x${helper30}`);
+              if (helper25 > 0) parts.push(`25x${helper25}`);
+              if (helper20 > 0) parts.push(`20x${helper20}`);
+              if (helperRestante > 0) parts.push(`restante ${helperRestante}`);
+              const formulaText = parts.length > 0 ? parts.join(' + ') : 'Sin bandejas';
+              const totalB = (helper40 * 40) + (helper35 * 35) + (helper30 * 30) + (helper25 * 25) + (helper20 * 20) + helperRestante;
+
+              return (
+                <div className="bg-brand-light p-3.5 rounded-xl border border-brand-border space-y-1">
+                  <div className="flex justify-between items-center text-brand-primary">
+                    <span className="text-xs font-black uppercase">Fórmula:</span>
+                    <span className="text-xs font-mono font-bold text-slate-600 bg-white/80 px-2 py-0.5 rounded border">
+                      {formulaText}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-brand-primary pt-1 border-t border-brand-border/40">
+                    <span className="text-xs font-black uppercase">Suma Total Calculada:</span>
+                    <span className="text-xl font-mono font-black">{totalB} bandejas</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="flex items-center gap-3 pt-2">
               <button
