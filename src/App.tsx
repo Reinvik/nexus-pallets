@@ -782,7 +782,7 @@ export default function App({ user }: { user: any }) {
       fetchReturns();
     } catch (err: any) {
       console.error('Error eliminando despacho:', err);
-      setErrorMsg(err.message || 'Error al eliminar el despacho de Supabase.');
+      setErrorMsg(err.message || 'Error al eliminar el despacho.');
     } finally {
       setLoading(false);
     }
@@ -867,7 +867,7 @@ export default function App({ user }: { user: any }) {
 
       if (error) throw error;
 
-      setSuccessMsg("¡Despacho de pallets registrado correctamente en Supabase!");
+      setSuccessMsg("¡Despacho registrado correctamente!");
       
       // Resetear formulario
       setTruckNumber('');
@@ -896,7 +896,7 @@ export default function App({ user }: { user: any }) {
 
     } catch (err: any) {
       console.error('Error insertando despacho:', err);
-      setErrorMsg(err.message || 'Error al conectar con Supabase.');
+      setErrorMsg(err.message || 'Error al guardar el despacho.');
     } finally {
       setLoading(false);
     }
@@ -943,7 +943,7 @@ export default function App({ user }: { user: any }) {
 
     } catch (err: any) {
       console.error('Error insertando retorno:', err);
-      setErrorMsg(err.message || 'Error al guardar el retorno en Supabase.');
+      setErrorMsg(err.message || 'Error al guardar el retorno.');
     } finally {
       setLoading(false);
     }
@@ -970,7 +970,7 @@ export default function App({ user }: { user: any }) {
               className="w-12 h-12 object-contain bg-white rounded-lg p-0.5 shadow-sm" 
             />
             <div>
-              <h1 className="text-lg font-black tracking-wider leading-none">NEXUS PALLETS</h1>
+              <h1 className="text-lg font-black tracking-wider leading-none">CONTROL DESPACHO</h1>
               <span className="text-[10px] text-emerald-300 font-bold tracking-widest uppercase">
                 Control de Despacho Táctil
               </span>
@@ -2833,7 +2833,7 @@ export default function App({ user }: { user: any }) {
 
       {/* FOOTER */}
       <footer className="bg-slate-100 border-t border-slate-200 text-slate-400 py-4 text-center text-[10px] font-semibold uppercase tracking-wider shrink-0 mt-auto">
-        CIAL Alimentos — Nexus Pallets Control v1.1.0 (2026)
+        CIAL Alimentos — Control Despacho v1.1.0 (2026)
       </footer>
 
     </div>

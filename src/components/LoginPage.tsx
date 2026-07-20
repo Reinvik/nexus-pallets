@@ -179,7 +179,7 @@ export default function LoginPage() {
               />
               <div className="text-left">
                 <h1 className="text-white font-extrabold text-lg leading-none tracking-tight">Control</h1>
-                <span className="text-emerald-200 font-bold text-xs tracking-widest uppercase leading-none">Pallets CIAL</span>
+                <span className="text-emerald-200 font-bold text-xs tracking-widest uppercase leading-none">Despacho CIAL</span>
               </div>
             </div>
             
@@ -438,7 +438,7 @@ export default function LoginPage() {
 
         {/* Versión */}
         <p className="text-center text-white/40 text-[10px] font-bold tracking-wider mt-4 uppercase">
-          Nexus Pallets v1.1.0 · Control Rampas
+          Control Despacho v1.1.0 · Control Rampas
         </p>
       </div>
     </div>
