@@ -136,6 +136,8 @@ export default function App({ user }: { user: any }) {
   const [returnsList, setReturnsList] = useState<PalletReturnRecord[]>([]);
   const [expandedRecords, setExpandedRecords] = useState<{ [key: string]: boolean }>({});
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
+  const [historySubTab, setHistorySubTab] = useState<'camiones' | 'zonales'>('camiones');
+  const [historyZonalFilter, setHistoryZonalFilter] = useState<string>('ALL');
 
   // Datos del Formulario actual de Despacho
   const [supervisorName, setSupervisorName] = useState(() => formatSupervisorName(user?.email));
@@ -1796,280 +1798,518 @@ export default function App({ user }: { user: any }) {
 
         {activeTab === 'historial' && (
           <div className="space-y-6">
-            <h2 className="text-lg font-black text-slate-800 flex items-center justify-between border-b pb-2 select-none">
-              <span>Despachos Registrados Hoy</span>
-              <button 
-                onClick={fetchHistory}
-                className="p-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-all active:scale-95 text-slate-600 cursor-pointer shadow-sm"
-                title="Actualizar Historial"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            </h2>
-
-            {records.length === 0 ? (
-              <div className="text-center py-20 bg-white border border-slate-200 rounded-2xl">
-                <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-sm font-bold text-slate-400">Aún no se han registrado despachos en este día.</p>
+            {/* Cabecera y Subpestañas del Historial */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-3 select-none">
+              <div>
+                <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5 text-brand-primary" />
+                  <span>Historial de Despachos Ingresados</span>
+                </h2>
+                <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                  Visualiza los despachos en vista general o desglosados individualmente por Zonal.
+                </p>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {records.map((rec) => {
-                  const zTotals = rec.zonals_detail.reduce(
-                    (acc, z) => {
-                      const w = 
-                        z.congelados.wood_bases + z.congelados.wood_extra +
-                        z.estandar.wood_bases + z.estandar.wood_extra +
-                        z.bandejas.wood_bases + z.bandejas.wood_extra;
-                      const p = 
-                        z.congelados.plastic_bases + z.congelados.plastic_extra +
-                        z.estandar.plastic_bases + z.estandar.plastic_extra +
-                        z.bandejas.plastic_bases + z.bandejas.plastic_extra;
-                      const b = z.bandejas.bandejas_count || 0;
-                      return { w: acc.w + w, p: acc.p + p, b: acc.b + b };
-                    },
-                    { w: 0, p: 0, b: 0 }
-                  );
 
-                  return (
-                    <div key={rec.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-                      {/* Cabecera */}
-                      <div className="flex items-start justify-between flex-wrap gap-2 border-b border-slate-100 pb-2.5 select-none">
-                        <div>
-                          <span className="text-[10px] font-black text-brand-primary uppercase tracking-widest block">
-                            Supervisor: {rec.supervisor_name}
-                          </span>
-                          <span className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5 mt-0.5">
-                            <Truck className="w-4 h-4 text-slate-400" />
-                            Andén: {rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'} 
-                            {rec.truck_plate !== 'N/A' && ` | Patente: ${rec.truck_plate}`}
-                          </span>
-                          <div className="text-[10px] text-slate-500 font-bold font-mono mt-1 bg-slate-50 border border-slate-100 px-2 py-1 rounded inline-block">
-                            Termos Camión: 1er: {rec.temp_1er}°C | 2do: {rec.temp_2do}°C | 3er: {rec.temp_3er}°C
-                          </div>
+              <div className="flex items-center gap-2">
+                {/* Subpestañas */}
+                <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setHistorySubTab('camiones')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      historySubTab === 'camiones'
+                        ? 'bg-white text-slate-800 shadow-sm font-black'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Truck className="w-3.5 h-3.5 text-brand-primary" />
+                    Vista Camiones
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistorySubTab('zonales')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      historySubTab === 'zonales'
+                        ? 'bg-white text-slate-800 shadow-sm font-black'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Package className="w-3.5 h-3.5 text-brand-emerald" />
+                    Reporte por Zonal
+                  </button>
+                </div>
 
-                          {/* Hora de Cierre Camión en Historial */}
-                          <div className="mt-1.5 flex items-center gap-2 select-none">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 text-brand-primary" />
-                              Cierre Camión:
+                <button 
+                  onClick={fetchHistory}
+                  className="p-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-all active:scale-95 text-slate-600 cursor-pointer shadow-sm"
+                  title="Actualizar Historial"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* VISTA 1: POR CAMIONES (Tarjeta tradicional) */}
+            {historySubTab === 'camiones' && (
+              records.length === 0 ? (
+                <div className="text-center py-20 bg-white border border-slate-200 rounded-2xl">
+                  <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-slate-400">Aún no se han registrado despachos en este día.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {records.map((rec) => {
+                    const zTotals = rec.zonals_detail.reduce(
+                      (acc, z) => {
+                        const w = 
+                          z.congelados.wood_bases + z.congelados.wood_extra +
+                          z.estandar.wood_bases + z.estandar.wood_extra +
+                          z.bandejas.wood_bases + z.bandejas.wood_extra;
+                        const p = 
+                          z.congelados.plastic_bases + z.congelados.plastic_extra +
+                          z.estandar.plastic_bases + z.estandar.plastic_extra +
+                          z.bandejas.plastic_bases + z.bandejas.plastic_extra;
+                        const b = z.bandejas.bandejas_count || 0;
+                        return { w: acc.w + w, p: acc.p + p, b: acc.b + b };
+                      },
+                      { w: 0, p: 0, b: 0 }
+                    );
+
+                    return (
+                      <div key={rec.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                        {/* Cabecera */}
+                        <div className="flex items-start justify-between flex-wrap gap-2 border-b border-slate-100 pb-2.5 select-none">
+                          <div>
+                            <span className="text-[10px] font-black text-brand-primary uppercase tracking-widest block">
+                              Supervisor: {rec.supervisor_name}
                             </span>
-                            
-                            {editingCloseTimes[rec.id] !== undefined ? (
-                              <div className="flex items-center gap-1.5">
-                                <input
-                                  type="time"
-                                  value={editingCloseTimes[rec.id]}
-                                  onChange={(e) => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: e.target.value }))}
-                                  className="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] font-mono font-bold focus:outline-none focus:border-brand-primary"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const now = new Date();
-                                    const pad = (n: number) => n.toString().padStart(2, '0');
-                                    setEditingCloseTimes(prev => ({ ...prev, [rec.id]: `${pad(now.getHours())}:${pad(now.getMinutes())}` }));
-                                  }}
-                                  className="bg-slate-200 hover:bg-slate-300 text-slate-750 px-1.5 py-0.5 rounded text-[10px] font-black cursor-pointer"
-                                >
-                                  Ahora
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={savingCloseTimeId === rec.id}
-                                  onClick={() => handleSaveCloseTime(rec.id, editingCloseTimes[rec.id])}
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 rounded text-[10px] font-black shadow-sm flex items-center gap-0.5 cursor-pointer disabled:opacity-50"
-                                >
-                                  {savingCloseTimeId === rec.id ? '...' : 'OK'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingCloseTimes(prev => {
-                                    const copy = { ...prev };
-                                    delete copy[rec.id];
-                                    return copy;
-                                  })}
-                                  className="bg-slate-100 hover:bg-slate-200 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer"
-                                >
-                                  X
-                                </button>
-                              </div>
+                            <span className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5 mt-0.5">
+                              <Truck className="w-4 h-4 text-slate-400" />
+                              Andén: {rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'} 
+                              {rec.truck_plate !== 'N/A' && ` | Patente: ${rec.truck_plate}`}
+                            </span>
+                            <div className="text-[10px] text-slate-500 font-bold font-mono mt-1 bg-slate-50 border border-slate-100 px-2 py-1 rounded inline-block">
+                              Termos Camión: 1er: {rec.temp_1er}°C | 2do: {rec.temp_2do}°C | 3er: {rec.temp_3er}°C
+                            </div>
+
+                            {/* Hora de Cierre Camión en Historial */}
+                            <div className="mt-1.5 flex items-center gap-2 select-none">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-brand-primary" />
+                                Cierre Camión:
+                              </span>
+                              
+                              {editingCloseTimes[rec.id] !== undefined ? (
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="time"
+                                    value={editingCloseTimes[rec.id]}
+                                    onChange={(e) => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: e.target.value }))}
+                                    className="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] font-mono font-bold focus:outline-none focus:border-brand-primary"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const now = new Date();
+                                      const pad = (n: number) => n.toString().padStart(2, '0');
+                                      setEditingCloseTimes(prev => ({ ...prev, [rec.id]: `${pad(now.getHours())}:${pad(now.getMinutes())}` }));
+                                    }}
+                                    className="bg-slate-200 hover:bg-slate-300 text-slate-750 px-1.5 py-0.5 rounded text-[10px] font-black cursor-pointer"
+                                  >
+                                    Ahora
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={savingCloseTimeId === rec.id}
+                                    onClick={() => handleSaveCloseTime(rec.id, editingCloseTimes[rec.id])}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 rounded text-[10px] font-black shadow-sm flex items-center gap-0.5 cursor-pointer disabled:opacity-50"
+                                  >
+                                    {savingCloseTimeId === rec.id ? '...' : 'OK'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCloseTimes(prev => {
+                                      const copy = { ...prev };
+                                      delete copy[rec.id];
+                                      return copy;
+                                    })}
+                                    className="bg-slate-100 hover:bg-slate-200 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer"
+                                  >
+                                    X
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-[11px] font-mono font-black ${rec.close_time ? 'text-brand-primary bg-emerald-50 border border-emerald-100 px-1.5 py-0.2 rounded' : 'text-slate-400 italic font-bold'}`}>
+                                    {rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: rec.close_time || '' }))}
+                                    className="text-slate-400 hover:text-brand-primary p-0.5 rounded transition-all cursor-pointer"
+                                    title="Editar Hora de Cierre"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right text-xs text-slate-400 font-mono">
+                            <div className="flex items-center gap-1 justify-end font-bold text-slate-600">
+                              <Calendar className="w-3.5 h-3.5" />
+                              {getFormatDate(rec.inspection_date)}
+                            </div>
+                            <div className="flex items-center gap-1 justify-end mt-0.5">
+                              <Clock className="w-3 h-3" />
+                              {rec.inspection_time}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Totales */}
+                        <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100/50 text-center font-mono select-none">
+                          <div className="p-2 bg-white rounded border border-slate-100">
+                            <span className="text-[9px] text-slate-400 font-bold block uppercase">Madera</span>
+                            <span className="text-sm font-black text-amber-700">{zTotals.w}</span>
+                          </div>
+                          <div className="p-2 bg-white rounded border border-slate-100">
+                            <span className="text-[9px] text-slate-400 font-bold block uppercase">Plástico</span>
+                            <span className="text-sm font-black text-emerald-700">{zTotals.p}</span>
+                          </div>
+                          <div className="p-2 bg-white rounded border border-slate-100">
+                            <span className="text-[9px] text-slate-400 font-bold block uppercase">Bandejas</span>
+                            <span className="text-sm font-black text-slate-700">{zTotals.b}</span>
+                          </div>
+                        </div>
+
+                        {/* Botón interactivo de ver/ocultar detalles, PDF, Editar y Eliminar */}
+                        <div className="flex justify-end flex-wrap gap-2 pt-0.5 select-none">
+                          <button
+                            type="button"
+                            disabled={generatingPdfId === rec.id}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDownloadPDF(rec);
+                            }}
+                            className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-emerald-600 bg-brand-emerald text-white flex items-center gap-1.5 hover:bg-emerald-600 disabled:opacity-60"
+                          >
+                            {generatingPdfId === rec.id ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                Generando...
+                              </>
                             ) : (
-                              <div className="flex items-center gap-1.5">
-                                <span className={`text-[11px] font-mono font-black ${rec.close_time ? 'text-brand-primary bg-emerald-50 border border-emerald-100 px-1.5 py-0.2 rounded' : 'text-slate-400 italic font-bold'}`}>
-                                  {rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: rec.close_time || '' }))}
-                                  className="text-slate-400 hover:text-brand-primary p-0.5 rounded transition-all cursor-pointer"
-                                  title="Editar Hora de Cierre"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
+                              <>
+                                <FileDown className="w-4 h-4" />
+                                PDF
+                              </>
+                            )}
+                          </button>
+
+                          {isAdmin && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openEditDispatchModal(rec)}
+                                className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1.5"
+                                title="Editar Despacho (Solo Admin)"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                                EDITAR
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDispatch(rec)}
+                                className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5"
+                                title="Eliminar Despacho (Solo Admin)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                ELIMINAR
+                              </button>
+                            </>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => setExpandedRecords(prev => ({ ...prev, [rec.id]: !prev[rec.id] }))}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border flex items-center gap-1.5 ${
+                              expandedRecords[rec.id] 
+                                ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' 
+                                : 'bg-brand-primary hover:bg-brand-secondary border-brand-primary text-white'
+                            }`}
+                          >
+                            {expandedRecords[rec.id] ? (
+                              <>
+                                <ChevronUp className="w-4 h-4" />
+                                OCULTAR DETALLES
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="w-4 h-4" />
+                                VER DETALLES
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Desglose Condicional de Zonales */}
+                        {expandedRecords[rec.id] && (
+                          <div className="space-y-4 pt-3.5 border-t border-slate-100">
+                            <div className="space-y-2">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block select-none">
+                                Detalle de Zonales cargados:
+                              </span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {rec.zonals_detail.map((z, idx) => {
+                                  const zT = z.congelados.wood_bases + z.congelados.wood_extra +
+                                            z.estandar.wood_bases + z.estandar.wood_extra +
+                                            z.bandejas.wood_bases + z.bandejas.wood_extra;
+                                  const zP = z.congelados.plastic_bases + z.congelados.plastic_extra +
+                                            z.estandar.plastic_bases + z.estandar.plastic_extra +
+                                            z.bandejas.plastic_bases + z.bandejas.plastic_extra;
+
+                                  return (
+                                    <div key={idx} className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 text-xs">
+                                      <div className="flex justify-between items-center font-extrabold text-slate-700 mb-1.5 border-b border-slate-200/50 pb-1">
+                                        <span>{z.zonal_name} ({z.lugar_camion})</span>
+                                        {z.sello && <span className="text-[9px] bg-slate-200 px-1.5 py-0.5 rounded font-mono font-bold">Sello: {z.sello}</span>}
+                                      </div>
+                                      <div className="space-y-1 font-semibold text-slate-500 font-mono">
+                                        <div className="flex justify-between">
+                                          <span>Congelados:</span>
+                                          <span>M:{z.congelados.wood_bases}+{z.congelados.wood_extra} | P:{z.congelados.plastic_bases}+{z.congelados.plastic_extra}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span>Estándar:</span>
+                                          <span>M:{z.estandar.wood_bases}+{z.estandar.wood_extra} | P:{z.estandar.plastic_bases}+{z.estandar.plastic_extra}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span>Bandejas:</span>
+                                          <span>{z.bandejas.bandejas_count}B | M:{z.bandejas.wood_bases}+{z.bandejas.wood_extra} | P:{z.bandejas.plastic_bases}+{z.bandejas.plastic_extra}</span>
+                                        </div>
+                                        <div className="flex justify-between text-brand-primary font-bold border-t border-dashed border-slate-200 pt-1 mt-1 text-[11px]">
+                                          <span>Totales Zonal:</span>
+                                          <span>M:{zT} | P:{zP}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Observaciones */}
+                            {rec.observations && (
+                              <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 font-semibold text-slate-600">
+                                <span className="font-bold text-slate-700">Observaciones: </span>
+                                {rec.observations}
                               </div>
                             )}
                           </div>
-                        </div>
-                        <div className="text-right text-xs text-slate-400 font-mono">
-                          <div className="flex items-center gap-1 justify-end font-bold text-slate-600">
-                            <Calendar className="w-3.5 h-3.5" />
-                            {getFormatDate(rec.inspection_date)}
-                          </div>
-                          <div className="flex items-center gap-1 justify-end mt-0.5">
-                            <Clock className="w-3 h-3" />
-                            {rec.inspection_time}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Totales */}
-                      <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100/50 text-center font-mono select-none">
-                        <div className="p-2 bg-white rounded border border-slate-100">
-                          <span className="text-[9px] text-slate-400 font-bold block uppercase">Madera</span>
-                          <span className="text-sm font-black text-amber-700">{zTotals.w}</span>
-                        </div>
-                        <div className="p-2 bg-white rounded border border-slate-100">
-                          <span className="text-[9px] text-slate-400 font-bold block uppercase">Plástico</span>
-                          <span className="text-sm font-black text-emerald-700">{zTotals.p}</span>
-                        </div>
-                        <div className="p-2 bg-white rounded border border-slate-100">
-                          <span className="text-[9px] text-slate-400 font-bold block uppercase">Bandejas</span>
-                          <span className="text-sm font-black text-slate-700">{zTotals.b}</span>
-                        </div>
-                      </div>
-
-                      {/* Botón interactivo de ver/ocultar detalles, PDF, Editar y Eliminar */}
-                      <div className="flex justify-end flex-wrap gap-2 pt-0.5 select-none">
-                        <button
-                          type="button"
-                          disabled={generatingPdfId === rec.id}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDownloadPDF(rec);
-                          }}
-                          className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-emerald-600 bg-brand-emerald text-white flex items-center gap-1.5 hover:bg-emerald-600 disabled:opacity-60"
-                        >
-                          {generatingPdfId === rec.id ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              Generando...
-                            </>
-                          ) : (
-                            <>
-                              <FileDown className="w-4 h-4" />
-                              PDF
-                            </>
-                          )}
-                        </button>
-
-                        {isAdmin && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => openEditDispatchModal(rec)}
-                              className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1.5"
-                              title="Editar Despacho (Solo Admin)"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                              EDITAR
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteDispatch(rec)}
-                              className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5"
-                              title="Eliminar Despacho (Solo Admin)"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              ELIMINAR
-                            </button>
-                          </>
                         )}
-
-                        <button
-                          type="button"
-                          onClick={() => setExpandedRecords(prev => ({ ...prev, [rec.id]: !prev[rec.id] }))}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border flex items-center gap-1.5 ${
-                            expandedRecords[rec.id] 
-                              ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' 
-                              : 'bg-brand-primary hover:bg-brand-secondary border-brand-primary text-white'
-                          }`}
-                        >
-                          {expandedRecords[rec.id] ? (
-                            <>
-                              <ChevronUp className="w-4 h-4" />
-                              OCULTAR DETALLES
-                            </>
-                          ) : (
-                            <>
-                              <ChevronDown className="w-4 h-4" />
-                              VER DETALLES
-                            </>
-                          )}
-                        </button>
                       </div>
-
-                      {/* Desglose Condicional de Zonales */}
-                      {expandedRecords[rec.id] && (
-                        <div className="space-y-4 pt-3.5 border-t border-slate-100">
-                          <div className="space-y-2">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block select-none">
-                              Detalle de Zonales cargados:
-                            </span>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              {rec.zonals_detail.map((z, idx) => {
-                                const zT = z.congelados.wood_bases + z.congelados.wood_extra +
-                                          z.estandar.wood_bases + z.estandar.wood_extra +
-                                          z.bandejas.wood_bases + z.bandejas.wood_extra;
-                                const zP = z.congelados.plastic_bases + z.congelados.plastic_extra +
-                                          z.estandar.plastic_bases + z.estandar.plastic_extra +
-                                          z.bandejas.plastic_bases + z.bandejas.plastic_extra;
-
-                                return (
-                                  <div key={idx} className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 text-xs">
-                                    <div className="flex justify-between items-center font-extrabold text-slate-700 mb-1.5 border-b border-slate-200/50 pb-1">
-                                      <span>{z.zonal_name} ({z.lugar_camion})</span>
-                                      {z.sello && <span className="text-[9px] bg-slate-200 px-1.5 py-0.5 rounded font-mono font-bold">Sello: {z.sello}</span>}
-                                    </div>
-                                    <div className="space-y-1 font-semibold text-slate-500 font-mono">
-                                      <div className="flex justify-between">
-                                        <span>Congelados:</span>
-                                        <span>M:{z.congelados.wood_bases}+{z.congelados.wood_extra} | P:{z.congelados.plastic_bases}+{z.congelados.plastic_extra}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span>Estándar:</span>
-                                        <span>M:{z.estandar.wood_bases}+{z.estandar.wood_extra} | P:{z.estandar.plastic_bases}+{z.estandar.plastic_extra}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span>Bandejas:</span>
-                                        <span>{z.bandejas.bandejas_count}B | M:{z.bandejas.wood_bases}+{z.bandejas.wood_extra} | P:{z.bandejas.plastic_bases}+{z.bandejas.plastic_extra}</span>
-                                      </div>
-                                      <div className="flex justify-between text-brand-primary font-bold border-t border-dashed border-slate-200 pt-1 mt-1 text-[11px]">
-                                        <span>Totales Zonal:</span>
-                                        <span>M:{zT} | P:{zP}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* Observaciones */}
-                          {rec.observations && (
-                            <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 font-semibold text-slate-600">
-                              <span className="font-bold text-slate-700">Observaciones: </span>
-                              {rec.observations}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )
             )}
+
+            {/* VISTA 2: REPORTE POR ZONAL (Desglose directo por Zonal) */}
+            {historySubTab === 'zonales' && (() => {
+              // Aplanar registros por Zonal
+              const allZonalRows = records.flatMap((rec) => {
+                return rec.zonals_detail.map((z) => {
+                  const wood = (z.congelados?.wood_bases || 0) + (z.congelados?.wood_extra || 0) +
+                               (z.estandar?.wood_bases || 0) + (z.estandar?.wood_extra || 0) +
+                               (z.bandejas?.wood_bases || 0) + (z.bandejas?.wood_extra || 0);
+                  const plastic = (z.congelados?.plastic_bases || 0) + (z.congelados?.plastic_extra || 0) +
+                                  (z.estandar?.plastic_bases || 0) + (z.estandar?.plastic_extra || 0) +
+                                  (z.bandejas?.plastic_bases || 0) + (z.bandejas?.plastic_extra || 0);
+                  const bandejas = z.bandejas?.bandejas_count || 0;
+
+                  return {
+                    id: `${rec.id}-${z.zonal_name}-${z.viaje_numero || 1}`,
+                    dispatchId: rec.id,
+                    date: rec.inspection_date,
+                    time: rec.inspection_time,
+                    truckNumber: rec.truck_number,
+                    truckPlate: rec.truck_plate,
+                    supervisor: rec.supervisor_name,
+                    zonalName: z.zonal_name,
+                    viajeNumero: z.viaje_numero || 1,
+                    lugarCamion: z.lugar_camion,
+                    wood,
+                    plastic,
+                    bandejas,
+                    sello: z.sello || '-'
+                  };
+                });
+              });
+
+              // Aplicar filtro si existe
+              const filteredRows = historyZonalFilter === 'ALL' 
+                ? allZonalRows 
+                : allZonalRows.filter(r => r.zonalName === historyZonalFilter);
+
+              // Totales agregados para el reporte filtrado
+              const reportTotals = filteredRows.reduce(
+                (acc, r) => ({
+                  wood: acc.wood + r.wood,
+                  plastic: acc.plastic + r.plastic,
+                  bandejas: acc.bandejas + r.bandejas
+                }),
+                { wood: 0, plastic: 0, bandejas: 0 }
+              );
+
+              // Lista de zonales únicos para el selector
+              const uniqueZonals = Array.from(new Set(allZonalRows.map(r => r.zonalName))).sort();
+
+              return (
+                <div className="space-y-4">
+                  {/* Tarjetas KPI Resumen del Reporte */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 select-none">
+                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Envíos</span>
+                      <span className="text-xl font-black text-slate-800 mt-1">{filteredRows.length} <span className="text-xs font-semibold text-slate-400">zonales</span></span>
+                    </div>
+
+                    <div className="bg-amber-500/10 border border-amber-500/20 p-3.5 rounded-2xl shadow-sm flex flex-col justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">Pallet Madera</span>
+                      <span className="text-xl font-black text-amber-800 mt-1">{reportTotals.wood}</span>
+                    </div>
+
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 p-3.5 rounded-2xl shadow-sm flex flex-col justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">Pallet Plástico</span>
+                      <span className="text-xl font-black text-emerald-800 mt-1">{reportTotals.plastic}</span>
+                    </div>
+
+                    <div className="bg-blue-500/10 border border-blue-500/20 p-3.5 rounded-2xl shadow-sm flex flex-col justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-blue-700">Bandejas</span>
+                      <span className="text-xl font-black text-blue-800 mt-1">{reportTotals.bandejas}</span>
+                    </div>
+                  </div>
+
+                  {/* Barra de Filtro rápido por Zonal */}
+                  <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex-wrap select-none">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-600">Filtrar Zonal:</span>
+                      <select
+                        value={historyZonalFilter}
+                        onChange={(e) => setHistoryZonalFilter(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-primary cursor-pointer"
+                      >
+                        <option value="ALL">Todos los Zonales ({allZonalRows.length})</option>
+                        {uniqueZonals.map(z => (
+                          <option key={z} value={z}>{z}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {historyZonalFilter !== 'ALL' && (
+                      <button
+                        onClick={() => setHistoryZonalFilter('ALL')}
+                        className="text-xs font-bold text-brand-primary hover:underline cursor-pointer"
+                      >
+                        Mostrar todos
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Tabla de Reporte por Zonal */}
+                  {filteredRows.length === 0 ? (
+                    <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl">
+                      <Package className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                      <p className="text-xs font-bold text-slate-400">No se encontraron entregas para el zonal seleccionado.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 select-none uppercase text-[10px] tracking-wider">
+                            <tr>
+                              <th className="p-3.5">Fecha / Hora</th>
+                              <th className="p-3.5">Zonal</th>
+                              <th className="p-3.5 text-center">Pallet Madera</th>
+                              <th className="p-3.5 text-center">Pallet Plástico</th>
+                              <th className="p-3.5 text-center">Bandejas</th>
+                              <th className="p-3.5">Camión / Patente</th>
+                              <th className="p-3.5">Sello</th>
+                              <th className="p-3.5">Supervisor</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                            {filteredRows.map((row) => (
+                              <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="p-3.5 font-mono text-[11px] whitespace-nowrap">
+                                  <div>{getFormatDate(row.date)}</div>
+                                  <div className="text-[10px] text-slate-400 font-normal">{row.time} hrs</div>
+                                </td>
+
+                                <td className="p-3.5">
+                                  <div className="font-bold text-slate-800 uppercase text-xs">
+                                    {row.zonalName} {row.viajeNumero > 1 ? `(${row.viajeNumero})` : ''}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 font-normal">{row.lugarCamion}</div>
+                                </td>
+
+                                <td className="p-3.5 text-center">
+                                  <span className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-xs ${
+                                    row.wood > 0 
+                                      ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                                      : 'text-slate-300 font-normal'
+                                  }`}>
+                                    {row.wood > 0 ? row.wood : '0'}
+                                  </span>
+                                </td>
+
+                                <td className="p-3.5 text-center">
+                                  <span className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-xs ${
+                                    row.plastic > 0 
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                                      : 'text-slate-300 font-normal'
+                                  }`}>
+                                    {row.plastic > 0 ? row.plastic : '0'}
+                                  </span>
+                                </td>
+
+                                <td className="p-3.5 text-center">
+                                  <span className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-xs ${
+                                    row.bandejas > 0 
+                                      ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                                      : 'text-slate-300 font-normal'
+                                  }`}>
+                                    {row.bandejas > 0 ? row.bandejas : '0'}
+                                  </span>
+                                </td>
+
+                                <td className="p-3.5 text-xs whitespace-nowrap">
+                                  <div className="font-bold text-slate-700">Andén {row.truckNumber}</div>
+                                  <div className="text-[10px] font-mono text-slate-400 uppercase">{row.truckPlate}</div>
+                                </td>
+
+                                <td className="p-3.5 font-mono text-xs text-slate-600">
+                                  {row.sello !== '-' ? (
+                                    <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{row.sello}</span>
+                                  ) : (
+                                    <span className="text-slate-300">—</span>
+                                  )}
+                                </td>
+
+                                <td className="p-3.5 text-xs text-slate-500 uppercase font-medium whitespace-nowrap">
+                                  {row.supervisor}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
