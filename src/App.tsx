@@ -109,6 +109,20 @@ const formatSupervisorName = (email: string | undefined): string => {
     .join(' ');
 };
 
+const ADMIN_EMAILS = [
+  'ariel.mella@cial.cl',
+  'euro.velasquez@cial.cl',
+  'admin@cial.cl'
+];
+
+const checkIsAdmin = (user: any): boolean => {
+  if (!user) return false;
+  const email = (user.email || '').toLowerCase();
+  const role = (user.user_metadata?.role || user.app_metadata?.role || '').toLowerCase();
+  if (['admin', 'superadmin', 'jefe', 'supervisor_jefe'].includes(role)) return true;
+  return ADMIN_EMAILS.includes(email);
+};
+
 export default function App({ user }: { user: any }) {
   const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales'>('nuevo');
   const [loading, setLoading] = useState(false);
@@ -131,9 +145,27 @@ export default function App({ user }: { user: any }) {
   const [temp3er, setTemp3er] = useState<number>(0);
   const [closeTime, setCloseTime] = useState<string>('');
 
+  const isAdmin = checkIsAdmin(user);
+
   // Estados para edición diferida de hora de cierre de camión en historial
   const [editingCloseTimes, setEditingCloseTimes] = useState<{ [key: string]: string }>({});
   const [savingCloseTimeId, setSavingCloseTimeId] = useState<string | null>(null);
+
+  // Estado para el modal de edición completa de despacho (solo admin)
+  const [editingDispatchRecord, setEditingDispatchRecord] = useState<DispatchRecord | null>(null);
+  const [editingDate, setEditingDate] = useState('');
+  const [editingTime, setEditingTime] = useState('');
+  const [editingCloseTime, setEditingCloseTime] = useState('');
+  const [editingTruckNumber, setEditingTruckNumber] = useState('');
+  const [editingTruckPlate, setEditingTruckPlate] = useState('');
+  const [editingSupervisorName, setEditingSupervisorName] = useState('');
+  const [editingPositions, setEditingPositions] = useState(26);
+  const [editingTemp1er, setEditingTemp1er] = useState(0);
+  const [editingTemp2do, setEditingTemp2do] = useState(-18);
+  const [editingTemp3er, setEditingTemp3er] = useState(0);
+  const [editingZonalsDetail, setEditingZonalsDetail] = useState<ZonalDetail[]>([]);
+  const [editingObservations, setEditingObservations] = useState('');
+  const [editingSaveLoading, setEditingSaveLoading] = useState(false);
 
   // Checklist de 5 items
   const [checklist, setChecklist] = useState({
@@ -641,6 +673,121 @@ export default function App({ user }: { user: any }) {
     }
   };
 
+    // Abrir modal de edición de despacho para Admin
+  const openEditDispatchModal = (rec: DispatchRecord) => {
+    setEditingDispatchRecord(rec);
+    setEditingDate(rec.inspection_date || '');
+    setEditingTime(rec.inspection_time || '');
+    setEditingCloseTime(rec.close_time || '');
+    setEditingTruckNumber(rec.truck_number !== 'N/A' ? rec.truck_number : '');
+    setEditingTruckPlate(rec.truck_plate !== 'N/A' ? rec.truck_plate : '');
+    setEditingSupervisorName(rec.supervisor_name || '');
+    setEditingPositions(rec.positions_occupied || 26);
+    setEditingTemp1er(rec.temp_1er ?? 0);
+    setEditingTemp2do(rec.temp_2do ?? -18);
+    setEditingTemp3er(rec.temp_3er ?? 0);
+    setEditingZonalsDetail(JSON.parse(JSON.stringify(rec.zonals_detail || [])));
+    setEditingObservations(rec.observations || '');
+  };
+
+  // Guardar edición completa de despacho
+  const handleSaveEditDispatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDispatchRecord) return;
+    setEditingSaveLoading(true);
+
+    try {
+      const { error } = await supabase
+        .from('pallet_dispatches')
+        .update({
+          inspection_date: editingDate,
+          inspection_time: editingTime,
+          close_time: editingCloseTime || null,
+          truck_number: editingTruckNumber || 'N/A',
+          truck_plate: editingTruckPlate || 'N/A',
+          supervisor_name: editingSupervisorName,
+          positions_occupied: editingPositions,
+          temp_1er: editingTemp1er,
+          temp_2do: editingTemp2do,
+          temp_3er: editingTemp3er,
+          zonals_detail: editingZonalsDetail,
+          observations: editingObservations
+        })
+        .eq('id', editingDispatchRecord.id);
+
+      if (error) throw error;
+
+      setSuccessMsg('¡Despacho corregido y guardado con éxito!');
+      setEditingDispatchRecord(null);
+      fetchHistory();
+      fetchReturns();
+    } catch (err: any) {
+      console.error('Error al editar despacho:', err);
+      alert('Error al actualizar despacho: ' + (err.message || 'Error de conexión'));
+    } finally {
+      setEditingSaveLoading(false);
+    }
+  };
+
+  // Helpers para modificar la lista de zonales en edición
+  const handleUpdateEditingZonal = (index: number, field: string, value: any) => {
+    setEditingZonalsDetail(prev => {
+      const copy = JSON.parse(JSON.stringify(prev));
+      copy[index][field] = value;
+      return copy;
+    });
+  };
+
+  const handleUpdateEditingZonalCategory = (index: number, category: 'congelados' | 'estandar' | 'bandejas', field: string, value: any) => {
+    setEditingZonalsDetail(prev => {
+      const copy = JSON.parse(JSON.stringify(prev));
+      copy[index][category][field] = value;
+      return copy;
+    });
+  };
+
+  const handleAddEditingZonal = () => {
+    const emptyZonal: ZonalDetail = {
+      zonal_name: ZONALES_LIST[0] || 'San Fernando',
+      viaje_numero: 1,
+      lugar_camion: '1° (FONDO)',
+      congelados: { kilos: 0, wood_bases: 0, wood_extra: 0, plastic_bases: 0, plastic_extra: 0 },
+      estandar: { kilos: 0, wood_bases: 0, wood_extra: 0, plastic_bases: 0, plastic_extra: 0 },
+      bandejas: { kilos: 0, wood_bases: 0, wood_extra: 0, plastic_bases: 0, plastic_extra: 0, bandejas_count: 0 },
+      sello: ''
+    };
+    setEditingZonalsDetail(prev => [...prev, emptyZonal]);
+  };
+
+  const handleRemoveEditingZonal = (index: number) => {
+    setEditingZonalsDetail(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Eliminar despacho (Solo Admin)
+  const handleDeleteDispatch = async (rec: DispatchRecord) => {
+    const confirmMsg = `¿Estás seguro de eliminar permanentemente el despacho de ${rec.supervisor_name} (Andén: ${rec.truck_number}, Patente: ${rec.truck_plate})?\n\nEsta acción recalculará inmediatamente los saldos de pallets.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('pallet_dispatches')
+        .delete()
+        .eq('id', rec.id);
+
+      if (error) throw error;
+
+      setSuccessMsg('Despacho eliminado correctamente.');
+      fetchHistory();
+      fetchReturns();
+    } catch (err: any) {
+      console.error('Error eliminando despacho:', err);
+      setErrorMsg(err.message || 'Error al eliminar el despacho de Supabase.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveCloseTime = async (recordId: string, time: string) => {
     setSavingCloseTimeId(recordId);
     try {
@@ -831,8 +978,13 @@ export default function App({ user }: { user: any }) {
           </div>
           <div className="flex items-center gap-2">
             <div className="text-right text-xs text-emerald-100 hidden lg:block mr-2 select-none">
-              <div className="font-semibold">
+              <div className="font-semibold flex items-center gap-1 justify-end">
                 {supervisorName}
+                {isAdmin && (
+                  <span className="text-[9px] bg-amber-400 text-amber-950 font-extrabold px-1.5 py-0.2 rounded uppercase">
+                    ADMIN
+                  </span>
+                )}
               </div>
               <div className="font-mono text-[9px] opacity-80 mt-0.5">
                 {user?.email}
@@ -1725,8 +1877,8 @@ export default function App({ user }: { user: any }) {
                         </div>
                       </div>
 
-                      {/* Botón interactivo de ver/ocultar detalles y PDF */}
-                      <div className="flex justify-end gap-2 pt-0.5 select-none">
+                      {/* Botón interactivo de ver/ocultar detalles, PDF, Editar y Eliminar */}
+                      <div className="flex justify-end flex-wrap gap-2 pt-0.5 select-none">
                         <button
                           type="button"
                           onClick={() => handleDownloadPDF(rec)}
@@ -1735,6 +1887,30 @@ export default function App({ user }: { user: any }) {
                           <FileDown className="w-4 h-4" />
                           PDF
                         </button>
+
+                        {isAdmin && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditDispatchModal(rec)}
+                              className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1.5"
+                              title="Editar Despacho (Solo Admin)"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                              EDITAR
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDispatch(rec)}
+                              className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5"
+                              title="Eliminar Despacho (Solo Admin)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              ELIMINAR
+                            </button>
+                          </>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => setExpandedRecords(prev => ({ ...prev, [rec.id]: !prev[rec.id] }))}
@@ -2309,6 +2485,347 @@ export default function App({ user }: { user: any }) {
                   {passwordLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <>ACTUALIZAR CLAVE</>}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EDICIÓN COMPLETA DE DESPACHO (SOLO ADMIN/SUPERIOR) */}
+      {editingDispatchRecord && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl space-y-5 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3 select-none">
+              <div className="flex items-center gap-2">
+                <div className="bg-amber-100 p-2 rounded-xl text-amber-800 font-bold">
+                  <Edit2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800 uppercase tracking-wider">
+                    Editar Despacho #{editingDispatchRecord.truck_number !== 'N/A' ? editingDispatchRecord.truck_number : editingDispatchRecord.id.slice(0, 6)}
+                  </h3>
+                  <p className="text-xs text-amber-700 font-bold">Modo Administrador — Edición Directa</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingDispatchRecord(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-xl cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditDispatch} className="space-y-5">
+              
+              {/* DATOS BÁSICOS */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-4">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider border-b pb-1">
+                  1. Fecha, Hora y Supervisor
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Fecha de Inspección</label>
+                    <input 
+                      type="date" 
+                      value={editingDate}
+                      onChange={(e) => setEditingDate(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Hora de Inspección</label>
+                    <input 
+                      type="text" 
+                      value={editingTime}
+                      onChange={(e) => setEditingTime(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
+                      placeholder="HH:MM:SS"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Hora Cierre Camión</label>
+                    <input 
+                      type="time" 
+                      value={editingCloseTime}
+                      onChange={(e) => setEditingCloseTime(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Supervisor</label>
+                    <input 
+                      type="text" 
+                      value={editingSupervisorName}
+                      onChange={(e) => setEditingSupervisorName(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Andén de Carga</label>
+                    <input 
+                      type="text" 
+                      value={editingTruckNumber}
+                      onChange={(e) => setEditingTruckNumber(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Patente</label>
+                    <input 
+                      type="text" 
+                      value={editingTruckPlate}
+                      onChange={(e) => setEditingTruckPlate(e.target.value.toUpperCase())}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* TEMPERATURAS Y POSICIONES */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-4">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider border-b pb-1">
+                  2. Posiciones & Termos (°C)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Posiciones Ocupadas</label>
+                    <input 
+                      type="number" 
+                      value={editingPositions}
+                      onChange={(e) => setEditingPositions(Number(e.target.value))}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
+                      min={0}
+                      max={30}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Temp. 1er Termo</label>
+                    <input 
+                      type="number" 
+                      value={editingTemp1er}
+                      onChange={(e) => setEditingTemp1er(Number(e.target.value))}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Temp. 2do Termo</label>
+                    <input 
+                      type="number" 
+                      value={editingTemp2do}
+                      onChange={(e) => setEditingTemp2do(Number(e.target.value))}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Temp. 3er Termo</label>
+                    <input 
+                      type="number" 
+                      value={editingTemp3er}
+                      onChange={(e) => setEditingTemp3er(Number(e.target.value))}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* DETALLE DE ZONALES */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-4">
+                <div className="flex justify-between items-center border-b pb-1">
+                  <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                    3. Detalle de Zonales Cargados ({editingZonalsDetail.length})
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={handleAddEditingZonal}
+                    className="bg-brand-primary hover:bg-brand-secondary text-white text-[10px] font-black px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+                  >
+                    + Agregar Zonal
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {editingZonalsDetail.map((zonal, zIndex) => {
+                    const woodTotal = (zonal.congelados.wood_bases || 0) + (zonal.congelados.wood_extra || 0) +
+                                     (zonal.estandar.wood_bases || 0) + (zonal.estandar.wood_extra || 0) +
+                                     (zonal.bandejas.wood_bases || 0) + (zonal.bandejas.wood_extra || 0);
+                    const plasticTotal = (zonal.congelados.plastic_bases || 0) + (zonal.congelados.plastic_extra || 0) +
+                                        (zonal.estandar.plastic_bases || 0) + (zonal.estandar.plastic_extra || 0) +
+                                        (zonal.bandejas.plastic_bases || 0) + (zonal.bandejas.plastic_extra || 0);
+
+                    return (
+                      <div key={zIndex} className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-3 shadow-sm">
+                        <div className="flex justify-between items-center bg-slate-100 p-2 rounded-lg">
+                          <div className="flex items-center gap-2 flex-1 flex-wrap">
+                            <span className="font-black text-xs text-brand-primary">#{zIndex + 1}</span>
+                            <select
+                              value={zonal.zonal_name}
+                              onChange={(e) => handleUpdateEditingZonal(zIndex, 'zonal_name', e.target.value)}
+                              className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold"
+                            >
+                              {ZONALES_LIST.map(zn => (
+                                <option key={zn} value={zn}>{zn}</option>
+                              ))}
+                            </select>
+
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] font-bold text-slate-500">Viaje:</span>
+                              <input 
+                                type="number" 
+                                min={1}
+                                max={10}
+                                value={zonal.viaje_numero || 1}
+                                onChange={(e) => handleUpdateEditingZonal(zIndex, 'viaje_numero', Number(e.target.value))}
+                                className="w-12 bg-white border border-slate-300 rounded px-1 py-0.5 text-xs font-bold text-center"
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] font-bold text-slate-500">Lugar:</span>
+                              <select
+                                value={zonal.lugar_camion}
+                                onChange={(e) => handleUpdateEditingZonal(zIndex, 'lugar_camion', e.target.value)}
+                                className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold"
+                              >
+                                <option value="1° (FONDO)">1° (FONDO)</option>
+                                <option value="2°">2°</option>
+                                <option value="3°">3°</option>
+                                <option value="4° (PUERTA)">4° (PUERTA)</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveEditingZonal(zIndex)}
+                            className="text-rose-600 hover:text-rose-800 p-1 rounded font-bold cursor-pointer"
+                            title="Quitar este zonal"
+                          >
+                            &times;
+                          </button>
+                        </div>
+
+                        {/* Cantidades del zonal */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                          {/* BANDEJAS Y CANTIDAD DE BANDEJAS */}
+                          <div className="bg-slate-50 p-2 rounded-lg border space-y-1">
+                            <span className="font-bold text-[10px] text-slate-600 uppercase block border-b pb-0.5">Bandejas</span>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-slate-500">Cant. Bandejas:</span>
+                              <input 
+                                type="number" 
+                                value={zonal.bandejas.bandejas_count || 0}
+                                onChange={(e) => handleUpdateEditingZonalCategory(zIndex, 'bandejas', 'bandejas_count', Number(e.target.value))}
+                                className="w-16 bg-white border rounded px-1.5 py-0.5 text-xs font-mono font-bold text-right"
+                              />
+                            </div>
+                          </div>
+
+                          {/* PALLETS MADERA TOTALES */}
+                          <div className="bg-amber-50/50 p-2 rounded-lg border border-amber-100 space-y-1">
+                            <span className="font-bold text-[10px] text-amber-800 uppercase block border-b border-amber-200 pb-0.5">Madera (Total: {woodTotal})</span>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-slate-500">Congelados Base:</span>
+                              <input 
+                                type="number" 
+                                value={zonal.congelados.wood_bases || 0}
+                                onChange={(e) => handleUpdateEditingZonalCategory(zIndex, 'congelados', 'wood_bases', Number(e.target.value))}
+                                className="w-12 bg-white border rounded px-1 py-0.5 text-xs font-mono font-bold text-right"
+                              />
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-slate-500">Estándar Base:</span>
+                              <input 
+                                type="number" 
+                                value={zonal.estandar.wood_bases || 0}
+                                onChange={(e) => handleUpdateEditingZonalCategory(zIndex, 'estandar', 'wood_bases', Number(e.target.value))}
+                                className="w-12 bg-white border rounded px-1 py-0.5 text-xs font-mono font-bold text-right"
+                              />
+                            </div>
+                          </div>
+
+                          {/* PALLETS PLÁSTICO TOTALES */}
+                          <div className="bg-emerald-50/50 p-2 rounded-lg border border-emerald-100 space-y-1">
+                            <span className="font-bold text-[10px] text-emerald-800 uppercase block border-b border-emerald-200 pb-0.5">Plástico (Total: {plasticTotal})</span>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-slate-500">Congelados Base:</span>
+                              <input 
+                                type="number" 
+                                value={zonal.congelados.plastic_bases || 0}
+                                onChange={(e) => handleUpdateEditingZonalCategory(zIndex, 'congelados', 'plastic_bases', Number(e.target.value))}
+                                className="w-12 bg-white border rounded px-1 py-0.5 text-xs font-mono font-bold text-right"
+                              />
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-slate-500">Estándar Base:</span>
+                              <input 
+                                type="number" 
+                                value={zonal.estandar.plastic_bases || 0}
+                                onChange={(e) => handleUpdateEditingZonalCategory(zIndex, 'estandar', 'plastic_bases', Number(e.target.value))}
+                                className="w-12 bg-white border rounded px-1 py-0.5 text-xs font-mono font-bold text-right"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* SELLO */}
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase">N° Sello:</span>
+                          <input 
+                            type="text" 
+                            value={zonal.sello || ''}
+                            onChange={(e) => handleUpdateEditingZonal(zIndex, 'sello', e.target.value)}
+                            className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-bold font-mono"
+                            placeholder="Ej. 017315"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* OBSERVACIONES */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Observaciones</label>
+                <textarea 
+                  rows={2}
+                  value={editingObservations}
+                  onChange={(e) => setEditingObservations(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-semibold"
+                />
+              </div>
+
+              {/* BOTONES ACCIÓN */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditingDispatchRecord(null)}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer"
+                >
+                  CANCELAR
+                </button>
+                <button
+                  type="submit"
+                  disabled={editingSaveLoading}
+                  className="bg-brand-emerald hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {editingSaveLoading ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      GUARDAR CORRECCIÓN
+                    </>
+                  )}
+                </button>
+              </div>
+
             </form>
           </div>
         </div>
