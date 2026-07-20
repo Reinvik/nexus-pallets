@@ -669,17 +669,20 @@ export default function App({ user }: { user: any }) {
       `;
 
       // Configurar y guardar el PDF usando html2pdf
-      const element = document.createElement('div');
-      element.innerHTML = pdfHtml;
-      element.style.position = 'absolute';
-      element.style.left = '-9999px';
-      element.style.top = '0';
-      element.style.width = '750px';
-      element.style.boxSizing = 'border-box';
-      element.style.backgroundColor = '#fff';
-      
-      document.body.appendChild(element);
-      
+      // Usamos un contenedor visible para html2canvas pero oculto para el usuario
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '0';
+      container.style.top = '0';
+      container.style.width = '750px';
+      container.style.opacity = '0';
+      container.style.zIndex = '-9999';
+      container.style.pointerEvents = 'none';
+      container.style.overflow = 'hidden';
+      container.style.backgroundColor = '#fff';
+      container.innerHTML = pdfHtml;
+      document.body.appendChild(container);
+
       // Opciones del documento PDF
       const opt = {
         margin:       8,
@@ -693,21 +696,20 @@ export default function App({ user }: { user: any }) {
       await new Promise<void>((resolve, reject) => {
         // @ts-ignore
         window.html2pdf()
-          .from(element)
+          .from(container)
           .set(opt)
           .save()
           .then(() => {
-            // Dar tiempo al navegador para finalizar la descarga antes de limpiar
             setTimeout(() => {
-              if (document.body.contains(element)) {
-                document.body.removeChild(element);
+              if (document.body.contains(container)) {
+                document.body.removeChild(container);
               }
               resolve();
             }, 1500);
           })
           .catch((err: any) => {
-            if (document.body.contains(element)) {
-              document.body.removeChild(element);
+            if (document.body.contains(container)) {
+              document.body.removeChild(container);
             }
             reject(err);
           });
