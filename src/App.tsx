@@ -430,6 +430,22 @@ export default function App({ user }: { user: any }) {
     });
   };
 
+  // Helper para convertir imagen a Base64 y evitar problemas de renderizado en html2canvas
+  const getLogoBase64 = async (url: string): Promise<string> => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(url);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return url;
+    }
+  };
+
   // Generar y Descargar PDF de Despacho
   const handleDownloadPDF = async (rec: DispatchRecord) => {
     if (generatingPdfId) return;
@@ -441,6 +457,9 @@ export default function App({ user }: { user: any }) {
         alert("No se pudo cargar el generador de PDF. Por favor verifica tu conexión a internet.");
         return;
       }
+
+      // Convertir el logo a Base64 para incrustación directa
+      const logoBase64 = await getLogoBase64(cialLogo);
 
       // 1. Obtener los renglones correspondientes a los 4 zonales (con vacíos si son menos de 4)
       const rows: string[] = [];
@@ -488,13 +507,13 @@ export default function App({ user }: { user: any }) {
       const totalB = rec.zonals_detail.reduce((sum, z) => sum + (z.bandejas.bandejas_count || 0), 0);
 
       const pdfHtml = `
-        <div style="font-family: Arial, sans-serif; font-size: 9.5px; width: 750px; padding: 25px; box-sizing: border-box; background-color: #fff; color: #000; margin: 0 auto; line-height: 1.25;">
+        <div style="font-family: Arial, sans-serif; font-size: 9.5px; width: 750px; padding: 25px; box-sizing: border-box; background-color: #ffffff; color: #000000; margin: 0 auto; line-height: 1.25;">
           
           <!-- Header -->
           <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px;">
             <tr>
               <td style="width: 25%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle;">
-                <img src="${cialLogo}" style="height: 48px; width: auto; object-fit: contain;" />
+                <img src="${logoBase64}" style="height: 48px; width: auto; object-fit: contain;" />
               </td>
               <td style="width: 50%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle;">
                 <div style="font-size: 13px; font-weight: 900; letter-spacing: 0.5px; font-family: sans-serif;">CHECK LIST CAMIONES SUR Y NORTE</div>
@@ -668,52 +687,46 @@ export default function App({ user }: { user: any }) {
         </div>
       `;
 
-      // Configurar y guardar el PDF usando html2pdf
-      // Usamos un contenedor visible para html2canvas pero oculto para el usuario
+      // Crear contenedor temporal visible en pantalla durante el procesamiento
       const container = document.createElement('div');
       container.style.position = 'fixed';
-      container.style.left = '0';
       container.style.top = '0';
+      container.style.left = '0';
       container.style.width = '750px';
-      container.style.opacity = '0';
-      container.style.zIndex = '-9999';
-      container.style.pointerEvents = 'none';
-      container.style.overflow = 'hidden';
-      container.style.backgroundColor = '#fff';
+      container.style.backgroundColor = '#ffffff';
+      container.style.zIndex = '999999';
+      container.style.boxSizing = 'border-box';
       container.innerHTML = pdfHtml;
       document.body.appendChild(container);
 
-      // Opciones del documento PDF
+      // Esperar la decodificación completa de la imagen
+      const imgs = Array.from(container.querySelectorAll('img'));
+      await Promise.all(
+        imgs.map((img) => {
+          if (img.complete) return Promise.resolve();
+          return new Promise((res) => {
+            img.onload = res;
+            img.onerror = res;
+          });
+        })
+      );
+
+      // Opciones de html2pdf optimizadas para html2canvas
       const opt = {
-        margin:       8,
+        margin:       [5, 5, 5, 5],
         filename:     `Despacho_Camion_${rec.truck_plate || 'SinPatente'}_${rec.inspection_date}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        html2canvas:  { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
         jsPDF:        { unit: 'mm', format: 'letter', orientation: 'portrait' }
       };
 
       // @ts-ignore
-      await new Promise<void>((resolve, reject) => {
-        // @ts-ignore
-        window.html2pdf()
-          .from(container)
-          .set(opt)
-          .save()
-          .then(() => {
-            setTimeout(() => {
-              if (document.body.contains(container)) {
-                document.body.removeChild(container);
-              }
-              resolve();
-            }, 1500);
-          })
-          .catch((err: any) => {
-            if (document.body.contains(container)) {
-              document.body.removeChild(container);
-            }
-            reject(err);
-          });
-      });
+      await window.html2pdf().set(opt).from(container).save();
+
+      // Limpiar contenedor
+      if (document.body.contains(container)) {
+        document.body.removeChild(container);
+      }
     } catch (err: any) {
       console.error("Error al generar PDF:", err);
       alert("Ocurrió un inconveniente al generar el PDF. Inténtalo nuevamente.");
