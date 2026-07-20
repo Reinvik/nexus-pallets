@@ -540,30 +540,30 @@ export default function App({ user }: { user: any }) {
               </tr>
             </thead>
             <tbody>
-              <tr style="height: 22px;">
-                <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">1. Horario de postura en el Andén</td>
-                <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${rec.checklist.postura_anden ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${!rec.checklist.postura_anden ? 'X' : ''}</td>
+              <tr style="height: 24px;">
+                <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">1. Horario de postura en el Andén</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.postura_anden ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.postura_anden ? 'X' : ''}</td>
               </tr>
-              <tr style="height: 22px;">
-                <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">2. Estado de camión a Cargar (Limpieza, Daño estructural)</td>
-                <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${rec.checklist.limpieza_estructura ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${!rec.checklist.limpieza_estructura ? 'X' : ''}</td>
+              <tr style="height: 24px;">
+                <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">2. Estado de camión a Cargar (Limpieza, Daño estructural)</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.limpieza_estructura ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.limpieza_estructura ? 'X' : ''}</td>
               </tr>
-              <tr style="height: 22px;">
-                <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">3. Estado de Luces (ENCENDIDAS)</td>
-                <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${rec.checklist.luces_encendidas ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${!rec.checklist.luces_encendidas ? 'X' : ''}</td>
+              <tr style="height: 24px;">
+                <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">3. Estado de Luces (ENCENDIDAS)</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.luces_encendidas ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.luces_encendidas ? 'X' : ''}</td>
               </tr>
-              <tr style="height: 22px;">
-                <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">4. Verificación Separador Térmico</td>
-                <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${rec.checklist.separador_termico ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${!rec.checklist.separador_termico ? 'X' : ''}</td>
+              <tr style="height: 24px;">
+                <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">4. Verificación Separador Térmico</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.separador_termico ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.separador_termico ? 'X' : ''}</td>
               </tr>
-              <tr style="height: 22px;">
-                <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">5. Verificación Lingas por camión</td>
-                <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${rec.checklist.lingas_camion ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; font-weight: 900; font-size: 13px; font-family: monospace;">${!rec.checklist.lingas_camion ? 'X' : ''}</td>
+              <tr style="height: 24px;">
+                <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">5. Verificación Lingas por camión</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.lingas_camion ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.lingas_camion ? 'X' : ''}</td>
               </tr>
             </tbody>
           </table>
