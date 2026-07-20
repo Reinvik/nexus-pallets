@@ -690,11 +690,28 @@ export default function App({ user }: { user: any }) {
       };
 
       // @ts-ignore
-      await window.html2pdf().from(element).set(opt).save();
-      
-      if (document.body.contains(element)) {
-        document.body.removeChild(element);
-      }
+      await new Promise<void>((resolve, reject) => {
+        // @ts-ignore
+        window.html2pdf()
+          .from(element)
+          .set(opt)
+          .save()
+          .then(() => {
+            // Dar tiempo al navegador para finalizar la descarga antes de limpiar
+            setTimeout(() => {
+              if (document.body.contains(element)) {
+                document.body.removeChild(element);
+              }
+              resolve();
+            }, 1500);
+          })
+          .catch((err: any) => {
+            if (document.body.contains(element)) {
+              document.body.removeChild(element);
+            }
+            reject(err);
+          });
+      });
     } catch (err: any) {
       console.error("Error al generar PDF:", err);
       alert("Ocurrió un inconveniente al generar el PDF. Inténtalo nuevamente.");
