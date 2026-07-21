@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import cialLogo from '../assets/cial-alimentos-logo.png';
 import { Mail, Lock, ArrowRight, CheckCircle2, AlertCircle, Eye, EyeOff, RotateCcw } from 'lucide-react';
 
-type AuthMode = 'login' | 'register' | 'forgot' | 'check_email';
+type AuthMode = 'login' | 'register' | 'forgot';
 
 const ALLOWED_DOMAIN = 'cial.cl';
 
@@ -16,7 +16,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [pendingEmail, setPendingEmail] = useState('');
 
   const validateDomain = (mail: string): boolean => {
     const domain = mail.split('@')[1]?.toLowerCase();
@@ -36,10 +35,8 @@ export default function LoginPage() {
     try {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) {
-        if (authError.message.includes('Email not confirmed')) {
-          setError('Tu correo aún no ha sido verificado. Revisa tu bandeja de entrada de @cial.cl.');
-        } else if (authError.message.includes('Invalid login credentials')) {
-          setError('Correo o contraseña incorrectos. Verifica tus datos e intenta nuevamente.');
+        if (authError.message.includes('Invalid login credentials')) {
+          setError('Correo o contraseña incorrectos. Verifica tus datos o crea tu cuenta.');
         } else {
           setError(authError.message);
         }
@@ -54,12 +51,12 @@ export default function LoginPage() {
     setError(null);
 
     if (!validateDomain(email)) {
-      setError('Solo se permiten correos corporativos @cial.cl para registrarse.');
+      setError('Solo se permiten correos corporativos @cial.cl para crear cuenta.');
       return;
     }
 
-    if (password.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres.');
+    if (password.length < 4) {
+      setError('La contraseña debe tener al menos 4 caracteres.');
       return;
     }
 
@@ -70,11 +67,10 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const { error: authError } = await supabase.auth.signUp({
+      const { data, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: window.location.origin,
           data: {
             domain_verified: true,
             registered_at: new Date().toISOString()
@@ -83,14 +79,29 @@ export default function LoginPage() {
       });
 
       if (authError) {
-        if (authError.message.includes('User already registered')) {
-          setError('Este correo ya tiene una cuenta. Inicia sesión o usa "¿Olvidaste tu contraseña?".');
+        if (authError.message.includes('User already registered') || authError.message.includes('already exists')) {
+          // Si el usuario ya existe, intentar ingresar de inmediato con esta contraseña
+          const { error: loginErr } = await supabase.auth.signInWithPassword({ email, password });
+          if (loginErr) {
+            setError('Esta cuenta @cial.cl ya está registrada. Si olvidaste tu contraseña, usa "Recuperar Acceso".');
+          }
         } else {
           setError(authError.message);
         }
       } else {
-        setPendingEmail(email);
-        setMode('check_email');
+        // Intentar sesión de una
+        if (data.session) {
+          return;
+        }
+        const { error: loginErr } = await supabase.auth.signInWithPassword({ email, password });
+        if (loginErr) {
+          if (loginErr.message.includes('Email not confirmed')) {
+            setSuccess('¡Cuenta creada correctamente! Ya puedes ingresar con tu contraseña.');
+            setMode('login');
+          } else {
+            setError(loginErr.message);
+          }
+        }
       }
     } finally {
       setLoading(false);
@@ -191,43 +202,6 @@ export default function LoginPage() {
           {/* Contenido del formulario */}
           <div className="p-8">
             
-            {/* === MODO: VERIFICAR CORREO === */}
-            {mode === 'check_email' && (
-              <div className="text-center space-y-5">
-                <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto border border-emerald-100 shadow-sm">
-                  <Mail className="w-8 h-8 text-[#0a5c36]" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-extrabold text-slate-900 mb-1">Verifica tu correo</h2>
-                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                    Te enviamos un enlace de verificación a:
-                  </p>
-                  <p className="text-sm font-extrabold text-[#0a5c36] mt-1">{pendingEmail}</p>
-                </div>
-                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-left space-y-2">
-                  <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    Revisa tu bandeja de entrada de @cial.cl
-                  </p>
-                  <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    Haz clic en el enlace de confirmación
-                  </p>
-                  <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    Regresa aquí para iniciar sesión
-                  </p>
-                </div>
-                <button
-                  onClick={() => switchMode('login')}
-                  className="w-full flex items-center justify-center gap-2 bg-[#0a5c36] hover:bg-[#08482a] text-white py-3 rounded-xl text-sm font-bold transition-all cursor-pointer shadow-md active:scale-95"
-                >
-                  <ArrowRight className="w-4 h-4" />
-                  Ir a Iniciar Sesión
-                </button>
-              </div>
-            )}
-
             {/* === MODO: LOGIN === */}
             {mode === 'login' && (
               <div className="space-y-5">
@@ -322,7 +296,7 @@ export default function LoginPage() {
                     onChange={setPassword}
                     show={showPassword}
                     onToggle={() => setShowPassword(!showPassword)}
-                    placeholder="Contraseña (mínimo 8 caracteres)"
+                    placeholder="Contraseña (mínimo 4 caracteres)"
                     disabled={loading}
                   />
                   <div className="relative">
@@ -358,8 +332,8 @@ export default function LoginPage() {
                       <RotateCcw className="w-4 h-4 animate-spin" />
                     ) : (
                       <>
-                        <Mail className="w-4 h-4" />
-                        Crear Cuenta y Verificar Correo
+                        <ArrowRight className="w-4 h-4" />
+                        Crear Cuenta e Ingresar
                       </>
                     )}
                   </button>
@@ -533,42 +507,17 @@ function PasswordField({
 }
 
 function PasswordStrength({ password }: { password: string }) {
-  const checks = [
-    { label: '8+ caracteres', pass: password.length >= 8 },
-    { label: 'Mayúscula', pass: /[A-Z]/.test(password) },
-    { label: 'Número', pass: /\d/.test(password) },
-  ];
-  const strength = checks.filter(c => c.pass).length;
-  const colors = ['bg-red-400', 'bg-amber-400', 'bg-emerald-400'];
-  const labels = ['Débil', 'Media', 'Fuerte'];
+  const isOk = password.length >= 4;
 
   return (
-    <div className="space-y-1.5 font-sans">
-      <div className="flex gap-1.5">
-        {[0, 1, 2].map(i => (
-          <div
-            key={i}
-            className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-              i < strength ? colors[strength - 1] : 'bg-slate-200'
-            }`}
-          />
-        ))}
-      </div>
-      <div className="flex items-center justify-between">
-        <div className="flex gap-3">
-          {checks.map((c) => (
-            <span key={c.label} className={`text-[10px] font-semibold flex items-center gap-1 ${c.pass ? 'text-emerald-600' : 'text-slate-400'}`}>
-              <CheckCircle2 className="w-2.5 h-2.5" />
-              {c.label}
-            </span>
-          ))}
-        </div>
-        {strength > 0 && (
-          <span className={`text-[10px] font-extrabold ${['text-red-500', 'text-amber-500', 'text-emerald-600'][strength - 1]}`}>
-            {labels[strength - 1]}
-          </span>
-        )}
-      </div>
+    <div className="flex items-center justify-between text-[11px] font-semibold pt-1">
+      <span className={`flex items-center gap-1 ${isOk ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+        <CheckCircle2 className="w-3 h-3" />
+        Mínimo 4 caracteres
+      </span>
+      {isOk && (
+        <span className="text-emerald-600 font-extrabold">Válida</span>
+      )}
     </div>
   );
 }
