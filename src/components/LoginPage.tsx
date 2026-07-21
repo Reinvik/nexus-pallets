@@ -83,7 +83,7 @@ export default function LoginPage() {
           // Si el usuario ya existe, intentar ingresar de inmediato con esta contraseña
           const { error: loginErr } = await supabase.auth.signInWithPassword({ email, password });
           if (loginErr) {
-            setError('Esta cuenta @cial.cl ya está registrada. Si olvidaste tu contraseña, usa "Recuperar Acceso".');
+            setError('Esta cuenta @cial.cl ya fue creada previamente. Inicia sesión con tu contraseña anterior o usa "¿Olvidaste tu contraseña?".');
           }
         } else {
           setError(authError.message);
