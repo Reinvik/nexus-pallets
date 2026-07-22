@@ -20,7 +20,10 @@ import {
   Package,
   LogOut,
   Edit2,
-  FileDown
+  FileDown,
+  Camera,
+  X,
+  Save
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -83,6 +86,7 @@ interface DispatchRecord {
     luces_encendidas: boolean;
     separador_termico: boolean;
     lingas_camion: boolean;
+    photos?: string[];
   };
   zonals_detail: ZonalDetail[];
   observations: string;
@@ -212,6 +216,131 @@ export default function App({ user }: { user: any }) {
 
 
 
+  // Fotos adjuntas en observaciones (max 4 fotos)
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+
+  // Helper para comprimir imágenes cargadas a JPEG 800px para mantener rendimiento y peso liviano
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800;
+          const MAX_HEIGHT = 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          } else {
+            resolve(e.target?.result as string);
+          }
+        };
+        img.onerror = () => reject('Error al procesar la imagen');
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject('Error al leer el archivo');
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Restaurar borrador de localStorage si existe
+  useEffect(() => {
+    try {
+      const savedDraft = localStorage.getItem('NEXUS_CONTROL_DESPACHO_DRAFT_V1');
+      if (savedDraft) {
+        const d = JSON.parse(savedDraft);
+        if (d.truckNumber !== undefined) setTruckNumber(d.truckNumber);
+        if (d.truckPlate !== undefined) setTruckPlate(d.truckPlate);
+        if (d.positionsOccupied !== undefined) setPositionsOccupied(d.positionsOccupied);
+        if (d.observations !== undefined) setObservations(d.observations);
+        if (d.temp1er !== undefined) setTemp1er(d.temp1er);
+        if (d.temp2do !== undefined) setTemp2do(d.temp2do);
+        if (d.temp3er !== undefined) setTemp3er(d.temp3er);
+        if (d.closeTime !== undefined) setCloseTime(d.closeTime);
+        if (d.checklist !== undefined) setChecklist(d.checklist);
+        if (d.selectedZonals && Array.isArray(d.selectedZonals)) setSelectedZonals(d.selectedZonals);
+        if (d.photos && Array.isArray(d.photos)) setPhotos(d.photos);
+        if (d.selectedZonals?.length > 0 || d.truckNumber || d.observations || d.photos?.length > 0) {
+          setHasRestoredDraft(true);
+        }
+      }
+    } catch (e) {
+      console.error('Error restaurando borrador:', e);
+    }
+  }, []);
+
+  // Auto-guardado de borrador en localStorage
+  useEffect(() => {
+    const hasContent = selectedZonals.length > 0 || !!truckNumber || !!truckPlate || !!observations || photos.length > 0;
+    if (hasContent) {
+      try {
+        const draftData = {
+          truckNumber,
+          truckPlate,
+          positionsOccupied,
+          observations,
+          temp1er,
+          temp2do,
+          temp3er,
+          closeTime,
+          checklist,
+          selectedZonals,
+          photos
+        };
+        localStorage.setItem('NEXUS_CONTROL_DESPACHO_DRAFT_V1', JSON.stringify(draftData));
+        setHasRestoredDraft(true);
+      } catch (e) {
+        console.error('Error guardando borrador:', e);
+      }
+    }
+  }, [truckNumber, truckPlate, positionsOccupied, observations, temp1er, temp2do, temp3er, closeTime, checklist, selectedZonals, photos]);
+
+  const clearDraft = (silent = false) => {
+    if (!silent) {
+      if (!window.confirm('¿Deseas descartar los datos del borrador actual y reiniciar el formulario?')) return;
+    }
+    localStorage.removeItem('NEXUS_CONTROL_DESPACHO_DRAFT_V1');
+    setTruckNumber('');
+    setTruckPlate('');
+    setPositionsOccupied(26);
+    setObservations('');
+    setTemp1er(0);
+    setTemp2do(-18);
+    setTemp3er(0);
+    setCloseTime('');
+    setChecklist({
+      postura_anden: true,
+      limpieza_estructura: true,
+      luces_encendidas: true,
+      separador_termico: true,
+      lingas_camion: true
+    });
+    setSelectedZonals([]);
+    setPhotos([]);
+    setHasRestoredDraft(false);
+  };
+
   // Cargar historial y retornos
   useEffect(() => {
     fetchHistory();
@@ -280,6 +409,17 @@ export default function App({ user }: { user: any }) {
   };
 
   const handleRemoveZonal = (index: number) => {
+    const zonal = selectedZonals[index];
+    const zName = zonal?.zonal_name || `Zonal #${index + 1}`;
+    const t = getZonalTotals(zonal);
+    const hasData = t.wood > 0 || t.plastic > 0 || t.bandejas > 0 || !!zonal?.sello;
+
+    const confirmMsg = hasData
+      ? `⚠️ ¿Eliminar Zonal "${zName}"?\n\nEste zonal ya tiene cantidades cargadas (${t.wood} madera, ${t.plastic} plástico, ${t.bandejas} bandejas). Si continúas se borrarán.`
+      : `¿Estás seguro de quitar el zonal "${zName}" de la lista de carga?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
     const updated = selectedZonals.filter((_, i) => i !== index);
     setSelectedZonals(updated);
     if (expandedZonalIndex === index) {
@@ -640,6 +780,16 @@ export default function App({ user }: { user: any }) {
                 <strong>OBSERVACIONES:</strong> <span style="font-weight: 600;">${rec.observations || ''}</span>
               </td>
             </tr>
+            ${(rec.checklist as any)?.photos?.length ? `
+              <tr>
+                <td colspan="2" style="border: 1px solid #000; padding: 6px; background-color: #fafafa;">
+                  <strong style="font-size: 8px; text-transform: uppercase;">RESPALDOS FOTOGRÁFICOS (${(rec.checklist as any).photos.length}):</strong>
+                  <div style="display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap;">
+                    ${(rec.checklist as any).photos.map((pUrl: string) => `<img src="${pUrl}" style="height: 85px; width: auto; max-width: 45%; object-fit: cover; border: 1px solid #000; border-radius: 4px;" />`).join('')}
+                  </div>
+                </td>
+              </tr>
+            ` : ''}
             <tr>
               <td style="width: 55%; border: 1px solid #000; padding: 5px; vertical-align: top; height: 24px;">
                 <strong>SUPERVISOR:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.supervisor_name}</span>
@@ -919,7 +1069,10 @@ export default function App({ user }: { user: any }) {
           inspection_date: dateStr,
           inspection_time: timeStr,
           positions_occupied: positionsOccupied,
-          checklist: checklist,
+          checklist: {
+            ...checklist,
+            photos: photos.length > 0 ? photos : undefined
+          },
           zonals_detail: formattedZonals,
           observations: observations,
           completed_at: now.toISOString(),
@@ -933,22 +1086,8 @@ export default function App({ user }: { user: any }) {
 
       setSuccessMsg("¡Despacho registrado correctamente!");
       
-      // Resetear formulario
-      setTruckNumber('');
-      setTruckPlate('');
-      setObservations('');
-      setSelectedZonals([]);
-      setTemp1er(0);
-      setTemp2do(-18);
-      setTemp3er(0);
-      setCloseTime('');
-      setChecklist({
-        postura_anden: true,
-        limpieza_estructura: true,
-        luces_encendidas: true,
-        separador_termico: true,
-        lingas_camion: true
-      });
+      // Resetear borrador y formulario
+      clearDraft(true);
       setExpandedZonalIndex(null);
       
       // Actualizar datos
@@ -1141,6 +1280,27 @@ export default function App({ user }: { user: any }) {
 
         {activeTab === 'nuevo' && (
           <form onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* INDICADOR DE AUTO-GUARDADO DE BORRADOR */}
+            {hasRestoredDraft && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 px-4 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-2 text-xs font-extrabold text-emerald-950 flex-wrap">
+                  <Save className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>💾 Borrador guardado automáticamente</span>
+                  <span className="text-[10px] bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-md font-mono font-bold">
+                    Protegido ante recargas o salida accidental
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => clearDraft(false)}
+                  className="text-xs text-rose-600 hover:text-rose-800 font-extrabold hover:underline cursor-pointer flex items-center gap-1 shrink-0 ml-2"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Limpiar borrador
+                </button>
+              </div>
+            )}
             
             {/* CARD 1: DATOS DEL SUPERVISOR Y CAMIÓN */}
             <section className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4">
@@ -1735,11 +1895,11 @@ export default function App({ user }: { user: any }) {
               )}
             </section>
 
-            {/* CARD 3: OBSERVACIONES Y COMENTARIOS */}
+            {/* CARD 3: OBSERVACIONES Y FOTOS */}
             <section className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4">
               <h2 className="text-sm font-black text-brand-primary uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-2.5">
                 <FileText className="w-4.5 h-4.5" />
-                3. Observaciones
+                3. Observaciones & Respaldos Fotográficos
               </h2>
               <textarea
                 rows={3}
@@ -1748,6 +1908,67 @@ export default function App({ user }: { user: any }) {
                 onChange={(e) => setObservations(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-semibold"
               />
+
+              {/* SECCIÓN DE FOTOS ADJUNTAS */}
+              <div className="space-y-3 border-t border-slate-100 pt-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-brand-primary" />
+                    Fotos / Capturas de Respaldo ({photos.length}/4)
+                  </span>
+                  {photos.length < 4 && (
+                    <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-2 shadow-sm active:scale-95 border border-slate-200">
+                      <Camera className="w-4 h-4 text-brand-primary" />
+                      Adjuntar / Tomar Foto
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        capture="environment"
+                        className="hidden"
+                        onChange={async (e) => {
+                          if (!e.target.files) return;
+                          const files = Array.from(e.target.files);
+                          const remaining = 4 - photos.length;
+                          const toProcess = files.slice(0, remaining);
+                          for (const f of toProcess) {
+                            try {
+                              const compressed = await compressImage(f);
+                              setPhotos(prev => [...prev, compressed]);
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {photos.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                    {photos.map((imgSrc, idx) => (
+                      <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 shadow-sm">
+                        <img
+                          src={imgSrc}
+                          alt={`Foto ${idx + 1}`}
+                          className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => setPreviewPhoto(imgSrc)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setPhotos(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-1.5 right-1.5 bg-rose-600 hover:bg-rose-700 text-white p-1 rounded-full shadow-md cursor-pointer transition-all active:scale-90"
+                          title="Eliminar foto"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </section>
 
             {/* CARD RESUMEN Y BOTÓN CONFIRMAR */}
@@ -2100,11 +2321,35 @@ export default function App({ user }: { user: any }) {
                               </div>
                             </div>
 
-                            {/* Observaciones */}
-                            {rec.observations && (
-                              <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 font-semibold text-slate-600">
-                                <span className="font-bold text-slate-700">Observaciones: </span>
-                                {rec.observations}
+                            {/* Observaciones y Fotos adjuntas */}
+                            {(rec.observations || (rec.checklist as any)?.photos?.length > 0) && (
+                              <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2">
+                                {rec.observations && (
+                                  <div className="font-semibold text-slate-600">
+                                    <span className="font-bold text-slate-700">Observaciones: </span>
+                                    {rec.observations}
+                                  </div>
+                                )}
+                                {(rec.checklist as any)?.photos?.length > 0 && (
+                                  <div className="space-y-1.5 border-t border-slate-200/60 pt-2">
+                                    <span className="font-bold text-slate-700 flex items-center gap-1.5 text-[11px]">
+                                      <Camera className="w-3.5 h-3.5 text-brand-primary" />
+                                      Fotos de Respaldo ({(rec.checklist as any).photos.length}):
+                                    </span>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                      {(rec.checklist as any).photos.map((pUrl: string, pIdx: number) => (
+                                        <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-200">
+                                          <img
+                                            src={pUrl}
+                                            alt={`Respaldo ${pIdx + 1}`}
+                                            className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                            onClick={() => setPreviewPhoto(pUrl)}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -3249,6 +3494,30 @@ export default function App({ user }: { user: any }) {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE VISTA PREVIA DE FOTO EN TAMAÑO COMPLETO */}
+      {previewPhoto && (
+        <div 
+          className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in cursor-pointer select-none"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <img 
+              src={previewPhoto} 
+              alt="Respaldo ampliado" 
+              className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/20"
+            />
+            <button
+              type="button"
+              onClick={() => setPreviewPhoto(null)}
+              className="absolute -top-3 -right-3 bg-rose-600 hover:bg-rose-700 text-white p-2.5 rounded-full shadow-2xl cursor-pointer transition-all active:scale-95 border-2 border-white"
+              title="Cerrar vista previa"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
       )}
