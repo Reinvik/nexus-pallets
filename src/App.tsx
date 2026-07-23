@@ -692,6 +692,15 @@ export default function App({ user }: { user: any }) {
       const totalP = rec.zonals_detail.reduce((sum, z) => sum + z.congelados.plastic_bases + z.congelados.plastic_extra + z.estandar.plastic_bases + z.estandar.plastic_extra + z.bandejas.plastic_bases + z.bandejas.plastic_extra, 0);
       const totalB = rec.zonals_detail.reduce((sum, z) => sum + (z.bandejas.bandejas_count || 0), 0);
 
+      const altoBandejasFormulas = rec.zonals_detail
+        .filter(z => (z.bandejas.bandejas_count || 0) > 0 || z.bandejas.bandejas_formula)
+        .map(z => {
+          const formulaStr = z.bandejas.bandejas_formula || (z.bandejas.bandejas_count ? `${z.bandejas.bandejas_count} B` : '');
+          return formulaStr ? `(${formulaStr} ${z.zonal_name})` : null;
+        })
+        .filter(Boolean)
+        .join(' ');
+
       const pdfHtml = `
         <div style="font-family: Arial, sans-serif; font-size: 9.5px; width: 750px; padding: 25px; box-sizing: border-box; background-color: #ffffff; color: #000000; margin: 0 auto; line-height: 1.25;">
           
@@ -703,10 +712,10 @@ export default function App({ user }: { user: any }) {
               </td>
               <td style="width: 50%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle;">
                 <div style="font-size: 13px; font-weight: 900; letter-spacing: 0.5px; font-family: sans-serif;">CHECK LIST CAMIONES SUR Y NORTE</div>
-                <div style="font-size: 8.5px; margin-top: 2px; font-weight: bold; color: #444; font-family: sans-serif;">En oficina del Jefe de turno (Carpeta)</div>
+                <div style="font-size: 8.5px; margin-top: 2px; font-weight: bold; color: #444; font-family: sans-serif;">(Archivados) En oficina del Jefe de turno</div>
               </td>
               <td style="width: 25%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle; background-color: #fafafa;">
-                <div style="font-size: 7.5px; font-weight: 800; color: #666; text-transform: uppercase; letter-spacing: 0.5px; font-family: sans-serif;">NUMERO CAMIÓN / ANDÉN</div>
+                <div style="font-size: 7.5px; font-weight: 800; color: #666; text-transform: uppercase; letter-spacing: 0.5px; font-family: sans-serif;">NUMERO CAMIÓN</div>
                 <div style="font-size: 17px; font-weight: 900; margin-top: 2px; font-family: monospace;">${rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'}</div>
               </td>
             </tr>
@@ -715,20 +724,15 @@ export default function App({ user }: { user: any }) {
           <!-- Datos generales -->
           <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
             <tr style="height: 24px;">
-              <td style="width: 33.3%; border: 1px solid #000; padding: 5px;"><strong>HORA ENTREGA HOJA:</strong> </td>
-              <td style="width: 33.3%; border: 1px solid #000; padding: 5px;"><strong>HORA INICIO PROCESO:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.inspection_time}</span></td>
-              <td style="width: 33.3%; border: 1px solid #000; padding: 5px;"><strong>HORA ENTREGA DOCUMENTOS:</strong> </td>
-            </tr>
-            <tr style="height: 24px;">
-              <td colspan="2" style="border: 1px solid #000; padding: 5px;"><strong>ZONALES:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.zonals_detail.map(z => {
+              <td style="width: 65%; border: 1px solid #000; padding: 5px;"><strong>ZONALES:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.zonals_detail.map(z => {
                 const viajeNum = z.viaje_numero || 1;
                 return viajeNum > 1 ? `${z.zonal_name} ${viajeNum}` : z.zonal_name;
               }).join(' - ')}</span></td>
-              <td style="border: 1px solid #000; padding: 5px;"><strong>PATENTE:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.truck_plate !== 'N/A' ? rec.truck_plate : 'S/A'}</span></td>
+              <td style="width: 35%; border: 1px solid #000; padding: 5px;"><strong>PATENTE:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.truck_plate !== 'N/A' ? rec.truck_plate : 'S/A'}</span></td>
             </tr>
             <tr style="height: 24px;">
               <td style="border: 1px solid #000; padding: 5px;"><strong>Hora Inspección:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.inspection_time}</span></td>
-              <td colspan="2" style="border: 1px solid #000; padding: 5px;"><strong>FECHA:</strong> <span style="font-family: monospace; font-weight: bold;">${getFormatDate(rec.inspection_date)}</span></td>
+              <td style="border: 1px solid #000; padding: 5px;"><strong>FECHA:</strong> <span style="font-family: monospace; font-weight: bold;">${getFormatDate(rec.inspection_date)}</span></td>
             </tr>
           </table>
 
@@ -773,8 +777,8 @@ export default function App({ user }: { user: any }) {
           <!-- Posiciones ocupadas -->
           <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
             <tr style="height: 24px;">
-              <td style="width: 50%; border: 1px solid #000; padding: 5px;"><strong>Posiciones ocupadas dentro del camión:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 10.5px;">${rec.positions_occupied}</span></td>
-              <td style="width: 50%; border: 1px solid #000; padding: 5px;"><strong>Alto de Bandejas:</strong> </td>
+              <td style="width: 40%; border: 1px solid #000; padding: 5px;"><strong>Posiciones ocupadas dentro del camión:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 10.5px;">${rec.positions_occupied}</span></td>
+              <td style="width: 60%; border: 1px solid #000; padding: 5px; font-size: 8.5px;"><strong>Alto de Bandejas:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 9.5px;">${altoBandejasFormulas || ''}</span></td>
             </tr>
             <tr style="height: 24px;">
               <td colspan="2" style="border: 1px solid #000; padding: 5px;"><strong>Motivos del alto:</strong> </td>
@@ -782,7 +786,7 @@ export default function App({ user }: { user: any }) {
           </table>
 
           <!-- Tabla principal de carga -->
-          <div style="font-size: 10px; font-weight: 900; text-align: center; margin-top: 15px; margin-bottom: 5px; letter-spacing: 0.5px; text-transform: uppercase; font-family: sans-serif;">CARGA ADICIONAL ZONAL</div>
+          <div style="font-size: 10px; font-weight: 900; text-align: center; margin-top: 15px; margin-bottom: 5px; letter-spacing: 0.5px; text-transform: uppercase; font-family: sans-serif;">CARGIO DE ZONALES</div>
           <div style="display: flex; width: 100%; margin-bottom: 12px; gap: 0; box-sizing: border-box; align-items: stretch;">
             
             <!-- Tabla de Zonales (6 celdas por fila, ancho 86%) -->
@@ -792,8 +796,8 @@ export default function App({ user }: { user: any }) {
                   <th style="border: 1px solid #000; padding: 4px; width: 6%;">N°</th>
                   <th style="border: 1px solid #000; padding: 4px; width: 34%; text-align: left;">ZONAL</th>
                   <th style="border: 1px solid #000; padding: 4px; width: 15%;">BANDEJAS</th>
-                  <th style="border: 1px solid #000; padding: 4px; width: 15%;">PALLET MADERA</th>
-                  <th style="border: 1px solid #000; padding: 4px; width: 15%;">PALLET PLÁSTICO</th>
+                  <th style="border: 1px solid #000; padding: 4px; width: 15%;">PALLETS MADERA</th>
+                  <th style="border: 1px solid #000; padding: 4px; width: 15%;">PALLETS PLÁSTICO</th>
                   <th style="border: 1px solid #000; padding: 4px; width: 15%;">N° DE SELLO</th>
                 </tr>
               </thead>
@@ -858,22 +862,17 @@ export default function App({ user }: { user: any }) {
               `;
             })()}
             <tr>
-              <td style="width: 55%; border: 1px solid #000; padding: 5px; vertical-align: top; height: 24px;">
-                <strong>SUPERVISOR:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.supervisor_name}</span>
+              <td style="width: 55%; border: 1px solid #000; padding: 5px; vertical-align: top; height: 32px;">
+                <strong>SUP. ENCARGADO:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.supervisor_name}</span>
               </td>
-              <td rowspan="3" style="width: 45%; border: 1px solid #000; padding: 6px; text-align: center; vertical-align: middle; height: 80px; background-color: #fafafa;">
-                <div style="font-size: 7.5px; color: #555; font-weight: bold; text-transform: uppercase; margin-bottom: 30px; letter-spacing: 0.5px;">Timbre y Firma</div>
+              <td rowspan="2" style="width: 45%; border: 1px solid #000; padding: 6px; text-align: center; vertical-align: middle; height: 70px; background-color: #fafafa;">
+                <div style="font-size: 7.5px; color: #555; font-weight: bold; text-transform: uppercase; margin-bottom: 25px; letter-spacing: 0.5px;">Timbre y Firma</div>
                 <div style="border-top: 1.5px dashed #000; width: 85%; margin: 0 auto;"></div>
               </td>
             </tr>
             <tr>
-              <td style="border: 1px solid #000; padding: 5px; height: 24px;">
-                <strong>HORA CIERRE CAMIÓN:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 10.5px;">${rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}</span>
-              </td>
-            </tr>
-            <tr>
-              <td style="border: 1px solid #000; padding: 5px; height: 24px;">
-                <strong>HORA ENTREGA:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.close_time || ''}</span>
+              <td style="border: 1px solid #000; padding: 5px; height: 32px;">
+                <strong>HORA CIERRE DE CAMION:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 10.5px;">${rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}</span>
               </td>
             </tr>
             <tr style="height: 24px;">
@@ -1397,10 +1396,10 @@ export default function App({ user }: { user: any }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Andén de Carga (Opcional)</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">N° de Camión / Andén (Opcional)</label>
                   <input 
                     type="text" 
-                    placeholder="Ej. Andén 4" 
+                    placeholder="Ej. 1951" 
                     value={truckNumber} 
                     onChange={(e) => setTruckNumber(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-mono font-bold"
