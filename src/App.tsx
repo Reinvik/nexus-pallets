@@ -2781,7 +2781,7 @@ export default function App({ user }: { user: any }) {
                                 </td>
 
                                 <td className="p-3.5 text-xs whitespace-nowrap">
-                                  <div className="font-bold text-slate-700">Andén {row.truckNumber}</div>
+                                  <div className="font-bold text-slate-700">Camión: {row.truckNumber}</div>
                                   <div className="text-[10px] font-mono text-slate-400 uppercase">{row.truckPlate}</div>
                                 </td>
 
