@@ -2178,182 +2178,201 @@ export default function App({ user }: { user: any }) {
                     );
 
                     return (
-                      <div key={rec.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                      <div key={rec.id} className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all space-y-3">
                         {/* Cabecera */}
                         <div className="flex items-start justify-between flex-wrap gap-2 border-b border-slate-100 pb-2.5 select-none">
-                          <div>
-                            <span className="text-[10px] font-black text-brand-primary uppercase tracking-widest block">
-                              Supervisor: {rec.supervisor_name}
-                            </span>
-                            <span className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5 mt-0.5">
-                              <Truck className="w-4 h-4 text-slate-400" />
-                              Andén: {rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'} 
-                              {rec.truck_plate !== 'N/A' && ` | Patente: ${rec.truck_plate}`}
-                            </span>
-                            <div className="text-[10px] text-slate-500 font-bold font-mono mt-1 bg-slate-50 border border-slate-100 px-2 py-1 rounded inline-block">
-                              Termos Camión: 1er: {rec.temp_1er}°C | 2do: {rec.temp_2do}°C | 3er: {rec.temp_3er}°C
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-black bg-emerald-50 text-brand-primary border border-emerald-100 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                                SUPERVISOR: {rec.supervisor_name}
+                              </span>
+                              <span className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
+                                <Truck className="w-4 h-4 text-slate-400" />
+                                Andén: {rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'} 
+                                {rec.truck_plate !== 'N/A' && ` | Patente: ${rec.truck_plate}`}
+                              </span>
                             </div>
 
-                            {/* Hora de Cierre Camión en Historial */}
-                            <div className="mt-1.5 flex items-center gap-2 select-none">
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                <Clock className="w-3.5 h-3.5 text-brand-primary" />
-                                Cierre Camión:
-                              </span>
-                              
-                              {editingCloseTimes[rec.id] !== undefined ? (
-                                <div className="flex items-center gap-1.5">
-                                  <input
-                                    type="time"
-                                    value={editingCloseTimes[rec.id]}
-                                    onChange={(e) => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: e.target.value }))}
-                                    className="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] font-mono font-bold focus:outline-none focus:border-brand-primary"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const now = new Date();
-                                      const pad = (n: number) => n.toString().padStart(2, '0');
-                                      setEditingCloseTimes(prev => ({ ...prev, [rec.id]: `${pad(now.getHours())}:${pad(now.getMinutes())}` }));
-                                    }}
-                                    className="bg-slate-200 hover:bg-slate-300 text-slate-750 px-1.5 py-0.5 rounded text-[10px] font-black cursor-pointer"
-                                  >
-                                    Ahora
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={savingCloseTimeId === rec.id}
-                                    onClick={() => handleSaveCloseTime(rec.id, editingCloseTimes[rec.id])}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 rounded text-[10px] font-black shadow-sm flex items-center gap-0.5 cursor-pointer disabled:opacity-50"
-                                  >
-                                    {savingCloseTimeId === rec.id ? '...' : 'OK'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingCloseTimes(prev => {
-                                      const copy = { ...prev };
-                                      delete copy[rec.id];
-                                      return copy;
-                                    })}
-                                    className="bg-slate-100 hover:bg-slate-200 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer"
-                                  >
-                                    X
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1.5">
-                                  <span className={`text-[11px] font-mono font-black ${rec.close_time ? 'text-brand-primary bg-emerald-50 border border-emerald-100 px-1.5 py-0.2 rounded' : 'text-slate-400 italic font-bold'}`}>
-                                    {rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: rec.close_time || '' }))}
-                                    className="text-slate-400 hover:text-brand-primary p-0.5 rounded transition-all cursor-pointer"
-                                    title="Editar Hora de Cierre"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              )}
+                            {/* Badges de Termos y Hora de Cierre */}
+                            <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                              <div className="text-[10px] text-slate-600 font-bold font-mono bg-slate-50 border border-slate-200/70 px-2 py-0.5 rounded-md">
+                                Termos: 1er: {rec.temp_1er}°C | 2do: {rec.temp_2do}°C | 3er: {rec.temp_3er}°C
+                              </div>
+
+                              {/* Hora Cierre Camión */}
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200/70 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                <Clock className="w-3 h-3 text-brand-primary" />
+                                <span className="text-slate-500 uppercase">Cierre:</span>
+                                {editingCloseTimes[rec.id] !== undefined ? (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="time"
+                                      value={editingCloseTimes[rec.id]}
+                                      onChange={(e) => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: e.target.value }))}
+                                      className="bg-white border border-slate-300 rounded px-1 py-0 text-[10px] font-mono font-bold focus:outline-none focus:border-brand-primary"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const now = new Date();
+                                        const pad = (n: number) => n.toString().padStart(2, '0');
+                                        setEditingCloseTimes(prev => ({ ...prev, [rec.id]: `${pad(now.getHours())}:${pad(now.getMinutes())}` }));
+                                      }}
+                                      className="bg-slate-200 text-slate-700 px-1 py-0 rounded text-[9px] font-bold cursor-pointer"
+                                    >
+                                      Ahora
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={savingCloseTimeId === rec.id}
+                                      onClick={() => handleSaveCloseTime(rec.id, editingCloseTimes[rec.id])}
+                                      className="bg-emerald-600 text-white px-1.5 py-0 rounded text-[9px] font-black cursor-pointer disabled:opacity-50"
+                                    >
+                                      {savingCloseTimeId === rec.id ? '...' : 'OK'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingCloseTimes(prev => {
+                                        const copy = { ...prev };
+                                        delete copy[rec.id];
+                                        return copy;
+                                      })}
+                                      className="text-slate-400 text-[9px] font-bold cursor-pointer"
+                                    >
+                                      X
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <span className={`font-mono font-black ${rec.close_time ? 'text-brand-primary' : 'text-slate-400 italic'}`}>
+                                      {rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: rec.close_time || '' }))}
+                                      className="text-slate-400 hover:text-brand-primary p-0.5 cursor-pointer"
+                                      title="Editar Hora de Cierre"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <div className="text-right text-xs text-slate-400 font-mono">
+
+                          <div className="text-right text-[11px] text-slate-400 font-mono select-none">
                             <div className="flex items-center gap-1 justify-end font-bold text-slate-600">
-                              <Calendar className="w-3.5 h-3.5" />
+                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
                               {getFormatDate(rec.inspection_date)}
                             </div>
                             <div className="flex items-center gap-1 justify-end mt-0.5">
-                              <Clock className="w-3 h-3" />
+                              <Clock className="w-3 h-3 text-slate-400" />
                               {rec.inspection_time}
                             </div>
                           </div>
                         </div>
 
-                        {/* Totales */}
-                        <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100/50 text-center font-mono select-none">
-                          <div className="p-2 bg-white rounded border border-slate-100">
-                            <span className="text-[9px] text-slate-400 font-bold block uppercase">Madera</span>
-                            <span className="text-sm font-black text-amber-700">{zTotals.w}</span>
-                          </div>
-                          <div className="p-2 bg-white rounded border border-slate-100">
-                            <span className="text-[9px] text-slate-400 font-bold block uppercase">Plástico</span>
-                            <span className="text-sm font-black text-emerald-700">{zTotals.p}</span>
-                          </div>
-                          <div className="p-2 bg-white rounded border border-slate-100">
-                            <span className="text-[9px] text-slate-400 font-bold block uppercase">Bandejas</span>
-                            <span className="text-sm font-black text-slate-700">{zTotals.b}</span>
-                          </div>
+                        {/* ZONALES INVOLUCRADOS EN ESTE CAMIÓN */}
+                        <div className="flex items-center gap-1.5 flex-wrap bg-slate-50/80 p-2 rounded-xl border border-slate-100 text-xs">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+                            Zonales ({rec.zonals_detail.length}):
+                          </span>
+                          {rec.zonals_detail.map((z, idx) => (
+                            <span 
+                              key={idx} 
+                              className="inline-flex items-center gap-1 bg-white border border-slate-200 text-slate-800 text-[11px] font-extrabold px-2 py-0.5 rounded-lg shadow-2xs"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary"></span>
+                              {z.zonal_name} {z.viaje_numero && z.viaje_numero > 1 ? `#${z.viaje_numero}` : ''}
+                              <span className="text-[9px] text-slate-400 font-mono font-normal">({z.lugar_camion})</span>
+                            </span>
+                          ))}
                         </div>
 
-                        {/* Botón interactivo de ver/ocultar detalles, PDF, Editar y Eliminar */}
-                        <div className="flex justify-end flex-wrap gap-2 pt-0.5 select-none">
-                          <button
-                            type="button"
-                            disabled={generatingPdfId === rec.id}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDownloadPDF(rec);
-                            }}
-                            className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-emerald-600 bg-brand-emerald text-white flex items-center gap-1.5 hover:bg-emerald-600 disabled:opacity-60"
-                          >
-                            {generatingPdfId === rec.id ? (
+                        {/* BARRA COMPACTA: TOTALES Y BOTONES DE ACCIÓN */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 border-t border-slate-100 select-none">
+                          {/* Resumen Compacto de Pallets */}
+                          <div className="flex items-center gap-2 font-mono text-xs font-black bg-slate-100/70 border border-slate-200/60 p-1.5 rounded-xl justify-around sm:justify-start">
+                            <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">
+                              <span className="text-[10px] font-bold text-amber-800 uppercase">Madera:</span>
+                              <span className="text-amber-900">{zTotals.w}</span>
+                            </div>
+                            <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">
+                              <span className="text-[10px] font-bold text-emerald-800 uppercase">Plástico:</span>
+                              <span className="text-emerald-900">{zTotals.p}</span>
+                            </div>
+                            <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">Bandejas:</span>
+                              <span className="text-slate-800">{zTotals.b}</span>
+                            </div>
+                          </div>
+
+                          {/* Botones de Acción */}
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              disabled={generatingPdfId === rec.id}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDownloadPDF(rec);
+                              }}
+                              className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-emerald-600 bg-brand-emerald text-white flex items-center gap-1 hover:bg-emerald-600 disabled:opacity-60"
+                            >
+                              {generatingPdfId === rec.id ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <FileDown className="w-3.5 h-3.5" />
+                              )}
+                              PDF
+                            </button>
+
+                            {isAdmin && (
                               <>
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                                Generando...
-                              </>
-                            ) : (
-                              <>
-                                <FileDown className="w-4 h-4" />
-                                PDF
+                                <button
+                                  type="button"
+                                  onClick={() => openEditDispatchModal(rec)}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1"
+                                  title="Editar Despacho (Solo Admin)"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                  EDITAR
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteDispatch(rec)}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1"
+                                  title="Eliminar Despacho (Solo Admin)"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  ELIMINAR
+                                </button>
                               </>
                             )}
-                          </button>
 
-                          {isAdmin && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => openEditDispatchModal(rec)}
-                                className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1.5"
-                                title="Editar Despacho (Solo Admin)"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                                EDITAR
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteDispatch(rec)}
-                                className="px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5"
-                                title="Eliminar Despacho (Solo Admin)"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                ELIMINAR
-                              </button>
-                            </>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => setExpandedRecords(prev => ({ ...prev, [rec.id]: !prev[rec.id] }))}
-                            className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border flex items-center gap-1.5 ${
-                              expandedRecords[rec.id] 
-                                ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' 
-                                : 'bg-brand-primary hover:bg-brand-secondary border-brand-primary text-white'
-                            }`}
-                          >
-                            {expandedRecords[rec.id] ? (
-                              <>
-                                <ChevronUp className="w-4 h-4" />
-                                OCULTAR DETALLES
-                              </>
-                            ) : (
-                              <>
-                                <ChevronDown className="w-4 h-4" />
-                                VER DETALLES
-                              </>
-                            )}
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedRecords(prev => ({ ...prev, [rec.id]: !prev[rec.id] }))}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border flex items-center gap-1 ${
+                                expandedRecords[rec.id] 
+                                  ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' 
+                                  : 'bg-brand-primary hover:bg-brand-secondary border-brand-primary text-white'
+                              }`}
+                            >
+                              {expandedRecords[rec.id] ? (
+                                <>
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                  OCULTAR
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                  VER DETALLES
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
 
                         {/* Desglose Condicional de Zonales */}
