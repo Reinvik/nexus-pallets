@@ -207,8 +207,9 @@ export default function App({ user }: { user: any }) {
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  // State para modal/asistente de sumatoria de bandejas (40, 35, 30, 25, 20 + restante)
+  // State para modal/asistente de sumatoria de bandejas (45, 40, 35, 30, 25, 20 + restante)
   const [showBandejasHelper, setShowBandejasHelper] = useState<number | null>(null); // Index del zonal actual en el asistente
+  const [helper45, setHelper45] = useState(0);
   const [helper40, setHelper40] = useState(0);
   const [helper35, setHelper35] = useState(0);
   const [helper30, setHelper30] = useState(0);
@@ -515,9 +516,10 @@ export default function App({ user }: { user: any }) {
     setSelectedZonals(updated);
   };
 
-  // Asistente de Bandejas (40, 35, 30, 25, 20 + restante)
+  // Asistente de Bandejas (45, 40, 35, 30, 25, 20 + restante)
   const openBandejasHelper = (index: number) => {
     setShowBandejasHelper(index);
+    setHelper45(0);
     setHelper40(0);
     setHelper35(0);
     setHelper30(0);
@@ -529,6 +531,7 @@ export default function App({ user }: { user: any }) {
   const applyBandejasHelper = () => {
     if (showBandejasHelper === null) return;
     const parts = [];
+    if (helper45 > 0) parts.push(`45x${helper45}`);
     if (helper40 > 0) parts.push(`40x${helper40}`);
     if (helper35 > 0) parts.push(`35x${helper35}`);
     if (helper30 > 0) parts.push(`30x${helper30}`);
@@ -536,8 +539,8 @@ export default function App({ user }: { user: any }) {
     if (helper20 > 0) parts.push(`20x${helper20}`);
     if (helperRestante > 0) parts.push(`${helperRestante}`);
     const formulaText = parts.length > 0 ? parts.join(' + ') : '0';
-    const totalBandejas = (helper40 * 40) + (helper35 * 35) + (helper30 * 30) + (helper25 * 25) + (helper20 * 20) + Math.max(0, Number(helperRestante || 0));
-    const totalPallets = helper40 + helper35 + helper30 + helper25 + helper20;
+    const totalBandejas = (helper45 * 45) + (helper40 * 40) + (helper35 * 35) + (helper30 * 30) + (helper25 * 25) + (helper20 * 20) + Math.max(0, Number(helperRestante || 0));
+    const totalPallets = helper45 + helper40 + helper35 + helper30 + helper25 + helper20;
     
     const updated = [...selectedZonals];
     const bandejasData = { ...updated[showBandejasHelper].bandejas };
@@ -554,6 +557,23 @@ export default function App({ user }: { user: any }) {
     
     setSelectedZonals(updated);
     setShowBandejasHelper(null);
+  };
+
+  // Helper para formatear automáticamente conteos simples a formato de fórmula (ej: 400 -> 40x10)
+  const formatBandejasCount = (count: number, formula?: string) => {
+    if (formula && formula.trim() && formula !== '0') return formula;
+    if (!count || count <= 0) return '';
+    if (count % 40 === 0) return `40x${count / 40}`;
+    if (count % 45 === 0) return `45x${count / 45}`;
+    if (count % 35 === 0) return `35x${count / 35}`;
+    if (count % 30 === 0) return `30x${count / 30}`;
+    if (count % 25 === 0) return `25x${count / 25}`;
+    const full40 = Math.floor(count / 40);
+    const rem = count % 40;
+    if (full40 > 0) {
+      return rem > 0 ? `40x${full40} + ${rem}` : `40x${full40}`;
+    }
+    return `${count}`;
   };
 
   // Cálculo de balances agregados por Zonal
@@ -701,7 +721,7 @@ export default function App({ user }: { user: any }) {
       const altoBandejasFormulas = rec.zonals_detail
         .filter(z => (z.bandejas.bandejas_count || 0) > 0 || z.bandejas.bandejas_formula)
         .map(z => {
-          const formulaStr = z.bandejas.bandejas_formula || (z.bandejas.bandejas_count ? `${z.bandejas.bandejas_count} B` : '');
+          const formulaStr = formatBandejasCount(z.bandejas.bandejas_count || 0, z.bandejas.bandejas_formula);
           return formulaStr ? `(${formulaStr} ${z.zonal_name})` : null;
         })
         .filter(Boolean)
@@ -2847,10 +2867,32 @@ export default function App({ user }: { user: any }) {
             </div>
 
             <p className="text-xs text-slate-500 font-semibold">
-              Ingresa la cantidad de pallets según la cantidad de bandejas por pallet (40, 35, 30, 25, 20) y agrega las bandejas sueltas o restantes.
+              Ingresa la cantidad de pallets según la cantidad de bandejas por pallet (45, 40, 35, 30, 25, 20) y agrega las bandejas sueltas o restantes.
             </p>
 
             <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+              {/* Pallets 45 (Excepcional 9 niveles) */}
+              <div className="flex items-center justify-between bg-amber-50/50 p-2.5 rounded-xl border border-amber-200/80">
+                <span className="text-xs font-black text-amber-900">Pallets de 45 bandejas (1x45 — 9 niv. Excepcional)</span>
+                <div className="flex items-center gap-2 select-none">
+                  <button
+                    type="button"
+                    onClick={() => setHelper45(Math.max(0, helper45 - 1))}
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shadow-sm cursor-pointer"
+                  >
+                    -
+                  </button>
+                  <span className="font-mono font-black text-sm w-6 text-center text-amber-950">{helper45}</span>
+                  <button
+                    type="button"
+                    onClick={() => setHelper45(helper45 + 1)}
+                    className="bg-white border hover:bg-slate-100 text-slate-700 w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shadow-sm cursor-pointer"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
               {/* Pallets 40 */}
               <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                 <span className="text-xs font-bold text-slate-700">Pallets de 40 bandejas (1x40)</span>
@@ -3003,6 +3045,7 @@ export default function App({ user }: { user: any }) {
             {/* FÓRMULA DINÁMICA EN TIEMPO REAL */}
             {(() => {
               const parts = [];
+              if (helper45 > 0) parts.push(`45x${helper45}`);
               if (helper40 > 0) parts.push(`40x${helper40}`);
               if (helper35 > 0) parts.push(`35x${helper35}`);
               if (helper30 > 0) parts.push(`30x${helper30}`);
@@ -3010,7 +3053,7 @@ export default function App({ user }: { user: any }) {
               if (helper20 > 0) parts.push(`20x${helper20}`);
               if (helperRestante > 0) parts.push(`restante ${helperRestante}`);
               const formulaText = parts.length > 0 ? parts.join(' + ') : 'Sin bandejas';
-              const totalB = (helper40 * 40) + (helper35 * 35) + (helper30 * 30) + (helper25 * 25) + (helper20 * 20) + helperRestante;
+              const totalB = (helper45 * 45) + (helper40 * 40) + (helper35 * 35) + (helper30 * 30) + (helper25 * 25) + (helper20 * 20) + helperRestante;
 
               return (
                 <div className="bg-brand-light p-3.5 rounded-xl border border-brand-border space-y-1">
