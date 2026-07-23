@@ -904,7 +904,7 @@ export default function App({ user }: { user: any }) {
             <tr style="height: 24px;">
               <td colspan="2" style="border: 1px solid #000; padding: 5px; background-color: #fcfcfc;">
                 <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 8.5px; text-transform: uppercase;">
-                  <span>KILOS TOTALES DEL CAMIÓN: ___________________________</span>
+                  <span>KILOS TOTALES DEL CAMIÓN: <strong style="font-family: monospace; font-size: 10px;">${rec.truck_kilos ? (typeof rec.truck_kilos === 'number' ? rec.truck_kilos.toLocaleString('es-CL') : rec.truck_kilos) + ' kg' : '___________________________'}</strong></span>
                   <span style="font-family: monospace; padding-right: 10px;">TOTALES DESPACHO: M:${totalW} | P:${totalP} | B:${totalB}</span>
                 </div>
               </td>
