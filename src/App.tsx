@@ -584,28 +584,34 @@ export default function App({ user }: { user: any }) {
 
   // Cálculo de balances agregados por Zonal
   const getZonalBalances = () => {
-    const balances: { [key: string]: { wood_sent: number; plastic_sent: number; wood_ret: number; plastic_ret: number } } = {};
+    const balances: { [key: string]: { wood_sent: number; plastic_sent: number; wood_ret: number; plastic_ret: number; last_dispatch_date?: string | null } } = {};
 
     ZONALES_LIST.forEach(z => {
-      balances[z] = { wood_sent: 0, plastic_sent: 0, wood_ret: 0, plastic_ret: 0 };
+      balances[z] = { wood_sent: 0, plastic_sent: 0, wood_ret: 0, plastic_ret: 0, last_dispatch_date: null };
     });
 
     records.forEach(rec => {
       rec.zonals_detail.forEach(zd => {
-        const name = zd.zonal_name;
+        const rawName = (zd.zonal_name || '').replace(/\s+\d+$/, '').trim();
+        const name = ZONALES_LIST.find(z => z.toLowerCase() === rawName.toLowerCase()) || zd.zonal_name;
+
         if (balances[name]) {
           const wood = 
-            zd.congelados.wood_bases + zd.congelados.wood_extra +
-            zd.estandar.wood_bases + zd.estandar.wood_extra +
-            zd.bandejas.wood_bases + zd.bandejas.wood_extra;
+            (zd.congelados?.wood_bases || 0) + (zd.congelados?.wood_extra || 0) +
+            (zd.estandar?.wood_bases || 0) + (zd.estandar?.wood_extra || 0) +
+            (zd.bandejas?.wood_bases || 0) + (zd.bandejas?.wood_extra || 0);
 
           const plastic = 
-            zd.congelados.plastic_bases + zd.congelados.plastic_extra +
-            zd.estandar.plastic_bases + zd.estandar.plastic_extra +
-            zd.bandejas.plastic_bases + zd.bandejas.plastic_extra;
+            (zd.congelados?.plastic_bases || 0) + (zd.congelados?.plastic_extra || 0) +
+            (zd.estandar?.plastic_bases || 0) + (zd.estandar?.plastic_extra || 0) +
+            (zd.bandejas?.plastic_bases || 0) + (zd.bandejas?.plastic_extra || 0);
 
           balances[name].wood_sent += wood;
           balances[name].plastic_sent += plastic;
+
+          if (!balances[name].last_dispatch_date && rec.inspection_date) {
+            balances[name].last_dispatch_date = rec.inspection_date;
+          }
         }
       });
     });
@@ -613,8 +619,8 @@ export default function App({ user }: { user: any }) {
     returnsList.forEach(ret => {
       const name = ret.zonal_name;
       if (balances[name]) {
-        balances[name].wood_ret += ret.wood_returned;
-        balances[name].plastic_ret += ret.plastic_returned;
+        balances[name].wood_ret += (ret.wood_returned || 0);
+        balances[name].plastic_ret += (ret.plastic_returned || 0);
       }
     });
 
@@ -2816,69 +2822,93 @@ export default function App({ user }: { user: any }) {
               </button>
             </h2>
 
-            {/* LISTA DE SALDOS POR ZONAL */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {ZONALES_LIST.map((zonalName) => {
-                const bal = balances[zonalName] || { wood_sent: 0, plastic_sent: 0, wood_ret: 0, plastic_ret: 0 };
-                const woodSaldo = bal.wood_sent - bal.wood_ret;
-                const plasticSaldo = bal.plastic_sent - bal.plastic_ret;
+            {/* LISTA COMPACTA DE SALDOS POR ZONAL CON FECHA DE ÚLTIMO DESPACHO */}
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden select-none">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
+                    <tr>
+                      <th className="p-3.5">Zonal / Región</th>
+                      <th className="p-3.5">Último Despacho Camión</th>
+                      <th className="p-3.5 text-center">Madera Neto</th>
+                      <th className="p-3.5 text-center">Plástico Neto</th>
+                      <th className="p-3.5 text-center">Estado</th>
+                      <th className="p-3.5 text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                    {ZONALES_LIST.map((zonalName) => {
+                      const bal = balances[zonalName] || { wood_sent: 0, plastic_sent: 0, wood_ret: 0, plastic_ret: 0, last_dispatch_date: null };
+                      const woodSaldo = bal.wood_sent - bal.wood_ret;
+                      const plasticSaldo = bal.plastic_sent - bal.plastic_ret;
+                      const hasBalance = woodSaldo > 0 || plasticSaldo > 0;
+                      const lastDateStr = bal.last_dispatch_date ? getFormatDate(bal.last_dispatch_date) : 'Sin envíos';
 
-                // Solo renderizar zonales que tengan algún movimiento (enviado o retornado)
-                // o mostrar todos. Mostremos todos pero destacando los que tienen saldos activos
-                const hasBalance = woodSaldo > 0 || plasticSaldo > 0;
+                      return (
+                        <tr key={zonalName} className={`hover:bg-slate-50/80 transition-colors ${hasBalance ? 'bg-emerald-50/20' : ''}`}>
+                          <td className="p-3.5">
+                            <div className="font-extrabold text-slate-800 uppercase text-xs flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${hasBalance ? 'bg-emerald-500 shadow-2xs' : 'bg-slate-300'}`}></span>
+                              {zonalName}
+                            </div>
+                          </td>
 
-                return (
-                  <div 
-                    key={zonalName} 
-                    className={`bg-white border rounded-2xl p-4 shadow-sm flex flex-col justify-between gap-3 transition-all ${hasBalance ? 'border-brand-primary bg-emerald-50/5' : 'border-slate-200 opacity-75 hover:opacity-100'}`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-black text-sm text-slate-800">{zonalName}</h3>
-                        <span className="text-[10px] text-slate-400 font-bold block mt-0.5 uppercase">Región / Zonal</span>
-                      </div>
-                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${hasBalance ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>
-                        {hasBalance ? 'Saldo Activo' : 'Sin Pallets'}
-                      </span>
-                    </div>
+                          <td className="p-3.5 font-mono text-[11px] whitespace-nowrap">
+                            {bal.last_dispatch_date ? (
+                              <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200/80 font-bold">
+                                <Calendar className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                                {lastDateStr}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-normal italic">Sin envíos</span>
+                            )}
+                          </td>
 
-                    {/* Fila de saldos */}
-                    <div className="grid grid-cols-2 gap-2 text-center py-1">
-                      {/* Madera */}
-                      <div className="bg-amber-50/30 p-2.5 rounded-xl border border-amber-100/50">
-                        <span className="text-[9px] text-amber-800 font-bold block uppercase">Madera Neto</span>
-                        <span className="text-lg font-mono font-black text-amber-900 mt-0.5 block">
-                          {woodSaldo} <span className="text-[10px] text-amber-600 font-normal">({bal.wood_sent} - {bal.wood_ret})</span>
-                        </span>
-                      </div>
-                      
-                      {/* Plastico */}
-                      <div className="bg-emerald-50/30 p-2.5 rounded-xl border border-emerald-100/50">
-                        <span className="text-[9px] text-emerald-800 font-bold block uppercase">Plástico Neto</span>
-                        <span className="text-lg font-mono font-black text-emerald-900 mt-0.5 block">
-                          {plasticSaldo} <span className="text-[10px] text-emerald-600 font-normal">({bal.plastic_sent} - {bal.plastic_ret})</span>
-                        </span>
-                      </div>
-                    </div>
+                          <td className="p-3.5 text-center">
+                            <div className="inline-flex flex-col items-center">
+                              <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-xs ${woodSaldo > 0 ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'text-slate-400 font-normal'}`}>
+                                {woodSaldo}
+                              </span>
+                              <span className="text-[9px] font-mono text-slate-400 font-normal">({bal.wood_sent} - {bal.wood_ret})</span>
+                            </div>
+                          </td>
 
-                    {/* Botón táctil para retornar */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowReturnModal(zonalName);
-                        setReturnSupervisor(formatSupervisorName(user?.email));
-                        setReturnWood(0);
-                        setReturnPlastic(0);
-                      }}
-                      className="w-full bg-brand-primary hover:bg-brand-secondary text-white py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      REGISTRAR RETORNO CD
-                    </button>
+                          <td className="p-3.5 text-center">
+                            <div className="inline-flex flex-col items-center">
+                              <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-xs ${plasticSaldo > 0 ? 'bg-emerald-100 text-emerald-900 border border-emerald-200' : 'text-slate-400 font-normal'}`}>
+                                {plasticSaldo}
+                              </span>
+                              <span className="text-[9px] font-mono text-slate-400 font-normal">({bal.plastic_sent} - {bal.plastic_ret})</span>
+                            </div>
+                          </td>
 
-                  </div>
-                );
-              })}
+                          <td className="p-3.5 text-center whitespace-nowrap">
+                            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-extrabold uppercase ${hasBalance ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-400'}`}>
+                              {hasBalance ? 'Saldo Activo' : 'Sin Pallets'}
+                            </span>
+                          </td>
+
+                          <td className="p-3.5 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowReturnModal(zonalName);
+                                setReturnSupervisor(formatSupervisorName(user?.email));
+                                setReturnWood(0);
+                                setReturnPlastic(0);
+                              }}
+                              className="bg-brand-primary hover:bg-brand-secondary text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              Registrar Retorno CD
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* BITÁCORA DE RETORNOS RECIENTES */}
