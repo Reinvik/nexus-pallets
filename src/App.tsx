@@ -98,6 +98,7 @@ interface DispatchRecord {
   temp_3er: number;
   close_time?: string | null;
   truck_kilos?: string | number | null;
+  anden_number?: string | null;
 }
 
 interface PalletReturnRecord {
@@ -157,6 +158,7 @@ export default function App({ user }: { user: any }) {
   const [temp3er, setTemp3er] = useState<number>(0);
   const [closeTime, setCloseTime] = useState<string>('');
   const [truckKilos, setTruckKilos] = useState<string>('');
+  const [truckAnden, setTruckAnden] = useState<string>('');
 
   const isAdmin = checkIsAdmin(user);
 
@@ -170,6 +172,7 @@ export default function App({ user }: { user: any }) {
   const [editingTime, setEditingTime] = useState('');
   const [editingCloseTime, setEditingCloseTime] = useState('');
   const [editingTruckKilos, setEditingTruckKilos] = useState('');
+  const [editingTruckAnden, setEditingTruckAnden] = useState('');
   const [editingTruckNumber, setEditingTruckNumber] = useState('');
   const [editingTruckPlate, setEditingTruckPlate] = useState('');
   const [editingSupervisorName, setEditingSupervisorName] = useState('');
@@ -285,10 +288,11 @@ export default function App({ user }: { user: any }) {
         if (d.temp3er !== undefined) setTemp3er(d.temp3er);
         if (d.closeTime !== undefined) setCloseTime(d.closeTime);
         if (d.truckKilos !== undefined) setTruckKilos(d.truckKilos);
+        if (d.truckAnden !== undefined) setTruckAnden(d.truckAnden);
         if (d.checklist !== undefined) setChecklist(d.checklist);
         if (d.selectedZonals && Array.isArray(d.selectedZonals)) setSelectedZonals(d.selectedZonals);
         if (d.photos && Array.isArray(d.photos)) setPhotos(d.photos);
-        if (d.selectedZonals?.length > 0 || d.truckNumber || d.observations || d.photos?.length > 0 || d.truckKilos) {
+        if (d.selectedZonals?.length > 0 || d.truckNumber || d.observations || d.photos?.length > 0 || d.truckKilos || d.truckAnden) {
           setHasRestoredDraft(true);
         }
       }
@@ -299,7 +303,7 @@ export default function App({ user }: { user: any }) {
 
   // Auto-guardado de borrador en localStorage
   useEffect(() => {
-    const hasContent = selectedZonals.length > 0 || !!truckNumber || !!truckPlate || !!observations || photos.length > 0 || !!truckKilos;
+    const hasContent = selectedZonals.length > 0 || !!truckNumber || !!truckPlate || !!observations || photos.length > 0 || !!truckKilos || !!truckAnden;
     if (hasContent) {
       try {
         const draftData = {
@@ -312,6 +316,7 @@ export default function App({ user }: { user: any }) {
           temp3er,
           closeTime,
           truckKilos,
+          truckAnden,
           checklist,
           selectedZonals,
           photos
@@ -322,7 +327,7 @@ export default function App({ user }: { user: any }) {
         console.error('Error guardando borrador:', e);
       }
     }
-  }, [truckNumber, truckPlate, positionsOccupied, observations, temp1er, temp2do, temp3er, closeTime, truckKilos, checklist, selectedZonals, photos]);
+  }, [truckNumber, truckPlate, positionsOccupied, observations, temp1er, temp2do, temp3er, closeTime, truckKilos, truckAnden, checklist, selectedZonals, photos]);
 
   const clearDraft = (silent = false) => {
     if (!silent) {
@@ -338,6 +343,7 @@ export default function App({ user }: { user: any }) {
     setTemp3er(0);
     setCloseTime('');
     setTruckKilos('');
+    setTruckAnden('');
     setChecklist({
       postura_anden: true,
       limpieza_estructura: true,
@@ -986,6 +992,7 @@ export default function App({ user }: { user: any }) {
     setEditingTime(rec.inspection_time || '');
     setEditingCloseTime(rec.close_time || '');
     setEditingTruckKilos(rec.truck_kilos ? String(rec.truck_kilos) : '');
+    setEditingTruckAnden(rec.anden_number || '');
     setEditingTruckNumber(rec.truck_number !== 'N/A' ? rec.truck_number : '');
     setEditingTruckPlate(rec.truck_plate !== 'N/A' ? rec.truck_plate : '');
     setEditingSupervisorName(rec.supervisor_name || '');
@@ -1011,6 +1018,7 @@ export default function App({ user }: { user: any }) {
           inspection_time: editingTime,
           close_time: editingCloseTime || null,
           truck_kilos: editingTruckKilos || null,
+          anden_number: editingTruckAnden || null,
           truck_number: editingTruckNumber || 'N/A',
           truck_plate: editingTruckPlate || 'N/A',
           supervisor_name: editingSupervisorName,
@@ -1174,7 +1182,8 @@ export default function App({ user }: { user: any }) {
           temp_2do: temp2do,
           temp_3er: temp3er,
           close_time: closeTime || null,
-          truck_kilos: truckKilos || null
+          truck_kilos: truckKilos || null,
+          anden_number: truckAnden || null
         }]);
 
       if (error) throw error;
@@ -1404,7 +1413,7 @@ export default function App({ user }: { user: any }) {
                 1. Datos del Camión & Supervisor
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Supervisor</label>
                   <input 
@@ -1431,6 +1440,16 @@ export default function App({ user }: { user: any }) {
                     placeholder="Ej. 1951" 
                     value={truckNumber} 
                     onChange={(e) => setTruckNumber(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">N° de Andén</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ej. Andén 4" 
+                    value={truckAnden} 
+                    onChange={(e) => setTruckAnden(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-mono font-bold"
                   />
                 </div>
@@ -2233,6 +2252,7 @@ export default function App({ user }: { user: any }) {
                                 <Truck className="w-4 h-4 text-slate-400" />
                                 N° Camión: {rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'} 
                                 {rec.truck_plate !== 'N/A' && ` | Patente: ${rec.truck_plate}`}
+                                {rec.anden_number && ` | Andén: ${rec.anden_number}`}
                               </span>
                             </div>
 
@@ -3415,7 +3435,7 @@ export default function App({ user }: { user: any }) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 pt-2">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Supervisor</label>
                     <input 
@@ -3442,6 +3462,16 @@ export default function App({ user }: { user: any }) {
                       value={editingTruckPlate}
                       onChange={(e) => setEditingTruckPlate(e.target.value.toUpperCase())}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">N° de Andén</label>
+                    <input 
+                      type="text" 
+                      value={editingTruckAnden}
+                      onChange={(e) => setEditingTruckAnden(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
+                      placeholder="Ej. Andén 4"
                     />
                   </div>
                   <div>
