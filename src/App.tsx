@@ -60,6 +60,7 @@ interface CategoryData {
   plastic_bases: number;
   plastic_extra: number;
   bandejas_count?: number; // Solo para categoría bandejas
+  bandejas_formula?: string; // Fórmula de desglose (ej: "40x3 + 25x2 + 5")
 }
 
 interface ZonalDetail {
@@ -70,6 +71,7 @@ interface ZonalDetail {
   estandar: CategoryData;
   bandejas: CategoryData;
   sello: string;
+  photos?: string[]; // Fotos adjuntas por zonal
 }
 
 interface DispatchRecord {
@@ -386,6 +388,48 @@ export default function App({ user }: { user: any }) {
     }
   };
 
+  // Mapa para expandir/ocultar pallets de madera en estándar y bandejas
+  const [showWoodMap, setShowWoodMap] = useState<{ [key: string]: boolean }>({});
+  const toggleWoodShow = (zonalIndex: number, catName: string) => {
+    const key = `${zonalIndex}_${catName}`;
+    setShowWoodMap(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleAddZonalPhoto = async (zonalIndex: number, files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
+    const updated = [...selectedZonals];
+    const currentPhotos = [...(updated[zonalIndex].photos || [])];
+    const remaining = 4 - currentPhotos.length;
+    const toProcess = fileArray.slice(0, remaining);
+
+    for (const f of toProcess) {
+      try {
+        const compressed = await compressImage(f);
+        currentPhotos.push(compressed);
+      } catch (err) {
+        console.error('Error al procesar foto:', err);
+      }
+    }
+
+    updated[zonalIndex] = {
+      ...updated[zonalIndex],
+      photos: currentPhotos
+    };
+    setSelectedZonals(updated);
+  };
+
+  const handleRemoveZonalPhoto = (zonalIndex: number, photoIndex: number) => {
+    const updated = [...selectedZonals];
+    const currentPhotos = [...(updated[zonalIndex].photos || [])];
+    currentPhotos.splice(photoIndex, 1);
+    updated[zonalIndex] = {
+      ...updated[zonalIndex],
+      photos: currentPhotos
+    };
+    setSelectedZonals(updated);
+  };
+
   const handleAddZonal = () => {
     if (selectedZonals.length >= 4) {
       alert("Un camión puede llevar un máximo de 4 zonales (según planilla de despacho).");
@@ -401,7 +445,8 @@ export default function App({ user }: { user: any }) {
       congelados: { kilos: 0, wood_bases: 0, wood_extra: 0, plastic_bases: 0, plastic_extra: 0 },
       estandar: { kilos: 0, wood_bases: 0, wood_extra: 0, plastic_bases: 0, plastic_extra: 0 },
       bandejas: { kilos: 0, wood_bases: 0, wood_extra: 0, plastic_bases: 0, plastic_extra: 0, bandejas_count: 0 },
-      sello: ''
+      sello: '',
+      photos: []
     };
 
     setSelectedZonals([...selectedZonals, newZonal]);
@@ -412,10 +457,10 @@ export default function App({ user }: { user: any }) {
     const zonal = selectedZonals[index];
     const zName = zonal?.zonal_name || `Zonal #${index + 1}`;
     const t = getZonalTotals(zonal);
-    const hasData = t.wood > 0 || t.plastic > 0 || t.bandejas > 0 || !!zonal?.sello;
+    const hasData = t.wood > 0 || t.plastic > 0 || t.bandejas > 0 || !!zonal?.sello || (zonal?.photos && zonal.photos.length > 0);
 
     const confirmMsg = hasData
-      ? `⚠️ ¿Eliminar Zonal "${zName}"?\n\nEste zonal ya tiene cantidades cargadas (${t.wood} madera, ${t.plastic} plástico, ${t.bandejas} bandejas). Si continúas se borrarán.`
+      ? `⚠️ ¿Eliminar Zonal "${zName}"?\n\nEste zonal ya tiene datos cargados (${t.wood} madera, ${t.plastic} plástico, ${t.bandejas} bandejas, ${(zonal.photos || []).length} fotos). Si continúas se borrarán.`
       : `¿Estás seguro de quitar el zonal "${zName}" de la lista de carga?`;
 
     if (!window.confirm(confirmMsg)) return;
@@ -449,7 +494,7 @@ export default function App({ user }: { user: any }) {
     
     // Evitar valores negativos
     const safeValue = Math.max(0, value);
-    catData[field] = safeValue;
+    (catData as any)[field] = safeValue;
     
     updated[zonalIndex] = {
       ...updated[zonalIndex],
@@ -471,12 +516,21 @@ export default function App({ user }: { user: any }) {
 
   const applyBandejasHelper = () => {
     if (showBandejasHelper === null) return;
+    const parts = [];
+    if (helper40 > 0) parts.push(`40x${helper40}`);
+    if (helper35 > 0) parts.push(`35x${helper35}`);
+    if (helper30 > 0) parts.push(`30x${helper30}`);
+    if (helper25 > 0) parts.push(`25x${helper25}`);
+    if (helper20 > 0) parts.push(`20x${helper20}`);
+    if (helperRestante > 0) parts.push(`${helperRestante}`);
+    const formulaText = parts.length > 0 ? parts.join(' + ') : '0';
     const totalBandejas = (helper40 * 40) + (helper35 * 35) + (helper30 * 30) + (helper25 * 25) + (helper20 * 20) + Math.max(0, Number(helperRestante || 0));
     const totalPallets = helper40 + helper35 + helper30 + helper25 + helper20;
     
     const updated = [...selectedZonals];
     const bandejasData = { ...updated[showBandejasHelper].bandejas };
     bandejasData.bandejas_count = totalBandejas;
+    bandejasData.bandejas_formula = formulaText;
     if (totalPallets > 0) {
       bandejasData.plastic_bases = totalPallets;
     }
@@ -780,16 +834,23 @@ export default function App({ user }: { user: any }) {
                 <strong>OBSERVACIONES:</strong> <span style="font-weight: 600;">${rec.observations || ''}</span>
               </td>
             </tr>
-            ${(rec.checklist as any)?.photos?.length ? `
-              <tr>
-                <td colspan="2" style="border: 1px solid #000; padding: 6px; background-color: #fafafa;">
-                  <strong style="font-size: 8px; text-transform: uppercase;">RESPALDOS FOTOGRÁFICOS (${(rec.checklist as any).photos.length}):</strong>
-                  <div style="display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap;">
-                    ${(rec.checklist as any).photos.map((pUrl: string) => `<img src="${pUrl}" style="height: 85px; width: auto; max-width: 45%; object-fit: cover; border: 1px solid #000; border-radius: 4px;" />`).join('')}
-                  </div>
-                </td>
-              </tr>
-            ` : ''}
+            ${(() => {
+              const zonalPhotos = rec.zonals_detail.flatMap(z => z.photos || []);
+              const legacyPhotos = (rec.checklist as any)?.photos || [];
+              const allPhotos = [...zonalPhotos, ...legacyPhotos];
+              if (allPhotos.length === 0) return '';
+
+              return `
+                <tr>
+                  <td colspan="2" style="border: 1px solid #000; padding: 6px; background-color: #fafafa;">
+                    <strong style="font-size: 8px; text-transform: uppercase;">RESPALDOS FOTOGRÁFICOS (${allPhotos.length}):</strong>
+                    <div style="display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap;">
+                      ${allPhotos.map((pUrl: string) => `<img src="${pUrl}" style="height: 85px; width: auto; max-width: 45%; object-fit: cover; border: 1px solid #000; border-radius: 4px;" />`).join('')}
+                    </div>
+                  </td>
+                </tr>
+              `;
+            })()}
             <tr>
               <td style="width: 55%; border: 1px solid #000; padding: 5px; vertical-align: top; height: 24px;">
                 <strong>SUPERVISOR:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.supervisor_name}</span>
@@ -1674,7 +1735,9 @@ export default function App({ user }: { user: any }) {
                               {(['congelados', 'estandar', 'bandejas'] as const).map((catName) => {
                                 const catData = zonal[catName];
                                 const catLabel = catName === 'congelados' ? 'CONGELADOS' : catName === 'estandar' ? 'ESTÁNDAR' : 'BANDEJAS';
-                                
+                                const hasWoodValue = (catData.wood_bases || 0) > 0 || (catData.wood_extra || 0) > 0;
+                                const isWoodVisible = catName === 'congelados' || hasWoodValue || !!showWoodMap[`${zonalIndex}_${catName}`];
+
                                 return (
                                   <div 
                                     key={catName} 
@@ -1684,71 +1747,94 @@ export default function App({ user }: { user: any }) {
                                       <span className="text-xs font-black text-brand-primary tracking-wide">
                                         {catLabel}
                                       </span>
+                                      {catName !== 'congelados' && !hasWoodValue && isWoodVisible && (
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleWoodShow(zonalIndex, catName)}
+                                          className="text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                                        >
+                                          Ocultar Madera X
+                                        </button>
+                                      )}
                                     </div>
 
                                     {/* CONTADORES DE PALLETS (TÁCTILES COMPACTOS EN EJE Y) */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                       
-                                      {/* COLUMNA: PALLETS MADERA */}
-                                      <div className="bg-amber-50/20 border border-amber-100 p-2.5 rounded-xl space-y-2">
-                                        <div className="flex justify-between items-center select-none">
-                                          <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">
-                                            Pallet Madera
-                                          </span>
-                                          <span className="text-[11px] font-black text-amber-950 font-mono bg-amber-100/50 px-1.5 py-0.5 rounded">
-                                            {catData.wood_bases}+{catData.wood_extra} ({catData.wood_bases + catData.wood_extra})
-                                          </span>
+                                      {/* COLUMNA: PALLETS MADERA (CON OPCIÓN DE OCULTAR) */}
+                                      {!isWoodVisible ? (
+                                        <div className="bg-slate-100/60 border border-dashed border-slate-300 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase">Pallet Madera (No usado)</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleWoodShow(zonalIndex, catName)}
+                                            className="text-[10px] font-extrabold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                          >
+                                            <Plus className="w-3 h-3" />
+                                            Desplegar Madera
+                                          </button>
                                         </div>
+                                      ) : (
+                                        <div className="bg-amber-50/20 border border-amber-100 p-2.5 rounded-xl space-y-2">
+                                          <div className="flex justify-between items-center select-none">
+                                            <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">
+                                              Pallet Madera
+                                            </span>
+                                            <span className="text-[11px] font-black text-amber-950 font-mono bg-amber-100/50 px-1.5 py-0.5 rounded">
+                                              {catData.wood_bases}+{catData.wood_extra} ({catData.wood_bases + catData.wood_extra})
+                                            </span>
+                                          </div>
 
-                                        <div className="space-y-1.5 bg-white p-2 rounded-lg border border-slate-100/60">
-                                          {/* Base */}
-                                          <div className="flex items-center justify-between text-xs">
-                                            <span className="text-[10px] font-bold text-slate-400">Base</span>
-                                            <div className="flex items-center gap-2 select-none">
-                                              <button
-                                                type="button"
-                                                onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_bases', catData.wood_bases - 1)}
-                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
-                                              >
-                                                -
-                                              </button>
-                                              <span className="font-mono text-xs font-black w-6 text-center">{catData.wood_bases}</span>
-                                              <button
-                                                type="button"
-                                                onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_bases', catData.wood_bases + 1)}
-                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
-                                              >
-                                                +
-                                              </button>
+                                          <div className="space-y-1.5 bg-white p-2 rounded-lg border border-slate-100/60">
+                                            {/* Base */}
+                                            <div className="flex items-center justify-between text-xs">
+                                              <span className="text-[10px] font-bold text-slate-400">Base</span>
+                                              <div className="flex items-center gap-2 select-none">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_bases', catData.wood_bases - 1)}
+                                                  className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
+                                                >
+                                                  -
+                                                </button>
+                                                <span className="font-mono text-xs font-black w-6 text-center">{catData.wood_bases}</span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_bases', catData.wood_bases + 1)}
+                                                  className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
+                                                >
+                                                  +
+                                                </button>
+                                              </div>
                                             </div>
-                                          </div>
-                                          
-                                          {/* Extra */}
-                                          <div className="flex items-center justify-between text-xs border-t border-slate-50 pt-1.5">
-                                            <span className="text-[10px] font-bold text-slate-400">2da Base (Extra)</span>
-                                            <div className="flex items-center gap-2 select-none">
-                                              <button
-                                                type="button"
-                                                onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_extra', catData.wood_extra - 1)}
-                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
-                                              >
-                                                -
-                                              </button>
-                                              <span className="font-mono text-xs font-black w-6 text-center">{catData.wood_extra}</span>
-                                              <button
-                                                type="button"
-                                                onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_extra', catData.wood_extra + 1)}
-                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
-                                              >
-                                                +
-                                              </button>
+                                            
+                                            {/* Extra */}
+                                            <div className="flex items-center justify-between text-xs border-t border-slate-50 pt-1.5">
+                                              <span className="text-[10px] font-bold text-slate-400">2da Base (Extra)</span>
+                                              <div className="flex items-center gap-2 select-none">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_extra', catData.wood_extra - 1)}
+                                                  className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
+                                                >
+                                                  -
+                                                </button>
+                                                <span className="font-mono text-xs font-black w-6 text-center">{catData.wood_extra}</span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUpdateCategory(zonalIndex, catName, 'wood_extra', catData.wood_extra + 1)}
+                                                  className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
+                                                >
+                                                  +
+                                                </button>
+                                              </div>
                                             </div>
                                           </div>
                                         </div>
-                                      </div>
+                                      )}
 
                                       {/* COLUMNA: PALLETS PLÁSTICOS */}
-                                      <div className="bg-emerald-50/20 border border-emerald-100 p-2.5 rounded-xl space-y-2">
+                                      <div className={`bg-emerald-50/20 border border-emerald-100 p-2.5 rounded-xl space-y-2 ${!isWoodVisible ? 'sm:col-span-2' : ''}`}>
                                         <div className="flex justify-between items-center select-none">
                                           <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider">
                                             Pallet Plástico
@@ -1808,58 +1894,68 @@ export default function App({ user }: { user: any }) {
 
                                     {/* Si es categoría BANDEJAS, agregar el contador de bandejas físicas */}
                                     {catName === 'bandejas' && (
-                                      <div className="bg-slate-100/50 p-3 rounded-lg border border-slate-200/50 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-[10px] font-black text-slate-500 uppercase">Cantidad de Bandejas:</span>
-                                          <span className="text-lg font-black text-brand-primary font-mono bg-white px-3 py-1 rounded border">
-                                            {catData.bandejas_count || 0}
-                                          </span>
+                                      <div className="bg-slate-100/50 p-3 rounded-lg border border-slate-200/50 space-y-2">
+                                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-black text-slate-500 uppercase">Cantidad de Bandejas:</span>
+                                            <span className="text-lg font-black text-brand-primary font-mono bg-white px-3 py-1 rounded border">
+                                              {catData.bandejas_count || 0}
+                                            </span>
+                                          </div>
+
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', (catData.bandejas_count || 0) + 1)}
+                                              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
+                                            >
+                                              +1
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', (catData.bandejas_count || 0) + 10)}
+                                              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
+                                            >
+                                              +10
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', (catData.bandejas_count || 0) + 40)}
+                                              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
+                                            >
+                                              +40
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', Math.max(0, (catData.bandejas_count || 0) - 10))}
+                                              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
+                                            >
+                                              -10
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', Math.max(0, (catData.bandejas_count || 0) - 1))}
+                                              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
+                                            >
+                                              -1
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => openBandejasHelper(zonalIndex)}
+                                              className="bg-brand-primary hover:bg-brand-secondary text-white px-2.5 py-1 rounded text-xs font-bold cursor-pointer transition-all shadow-sm"
+                                            >
+                                              Asistente
+                                            </button>
+                                          </div>
                                         </div>
 
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', (catData.bandejas_count || 0) + 1)}
-                                            className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
-                                          >
-                                            +1
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', (catData.bandejas_count || 0) + 10)}
-                                            className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
-                                          >
-                                            +10
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', (catData.bandejas_count || 0) + 40)}
-                                            className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
-                                          >
-                                            +40
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', Math.max(0, (catData.bandejas_count || 0) - 10))}
-                                            className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
-                                          >
-                                            -10
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', Math.max(0, (catData.bandejas_count || 0) - 1))}
-                                            className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
-                                          >
-                                            -1
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => openBandejasHelper(zonalIndex)}
-                                            className="bg-brand-primary hover:bg-brand-secondary text-white px-2.5 py-1 rounded text-xs font-bold cursor-pointer transition-all shadow-sm"
-                                          >
-                                            Asistente
-                                          </button>
-                                        </div>
+                                        {/* MOSTRAR DESGLOSE DE FÓRMULA SI EXISTE */}
+                                        {catData.bandejas_formula && (
+                                          <div className="text-[11px] font-mono font-bold text-slate-600 bg-amber-50/70 border border-amber-200/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-[10px] text-amber-900 font-extrabold uppercase tracking-wide">Cálculo del Conteo:</span>
+                                            <span className="text-amber-950 font-black">{catData.bandejas_formula}</span>
+                                          </div>
+                                        )}
                                       </div>
                                     )}
 
@@ -1868,22 +1964,68 @@ export default function App({ user }: { user: any }) {
                               })}
                             </div>
 
-                            {/* SECCIÓN SELLOS (Check list camiones) */}
+                            {/* SECCIÓN SELLOS Y FOTOS DEL ZONAL */}
                             <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                               <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider border-b pb-1">
-                                Control Adicional de Zonal
+                                Control Adicional & Respaldos Fotográficos del Zonal
                               </h3>
 
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nº de Sello</label>
-                                <input
-                                  type="text"
-                                  placeholder="Ej. 017315"
-                                  value={zonal.sello}
-                                  onChange={(e) => handleUpdateZonal(zonalIndex, 'sello', e.target.value)}
-                                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold"
-                                />
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nº de Sello</label>
+                                  <input
+                                    type="text"
+                                    placeholder="Ej. 017315"
+                                    value={zonal.sello}
+                                    onChange={(e) => handleUpdateZonal(zonalIndex, 'sello', e.target.value)}
+                                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                    Fotos de Respaldo Zonal ({(zonal.photos || []).length}/4)
+                                  </label>
+                                  {(!zonal.photos || zonal.photos.length < 4) && (
+                                    <label className="bg-white hover:bg-slate-100 text-slate-700 px-3.5 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 border border-slate-200 shadow-sm active:scale-95">
+                                      <Camera className="w-4 h-4 text-brand-primary" />
+                                      Adjuntar / Tomar Foto
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        capture="environment"
+                                        className="hidden"
+                                        onChange={(e) => handleAddZonalPhoto(zonalIndex, e.target.files)}
+                                      />
+                                    </label>
+                                  )}
+                                </div>
                               </div>
+
+                              {/* FOTOS EN MINIATURA DEL ZONAL */}
+                              {zonal.photos && zonal.photos.length > 0 && (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200/60">
+                                  {zonal.photos.map((imgSrc, pIdx) => (
+                                    <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100 shadow-sm">
+                                      <img
+                                        src={imgSrc}
+                                        alt={`Zonal ${zonalIndex + 1} Foto ${pIdx + 1}`}
+                                        className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                        onClick={() => setPreviewPhoto(imgSrc)}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveZonalPhoto(zonalIndex, pIdx)}
+                                        className="absolute top-1 right-1 bg-rose-600 hover:bg-rose-700 text-white p-1 rounded-full shadow-md cursor-pointer transition-all active:scale-90"
+                                        title="Eliminar foto"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
 
                           </div>
@@ -1895,11 +2037,11 @@ export default function App({ user }: { user: any }) {
               )}
             </section>
 
-            {/* CARD 3: OBSERVACIONES Y FOTOS */}
+            {/* CARD 3: OBSERVACIONES */}
             <section className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4">
               <h2 className="text-sm font-black text-brand-primary uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-2.5">
                 <FileText className="w-4.5 h-4.5" />
-                3. Observaciones & Respaldos Fotográficos
+                3. Observaciones
               </h2>
               <textarea
                 rows={3}
@@ -1908,67 +2050,6 @@ export default function App({ user }: { user: any }) {
                 onChange={(e) => setObservations(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-semibold"
               />
-
-              {/* SECCIÓN DE FOTOS ADJUNTAS */}
-              <div className="space-y-3 border-t border-slate-100 pt-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Camera className="w-4 h-4 text-brand-primary" />
-                    Fotos / Capturas de Respaldo ({photos.length}/4)
-                  </span>
-                  {photos.length < 4 && (
-                    <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-2 shadow-sm active:scale-95 border border-slate-200">
-                      <Camera className="w-4 h-4 text-brand-primary" />
-                      Adjuntar / Tomar Foto
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        capture="environment"
-                        className="hidden"
-                        onChange={async (e) => {
-                          if (!e.target.files) return;
-                          const files = Array.from(e.target.files);
-                          const remaining = 4 - photos.length;
-                          const toProcess = files.slice(0, remaining);
-                          for (const f of toProcess) {
-                            try {
-                              const compressed = await compressImage(f);
-                              setPhotos(prev => [...prev, compressed]);
-                            } catch (err) {
-                              console.error(err);
-                            }
-                          }
-                          e.target.value = '';
-                        }}
-                      />
-                    </label>
-                  )}
-                </div>
-
-                {photos.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                    {photos.map((imgSrc, idx) => (
-                      <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 shadow-sm">
-                        <img
-                          src={imgSrc}
-                          alt={`Foto ${idx + 1}`}
-                          className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                          onClick={() => setPreviewPhoto(imgSrc)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setPhotos(prev => prev.filter((_, i) => i !== idx))}
-                          className="absolute top-1.5 right-1.5 bg-rose-600 hover:bg-rose-700 text-white p-1 rounded-full shadow-md cursor-pointer transition-all active:scale-90"
-                          title="Eliminar foto"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </section>
 
             {/* CARD RESUMEN Y BOTÓN CONFIRMAR */}
@@ -2308,13 +2389,33 @@ export default function App({ user }: { user: any }) {
                                         </div>
                                         <div className="flex justify-between">
                                           <span>Bandejas:</span>
-                                          <span>{z.bandejas.bandejas_count}B | M:{z.bandejas.wood_bases}+{z.bandejas.wood_extra} | P:{z.bandejas.plastic_bases}+{z.bandejas.plastic_extra}</span>
+                                          <span>{z.bandejas.bandejas_count}B {z.bandejas.bandejas_formula ? `(${z.bandejas.bandejas_formula})` : ''} | M:{z.bandejas.wood_bases}+{z.bandejas.wood_extra} | P:{z.bandejas.plastic_bases}+{z.bandejas.plastic_extra}</span>
                                         </div>
                                         <div className="flex justify-between text-brand-primary font-bold border-t border-dashed border-slate-200 pt-1 mt-1 text-[11px]">
                                           <span>Totales Zonal:</span>
                                           <span>M:{zT} | P:{zP}</span>
                                         </div>
                                       </div>
+                                      {z.photos && z.photos.length > 0 && (
+                                        <div className="pt-2 border-t border-slate-200/60 mt-1.5 space-y-1">
+                                          <span className="text-[10px] font-bold text-slate-600 flex items-center gap-1">
+                                            <Camera className="w-3 h-3 text-brand-primary" />
+                                            Fotos Zonal ({z.photos.length}):
+                                          </span>
+                                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                                            {z.photos.map((pUrl, pIdx) => (
+                                              <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-200">
+                                                <img
+                                                  src={pUrl}
+                                                  alt={`Foto Zonal ${pIdx + 1}`}
+                                                  className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                                  onClick={() => setPreviewPhoto(pUrl)}
+                                                />
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
