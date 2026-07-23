@@ -1384,7 +1384,7 @@ export default function App({ user }: { user: any }) {
                 1. Datos del Camión & Supervisor
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Supervisor (Autenticado)</label>
                   <input 
@@ -1411,16 +1411,6 @@ export default function App({ user }: { user: any }) {
                     placeholder="Ej. 1951" 
                     value={truckNumber} 
                     onChange={(e) => setTruckNumber(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-mono font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Kilos Totales Camión (kg)</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ej. 21.116" 
-                    value={truckKilos} 
-                    onChange={(e) => setTruckKilos(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-mono font-bold"
                   />
                 </div>
@@ -1580,8 +1570,8 @@ export default function App({ user }: { user: any }) {
                   </div>
                 </div>
 
-                {/* Posiciones */}
-                <div className="flex flex-col justify-between">
+                {/* Posiciones y Kilos Totales del Camión */}
+                <div className="flex flex-col justify-between space-y-3">
                   <div className="space-y-2">
                     <label className="block text-xs font-bold text-slate-500 uppercase">Posiciones Ocupadas dentro del Camión</label>
                     <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
@@ -1606,11 +1596,22 @@ export default function App({ user }: { user: any }) {
                     </div>
                   </div>
 
-                  <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100/50 flex items-center gap-2 mt-2">
-                    <Award className="w-4.5 h-4.5 text-brand-primary shrink-0" />
-                    <span className="text-[11px] font-semibold text-slate-600">
-                      Configuración táctil mobile-first para andenes de CIAL.
-                    </span>
+                  {/* KILOS TOTALES DEL CAMIÓN (UBICACIÓN SOLICITADA ABAJO DE POSICIONES) */}
+                  <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200/80 space-y-1.5 shadow-2xs">
+                    <label className="block text-xs font-black text-amber-900 uppercase tracking-wider flex items-center justify-between">
+                      <span>Kilos Totales del Camión (kg)</span>
+                      <span className="text-[9px] font-mono bg-amber-200/60 text-amber-950 px-1.5 py-0.5 rounded font-extrabold">SEGÚN GUÍA DE RUTA</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="Ej. 21.116" 
+                        value={truckKilos} 
+                        onChange={(e) => setTruckKilos(e.target.value)}
+                        className="w-full bg-white border border-amber-300 rounded-xl px-3.5 py-2 text-base focus:outline-none focus:border-amber-600 font-mono font-black text-amber-950 shadow-2xs placeholder:text-amber-300/80"
+                      />
+                      <span className="text-xs font-black text-amber-900 font-mono pr-1">KG</span>
+                    </div>
                   </div>
                 </div>
               </div>
