@@ -1386,7 +1386,7 @@ export default function App({ user }: { user: any }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Supervisor (Autenticado)</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Supervisor</label>
                   <input 
                     type="text" 
                     value={supervisorName} 
@@ -1395,7 +1395,7 @@ export default function App({ user }: { user: any }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Patente (Opcional)</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Patente</label>
                   <input 
                     type="text" 
                     placeholder="Ej. DRCX-73" 
@@ -1405,7 +1405,7 @@ export default function App({ user }: { user: any }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">N° de Camión / Andén (Opcional)</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">N° Camión / Andén</label>
                   <input 
                     type="text" 
                     placeholder="Ej. 1951" 
@@ -1415,7 +1415,7 @@ export default function App({ user }: { user: any }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Hora Cierre (Opcional)</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Hora Cierre</label>
                   <div className="flex gap-1.5 select-none">
                     <input 
                       type="time" 
@@ -1955,53 +1955,19 @@ export default function App({ user }: { user: any }) {
                                         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                                           <div className="flex items-center gap-2">
                                             <span className="text-[10px] font-black text-slate-500 uppercase">Cantidad de Bandejas:</span>
-                                            <span className="text-lg font-black text-brand-primary font-mono bg-white px-3 py-1 rounded border">
+                                            <span className="text-lg font-black text-brand-primary font-mono bg-white px-3 py-1 rounded border shadow-2xs">
                                               {catData.bandejas_count || 0}
                                             </span>
                                           </div>
 
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', (catData.bandejas_count || 0) + 1)}
-                                              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
-                                            >
-                                              +1
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', (catData.bandejas_count || 0) + 10)}
-                                              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
-                                            >
-                                              +10
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', (catData.bandejas_count || 0) + 40)}
-                                              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
-                                            >
-                                              +40
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', Math.max(0, (catData.bandejas_count || 0) - 10))}
-                                              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
-                                            >
-                                              -10
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleUpdateCategory(zonalIndex, 'bandejas', 'bandejas_count', Math.max(0, (catData.bandejas_count || 0) - 1))}
-                                              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold cursor-pointer"
-                                            >
-                                              -1
-                                            </button>
+                                          <div className="flex items-center gap-2">
                                             <button
                                               type="button"
                                               onClick={() => openBandejasHelper(zonalIndex)}
-                                              className="bg-brand-primary hover:bg-brand-secondary text-white px-2.5 py-1 rounded text-xs font-bold cursor-pointer transition-all shadow-sm"
+                                              className="bg-brand-primary hover:bg-brand-secondary text-white px-4 py-2 rounded-xl text-xs font-black cursor-pointer transition-all shadow-md flex items-center gap-1.5 active:scale-95"
                                             >
-                                              Asistente
+                                              <Award className="w-4 h-4" />
+                                              Usar Asistente de Bandejas
                                             </button>
                                           </div>
                                         </div>
