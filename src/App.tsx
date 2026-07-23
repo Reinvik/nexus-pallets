@@ -2124,18 +2124,70 @@ export default function App({ user }: { user: any }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 text-center py-2">
-                <div className="bg-white/5 p-3 rounded-xl border border-white/10">
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Pallets Madera</span>
-                  <span className="text-2xl font-mono font-black text-amber-400 mt-1 block">{totals.wood}</span>
+              {/* DESGLOSE SEPARADO POR CADA ZONAL */}
+              {selectedZonals.length === 0 ? (
+                <div className="text-center py-4 bg-white/5 rounded-xl border border-dashed border-white/10">
+                  <p className="text-xs font-bold text-slate-400">Agrega al menos un Zonal arriba para ver la separación de carga.</p>
                 </div>
-                <div className="bg-white/5 p-3 rounded-xl border border-white/10">
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Pallets Plástico</span>
-                  <span className="text-2xl font-mono font-black text-emerald-400 mt-1 block">{totals.plastic}</span>
+              ) : (
+                <div className="space-y-2">
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                    Desglose por Zonal ({selectedZonals.length}):
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    {selectedZonals.map((z, idx) => {
+                      const zt = getZonalTotals(z);
+                      const viajeNum = z.viaje_numero || 1;
+                      const zonalDisplayName = viajeNum > 1 ? `${z.zonal_name} ${viajeNum}` : z.zonal_name;
+                      return (
+                        <div key={idx} className="bg-white/5 border border-white/10 p-3 rounded-xl space-y-1.5">
+                          <div className="flex items-center justify-between border-b border-white/10 pb-1">
+                            <span className="text-xs font-black text-emerald-300 uppercase truncate" title={zonalDisplayName}>
+                              📍 {zonalDisplayName}
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-400 font-bold bg-white/10 px-1.5 py-0.5 rounded">
+                              {z.lugar_camion}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1 text-center pt-0.5 text-xs font-mono font-bold">
+                            <div className="bg-amber-400/10 border border-amber-400/20 rounded py-1">
+                              <span className="text-[9px] text-amber-300/80 block font-sans font-bold">Madera</span>
+                              <span className="text-amber-400 font-black">{zt.wood}</span>
+                            </div>
+                            <div className="bg-emerald-400/10 border border-emerald-400/20 rounded py-1">
+                              <span className="text-[9px] text-emerald-300/80 block font-sans font-bold">Plástico</span>
+                              <span className="text-emerald-400 font-black">{zt.plastic}</span>
+                            </div>
+                            <div className="bg-white/10 border border-white/20 rounded py-1">
+                              <span className="text-[9px] text-slate-300 block font-sans font-bold">Bandejas</span>
+                              <span className="text-white font-black">{zt.bandejas}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="bg-white/5 p-3 rounded-xl border border-white/10">
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Bandejas Totales</span>
-                  <span className="text-2xl font-mono font-black text-white mt-1 block">{totals.bandejas}</span>
+              )}
+
+              {/* TOTALES CONSOLIDADOS DEL CAMIÓN */}
+              <div className="space-y-1.5 pt-1 border-t border-white/10">
+                <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  Totales Consolidados del Camión:
+                </span>
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
+                    <span className="text-[10px] text-amber-300/80 font-bold block uppercase">Pallets Madera</span>
+                    <span className="text-2xl font-mono font-black text-amber-400 mt-0.5 block">{totals.wood}</span>
+                  </div>
+                  <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
+                    <span className="text-[10px] text-emerald-300/80 font-bold block uppercase">Pallets Plástico</span>
+                    <span className="text-2xl font-mono font-black text-emerald-400 mt-0.5 block">{totals.plastic}</span>
+                  </div>
+                  <div className="bg-white/10 p-3 rounded-xl border border-white/20">
+                    <span className="text-[10px] text-slate-300 font-bold block uppercase">Bandejas Totales</span>
+                    <span className="text-2xl font-mono font-black text-white mt-0.5 block">{totals.bandejas}</span>
+                  </div>
                 </div>
               </div>
 
