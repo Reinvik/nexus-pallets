@@ -1413,7 +1413,7 @@ export default function App({ user }: { user: any }) {
                 1. Datos del Camión & Supervisor
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Supervisor</label>
                   <input 
@@ -1452,29 +1452,6 @@ export default function App({ user }: { user: any }) {
                     onChange={(e) => setTruckAnden(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-mono font-bold"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Hora Cierre</label>
-                  <div className="flex gap-1.5 select-none">
-                    <input 
-                      type="time" 
-                      value={closeTime} 
-                      onChange={(e) => setCloseTime(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-mono font-bold"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const now = new Date();
-                        const pad = (n: number) => n.toString().padStart(2, '0');
-                        setCloseTime(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
-                      }}
-                      className="bg-brand-primary hover:bg-brand-secondary text-white px-2.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center"
-                      title="Poner Hora Actual"
-                    >
-                      Ahora
-                    </button>
-                  </div>
                 </div>
               </div>
 
@@ -2116,10 +2093,36 @@ export default function App({ user }: { user: any }) {
 
             {/* CARD RESUMEN Y BOTÓN CONFIRMAR */}
             <section className="bg-slate-900 text-white rounded-2xl p-5 shadow-md space-y-4 select-none">
-              <h2 className="text-sm font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2 border-b border-white/10 pb-2.5">
-                <ShieldCheck className="w-5 h-5" />
-                Resumen de Carga del Camión
-              </h2>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-white/10 pb-2.5">
+                <h2 className="text-sm font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5" />
+                  Resumen de Carga del Camión
+                </h2>
+
+                {/* HORA CIERRE DE CAMIÓN EN EL RESUMEN DE CONFIRMACIÓN */}
+                <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 w-full sm:w-auto">
+                  <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-xs font-black text-slate-300 uppercase shrink-0">Hora Cierre:</span>
+                  <input 
+                    type="time" 
+                    value={closeTime} 
+                    onChange={(e) => setCloseTime(e.target.value)}
+                    className="bg-white/20 border border-white/20 text-white rounded-lg px-2.5 py-1 text-xs font-mono font-black focus:outline-none focus:bg-white/30 text-center w-24"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date();
+                      const pad = (n: number) => n.toString().padStart(2, '0');
+                      setCloseTime(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
+                    }}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-2.5 py-1 rounded-lg text-[10px] font-black transition-all active:scale-95 cursor-pointer shadow-sm shrink-0"
+                    title="Establecer Hora Actual"
+                  >
+                    Ahora
+                  </button>
+                </div>
+              </div>
 
               <div className="grid grid-cols-3 gap-4 text-center py-2">
                 <div className="bg-white/5 p-3 rounded-xl border border-white/10">
@@ -2138,7 +2141,7 @@ export default function App({ user }: { user: any }) {
 
               <div className="flex flex-col sm:flex-row items-center gap-4 pt-2">
                 <div className="flex-1 text-xs text-slate-400 font-semibold">
-                  Al presionar <span className="text-emerald-400 font-bold">"Confirmar Despacho"</span>, se registrarán las firmas, las temperaturas de los termos y la sumatoria oficial en Supabase.
+                  Al presionar <span className="text-emerald-400 font-bold">"Confirmar Despacho"</span>, se registrarán las firmas, las temperaturas de los termos y la sumatoria oficial en la base de datos.
                 </div>
                 <button
                   type="submit"
