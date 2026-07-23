@@ -1073,7 +1073,7 @@ export default function App({ user }: { user: any }) {
 
   // Eliminar despacho (Solo Admin)
   const handleDeleteDispatch = async (rec: DispatchRecord) => {
-    const confirmMsg = `¿Estás seguro de eliminar permanentemente el despacho de ${rec.supervisor_name} (Andén: ${rec.truck_number}, Patente: ${rec.truck_plate})?\n\nEsta acción recalculará inmediatamente los saldos de pallets.`;
+    const confirmMsg = `¿Estás seguro de eliminar permanentemente el despacho de ${rec.supervisor_name} (Camión: ${rec.truck_number}, Patente: ${rec.truck_plate})?\n\nEsta acción recalculará inmediatamente los saldos de pallets.`;
     if (!window.confirm(confirmMsg)) return;
 
     setLoading(true);
@@ -2231,7 +2231,7 @@ export default function App({ user }: { user: any }) {
                               </span>
                               <span className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
                                 <Truck className="w-4 h-4 text-slate-400" />
-                                Andén: {rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'} 
+                                N° Camión: {rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'} 
                                 {rec.truck_plate !== 'N/A' && ` | Patente: ${rec.truck_plate}`}
                               </span>
                             </div>
