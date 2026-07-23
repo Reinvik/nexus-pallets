@@ -1425,7 +1425,7 @@ export default function App({ user }: { user: any }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">N° Camión / Andén</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">N° Camión</label>
                   <input 
                     type="text" 
                     placeholder="Ej. 1951" 
@@ -3427,7 +3427,7 @@ export default function App({ user }: { user: any }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">N° Camión / Andén</label>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">N° Camión</label>
                     <input 
                       type="text" 
                       value={editingTruckNumber}
