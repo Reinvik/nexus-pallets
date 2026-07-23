@@ -388,11 +388,17 @@ export default function App({ user }: { user: any }) {
     }
   };
 
-  // Mapa para expandir/ocultar pallets de madera en estándar y bandejas
+  // Mapa para expandir/ocultar pallets de madera y plástico en congelados, estándar y bandejas
   const [showWoodMap, setShowWoodMap] = useState<{ [key: string]: boolean }>({});
   const toggleWoodShow = (zonalIndex: number, catName: string) => {
     const key = `${zonalIndex}_${catName}`;
     setShowWoodMap(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const [showPlasticMap, setShowPlasticMap] = useState<{ [key: string]: boolean }>({});
+  const togglePlasticShow = (zonalIndex: number, catName: string) => {
+    const key = `${zonalIndex}_${catName}`;
+    setShowPlasticMap(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleAddZonalPhoto = async (zonalIndex: number, files: FileList | null) => {
@@ -1734,9 +1740,12 @@ export default function App({ user }: { user: any }) {
 
                               {(['congelados', 'estandar', 'bandejas'] as const).map((catName) => {
                                 const catData = zonal[catName];
-                                const catLabel = catName === 'congelados' ? 'CONGELADOS' : catName === 'estandar' ? 'ESTÁNDAR' : 'BANDEJAS';
+                                const catLabel = catName === 'congelados' ? 'CONGELADOS' : catName === 'estandar' ? 'ESTÁNDAR (CAJAS)' : 'BANDEJAS';
                                 const hasWoodValue = (catData.wood_bases || 0) > 0 || (catData.wood_extra || 0) > 0;
-                                const isWoodVisible = catName === 'congelados' || hasWoodValue || !!showWoodMap[`${zonalIndex}_${catName}`];
+                                const isWoodVisible = hasWoodValue || !!showWoodMap[`${zonalIndex}_${catName}`];
+
+                                const hasPlasticValue = (catData.plastic_bases || 0) > 0 || (catData.plastic_extra || 0) > 0;
+                                const isPlasticVisible = hasPlasticValue || !!showPlasticMap[`${zonalIndex}_${catName}`];
 
                                 return (
                                   <div 
@@ -1747,28 +1756,19 @@ export default function App({ user }: { user: any }) {
                                       <span className="text-xs font-black text-brand-primary tracking-wide">
                                         {catLabel}
                                       </span>
-                                      {catName !== 'congelados' && !hasWoodValue && isWoodVisible && (
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleWoodShow(zonalIndex, catName)}
-                                          className="text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
-                                        >
-                                          Ocultar Madera X
-                                        </button>
-                                      )}
                                     </div>
 
-                                    {/* CONTADORES DE PALLETS (TÁCTILES COMPACTOS EN EJE Y) */}
+                                    {/* CONTADORES DE PALLETS (MADERA Y PLÁSTICO DESPLEGABLES) */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                       
-                                      {/* COLUMNA: PALLETS MADERA (CON OPCIÓN DE OCULTAR) */}
+                                      {/* COLUMNA: PALLETS MADERA (CON OPCIÓN DE OCULTAR POR DEFECTO) */}
                                       {!isWoodVisible ? (
                                         <div className="bg-slate-100/60 border border-dashed border-slate-300 p-2.5 rounded-xl flex items-center justify-between text-xs">
                                           <span className="text-[10px] font-bold text-slate-400 uppercase">Pallet Madera (No usado)</span>
                                           <button
                                             type="button"
                                             onClick={() => toggleWoodShow(zonalIndex, catName)}
-                                            className="text-[10px] font-extrabold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                            className="text-[10px] font-extrabold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
                                           >
                                             <Plus className="w-3 h-3" />
                                             Desplegar Madera
@@ -1780,9 +1780,21 @@ export default function App({ user }: { user: any }) {
                                             <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">
                                               Pallet Madera
                                             </span>
-                                            <span className="text-[11px] font-black text-amber-950 font-mono bg-amber-100/50 px-1.5 py-0.5 rounded">
-                                              {catData.wood_bases}+{catData.wood_extra} ({catData.wood_bases + catData.wood_extra})
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-[11px] font-black text-amber-950 font-mono bg-amber-100/50 px-1.5 py-0.5 rounded">
+                                                {catData.wood_bases}+{catData.wood_extra} ({catData.wood_bases + catData.wood_extra})
+                                              </span>
+                                              {!hasWoodValue && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => toggleWoodShow(zonalIndex, catName)}
+                                                  className="text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer ml-1"
+                                                  title="Ocultar Pallet Madera"
+                                                >
+                                                  Ocultar X
+                                                </button>
+                                              )}
+                                            </div>
                                           </div>
 
                                           <div className="space-y-1.5 bg-white p-2 rounded-lg border border-slate-100/60">
@@ -1833,63 +1845,89 @@ export default function App({ user }: { user: any }) {
                                         </div>
                                       )}
 
-                                      {/* COLUMNA: PALLETS PLÁSTICOS */}
-                                      <div className={`bg-emerald-50/20 border border-emerald-100 p-2.5 rounded-xl space-y-2 ${!isWoodVisible ? 'sm:col-span-2' : ''}`}>
-                                        <div className="flex justify-between items-center select-none">
-                                          <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider">
-                                            Pallet Plástico
-                                          </span>
-                                          <span className="text-[11px] font-black text-emerald-950 font-mono bg-emerald-100/50 px-1.5 py-0.5 rounded">
-                                            {catData.plastic_bases}+{catData.plastic_extra} ({catData.plastic_bases + catData.plastic_extra})
-                                          </span>
+                                      {/* COLUMNA: PALLETS PLÁSTICOS (CON OPCIÓN DE OCULTAR POR DEFECTO) */}
+                                      {!isPlasticVisible ? (
+                                        <div className="bg-slate-100/60 border border-dashed border-slate-300 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase">Pallet Plástico (No usado)</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => togglePlasticShow(zonalIndex, catName)}
+                                            className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                                          >
+                                            <Plus className="w-3 h-3" />
+                                            Desplegar Plástico
+                                          </button>
                                         </div>
+                                      ) : (
+                                        <div className="bg-emerald-50/20 border border-emerald-100 p-2.5 rounded-xl space-y-2">
+                                          <div className="flex justify-between items-center select-none">
+                                            <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider">
+                                              Pallet Plástico
+                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-[11px] font-black text-emerald-950 font-mono bg-emerald-100/50 px-1.5 py-0.5 rounded">
+                                                {catData.plastic_bases}+{catData.plastic_extra} ({catData.plastic_bases + catData.plastic_extra})
+                                              </span>
+                                              {!hasPlasticValue && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => togglePlasticShow(zonalIndex, catName)}
+                                                  className="text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer ml-1"
+                                                  title="Ocultar Pallet Plástico"
+                                                >
+                                                  Ocultar X
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
 
-                                        <div className="space-y-1.5 bg-white p-2 rounded-lg border border-slate-100/60">
-                                          {/* Base */}
-                                          <div className="flex items-center justify-between text-xs">
-                                            <span className="text-[10px] font-bold text-slate-400">Base</span>
-                                            <div className="flex items-center gap-2 select-none">
-                                              <button
-                                                type="button"
-                                                onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_bases', catData.plastic_bases - 1)}
-                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
-                                              >
-                                                -
-                                              </button>
-                                              <span className="font-mono text-xs font-black w-6 text-center">{catData.plastic_bases}</span>
-                                              <button
-                                                type="button"
-                                                onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_bases', catData.plastic_bases + 1)}
-                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
-                                              >
-                                                +
-                                              </button>
+                                          <div className="space-y-1.5 bg-white p-2 rounded-lg border border-slate-100/60">
+                                            {/* Base */}
+                                            <div className="flex items-center justify-between text-xs">
+                                              <span className="text-[10px] font-bold text-slate-400">Base</span>
+                                              <div className="flex items-center gap-2 select-none">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_bases', catData.plastic_bases - 1)}
+                                                  className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
+                                                >
+                                                  -
+                                                </button>
+                                                <span className="font-mono text-xs font-black w-6 text-center">{catData.plastic_bases}</span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_bases', catData.plastic_bases + 1)}
+                                                  className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
+                                                >
+                                                  +
+                                                </button>
+                                              </div>
                                             </div>
-                                          </div>
-                                          
-                                          {/* Extra */}
-                                          <div className="flex items-center justify-between text-xs border-t border-slate-50 pt-1.5">
-                                            <span className="text-[10px] font-bold text-slate-400">2da Base (Extra)</span>
-                                            <div className="flex items-center gap-2 select-none">
-                                              <button
-                                                type="button"
-                                                onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_extra', catData.plastic_extra - 1)}
-                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
-                                              >
-                                                -
-                                              </button>
-                                              <span className="font-mono text-xs font-black w-6 text-center">{catData.plastic_extra}</span>
-                                              <button
-                                                type="button"
-                                                onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_extra', catData.plastic_extra + 1)}
-                                                className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
-                                              >
-                                                +
-                                              </button>
+                                            
+                                            {/* Extra */}
+                                            <div className="flex items-center justify-between text-xs border-t border-slate-50 pt-1.5">
+                                              <span className="text-[10px] font-bold text-slate-400">2da Base (Extra)</span>
+                                              <div className="flex items-center gap-2 select-none">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_extra', catData.plastic_extra - 1)}
+                                                  className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
+                                                >
+                                                  -
+                                                </button>
+                                                <span className="font-mono text-xs font-black w-6 text-center">{catData.plastic_extra}</span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUpdateCategory(zonalIndex, catName, 'plastic_extra', catData.plastic_extra + 1)}
+                                                  className="bg-slate-100 active:bg-slate-200 text-slate-600 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs cursor-pointer"
+                                                >
+                                                  +
+                                                </button>
+                                              </div>
                                             </div>
                                           </div>
                                         </div>
-                                      </div>
+                                      )}
                                     </div>
 
                                     {/* Si es categoría BANDEJAS, agregar el contador de bandejas físicas */}
