@@ -582,6 +582,15 @@ export default function App({ user }: { user: any }) {
     return `${count}`;
   };
 
+  // Helper para obtener el nombre base absoluto de un zonal (ej: "CHILLÁN 2 (2)" -> "CHILLÁN")
+  const getBaseZonalName = (fullName: string): string => {
+    if (!fullName) return '';
+    let clean = fullName.replace(/\s*\(\d+\)\s*/g, '').trim();
+    clean = clean.replace(/\s+\d+$/g, '').trim();
+    const matched = ZONALES_LIST.find(z => z.toLowerCase() === clean.toLowerCase());
+    return matched || clean.toUpperCase();
+  };
+
   // Cálculo de balances agregados por Zonal
   const getZonalBalances = () => {
     const balances: { [key: string]: { wood_sent: number; plastic_sent: number; wood_ret: number; plastic_ret: number; last_dispatch_date?: string | null } } = {};
@@ -2624,6 +2633,7 @@ export default function App({ user }: { user: any }) {
                                   (z.estandar?.plastic_bases || 0) + (z.estandar?.plastic_extra || 0) +
                                   (z.bandejas?.plastic_bases || 0) + (z.bandejas?.plastic_extra || 0);
                   const bandejas = z.bandejas?.bandejas_count || 0;
+                  const baseZonalName = getBaseZonalName(z.zonal_name);
 
                   return {
                     id: `${rec.id}-${z.zonal_name}-${z.viaje_numero || 1}`,
@@ -2634,6 +2644,7 @@ export default function App({ user }: { user: any }) {
                     truckPlate: rec.truck_plate,
                     supervisor: rec.supervisor_name,
                     zonalName: z.zonal_name,
+                    baseZonalName,
                     viajeNumero: z.viaje_numero || 1,
                     lugarCamion: z.lugar_camion,
                     wood,
@@ -2644,10 +2655,10 @@ export default function App({ user }: { user: any }) {
                 });
               });
 
-              // Aplicar filtro si existe
+              // Aplicar filtro por Zonal base absoluta (ej. La Serena, Chillán, etc.)
               const filteredRows = historyZonalFilter === 'ALL' 
                 ? allZonalRows 
-                : allZonalRows.filter(r => r.zonalName === historyZonalFilter);
+                : allZonalRows.filter(r => r.baseZonalName === historyZonalFilter || r.zonalName === historyZonalFilter);
 
               // Totales agregados para el reporte filtrado
               const reportTotals = filteredRows.reduce(
@@ -2659,8 +2670,8 @@ export default function App({ user }: { user: any }) {
                 { wood: 0, plastic: 0, bandejas: 0 }
               );
 
-              // Lista de zonales únicos para el selector
-              const uniqueZonals = Array.from(new Set(allZonalRows.map(r => r.zonalName))).sort();
+              // Lista de zonales base absolutos únicos para el selector
+              const uniqueBaseZonals = Array.from(new Set(allZonalRows.map(r => r.baseZonalName))).sort();
 
               return (
                 <div className="space-y-4">
@@ -2697,9 +2708,12 @@ export default function App({ user }: { user: any }) {
                         className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-primary cursor-pointer"
                       >
                         <option value="ALL">Todos los Zonales ({allZonalRows.length})</option>
-                        {uniqueZonals.map(z => (
-                          <option key={z} value={z}>{z}</option>
-                        ))}
+                        {uniqueBaseZonals.map(z => {
+                          const count = allZonalRows.filter(r => r.baseZonalName === z).length;
+                          return (
+                            <option key={z} value={z}>{z} ({count})</option>
+                          );
+                        })}
                       </select>
                     </div>
 
