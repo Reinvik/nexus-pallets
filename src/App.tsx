@@ -22,8 +22,8 @@ import {
   Edit2,
   FileDown,
   Camera,
-  X,
-  Save
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -109,6 +109,38 @@ interface PalletReturnRecord {
   supervisor_name: string;
   created_at: string;
 }
+
+interface TruckDraft {
+  id: string;
+  truckNumber: string;
+  truckPlate: string;
+  truckAnden: string;
+  positionsOccupied: number;
+  observations: string;
+  temp1er: number;
+  temp2do: number;
+  temp3er: number;
+  closeTime: string;
+  truckKilos: string;
+  checklist: {
+    postura_anden: boolean;
+    limpieza_estructura: boolean;
+    luces_encendidas: boolean;
+    separador_termico: boolean;
+    lingas_camion: boolean;
+  };
+  selectedZonals: ZonalDetail[];
+  photos: string[];
+  createdAt: string;
+}
+
+const INITIAL_CHECKLIST = {
+  postura_anden: true,
+  limpieza_estructura: true,
+  luces_encendidas: true,
+  separador_termico: true,
+  lingas_camion: true
+};
 
 const formatSupervisorName = (email: string | undefined): string => {
   if (!email) return 'Supervisor';
@@ -228,7 +260,6 @@ export default function App({ user }: { user: any }) {
   // Fotos adjuntas en observaciones (max 4 fotos)
   const [photos, setPhotos] = useState<string[]>([]);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
-  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
 
   // Helper para comprimir imágenes cargadas a JPEG 800px para mantener rendimiento y peso liviano
   const compressImage = (file: File): Promise<string> => {
@@ -273,69 +304,188 @@ export default function App({ user }: { user: any }) {
     });
   };
 
-  // Restaurar borrador de localStorage si existe
+  // Gestión de Múltiples Borradores de Camiones Abiertos en Paralelo
+  const [truckDrafts, setTruckDrafts] = useState<TruckDraft[]>([]);
+  const [activeDraftId, setActiveDraftId] = useState<string>('');
+
+  const createEmptyDraft = (id?: string): TruckDraft => ({
+    id: id || `draft_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    truckNumber: '',
+    truckPlate: '',
+    truckAnden: '',
+    positionsOccupied: 26,
+    observations: '',
+    temp1er: 0,
+    temp2do: -18,
+    temp3er: 0,
+    closeTime: '',
+    truckKilos: '',
+    checklist: { ...INITIAL_CHECKLIST },
+    selectedZonals: [],
+    photos: [],
+    createdAt: new Date().toISOString()
+  });
+
+  const loadDraftIntoState = (draft: TruckDraft) => {
+    setTruckNumber(draft.truckNumber || '');
+    setTruckPlate(draft.truckPlate || '');
+    setTruckAnden(draft.truckAnden || '');
+    setPositionsOccupied(draft.positionsOccupied ?? 26);
+    setObservations(draft.observations || '');
+    setTemp1er(draft.temp1er ?? 0);
+    setTemp2do(draft.temp2do ?? -18);
+    setTemp3er(draft.temp3er ?? 0);
+    setCloseTime(draft.closeTime || '');
+    setTruckKilos(draft.truckKilos || '');
+    setChecklist(draft.checklist || { ...INITIAL_CHECKLIST });
+    setSelectedZonals(draft.selectedZonals || []);
+    setPhotos(draft.photos || []);
+  };
+
+  // Restaurar borradores de localStorage al montar
   useEffect(() => {
     try {
-      const savedDraft = localStorage.getItem('NEXUS_CONTROL_DESPACHO_DRAFT_V1');
-      if (savedDraft) {
-        const d = JSON.parse(savedDraft);
-        if (d.truckNumber !== undefined) setTruckNumber(d.truckNumber);
-        if (d.truckPlate !== undefined) setTruckPlate(d.truckPlate);
-        if (d.positionsOccupied !== undefined) setPositionsOccupied(d.positionsOccupied);
-        if (d.observations !== undefined) setObservations(d.observations);
-        if (d.temp1er !== undefined) setTemp1er(d.temp1er);
-        if (d.temp2do !== undefined) setTemp2do(d.temp2do);
-        if (d.temp3er !== undefined) setTemp3er(d.temp3er);
-        if (d.closeTime !== undefined) setCloseTime(d.closeTime);
-        if (d.truckKilos !== undefined) setTruckKilos(d.truckKilos);
-        if (d.truckAnden !== undefined) setTruckAnden(d.truckAnden);
-        if (d.checklist !== undefined) setChecklist(d.checklist);
-        if (d.selectedZonals && Array.isArray(d.selectedZonals)) setSelectedZonals(d.selectedZonals);
-        if (d.photos && Array.isArray(d.photos)) setPhotos(d.photos);
-        if (d.selectedZonals?.length > 0 || d.truckNumber || d.observations || d.photos?.length > 0 || d.truckKilos || d.truckAnden) {
-          setHasRestoredDraft(true);
+      const savedV2 = localStorage.getItem('NEXUS_CONTROL_DESPACHOS_OPEN_DRAFTS_V2');
+      if (savedV2) {
+        const parsed = JSON.parse(savedV2);
+        if (Array.isArray(parsed.drafts) && parsed.drafts.length > 0) {
+          setTruckDrafts(parsed.drafts);
+          const activeId = parsed.activeDraftId && parsed.drafts.some((d: TruckDraft) => d.id === parsed.activeDraftId)
+            ? parsed.activeDraftId
+            : parsed.drafts[0].id;
+          setActiveDraftId(activeId);
+          const target = parsed.drafts.find((d: TruckDraft) => d.id === activeId) || parsed.drafts[0];
+          loadDraftIntoState(target);
+          return;
         }
       }
+
+      // Migración desde V1 (borrador único previo)
+      const v1Draft = localStorage.getItem('NEXUS_CONTROL_DESPACHO_DRAFT_V1');
+      if (v1Draft) {
+        const d = JSON.parse(v1Draft);
+        const migratedDraft: TruckDraft = {
+          id: `draft_${Date.now()}`,
+          truckNumber: d.truckNumber || '',
+          truckPlate: d.truckPlate || '',
+          truckAnden: d.truckAnden || '',
+          positionsOccupied: d.positionsOccupied ?? 26,
+          observations: d.observations || '',
+          temp1er: d.temp1er ?? 0,
+          temp2do: d.temp2do ?? -18,
+          temp3er: d.temp3er ?? 0,
+          closeTime: d.closeTime || '',
+          truckKilos: d.truckKilos || '',
+          checklist: d.checklist || { ...INITIAL_CHECKLIST },
+          selectedZonals: d.selectedZonals || [],
+          photos: d.photos || [],
+          createdAt: new Date().toISOString()
+        };
+        setTruckDrafts([migratedDraft]);
+        setActiveDraftId(migratedDraft.id);
+        loadDraftIntoState(migratedDraft);
+        return;
+      }
+
+      // Borrador por defecto si está vacío
+      const initial = createEmptyDraft();
+      setTruckDrafts([initial]);
+      setActiveDraftId(initial.id);
+      loadDraftIntoState(initial);
     } catch (e) {
-      console.error('Error restaurando borrador:', e);
+      console.error('Error restaurando borradores:', e);
+      const initial = createEmptyDraft();
+      setTruckDrafts([initial]);
+      setActiveDraftId(initial.id);
+      loadDraftIntoState(initial);
     }
   }, []);
 
-  // Auto-guardado de borrador en localStorage
+  // Sincronizar cambios de estado al borrador activo en tiempo real
   useEffect(() => {
-    const hasContent = selectedZonals.length > 0 || !!truckNumber || !!truckPlate || !!observations || photos.length > 0 || !!truckKilos || !!truckAnden;
-    if (hasContent) {
+    if (!activeDraftId) return;
+    setTruckDrafts(prevDrafts => {
+      const updated = prevDrafts.map(d => {
+        if (d.id === activeDraftId) {
+          return {
+            ...d,
+            truckNumber,
+            truckPlate,
+            truckAnden,
+            positionsOccupied,
+            observations,
+            temp1er,
+            temp2do,
+            temp3er,
+            closeTime,
+            truckKilos,
+            checklist,
+            selectedZonals,
+            photos
+          };
+        }
+        return d;
+      });
+
       try {
-        const draftData = {
-          truckNumber,
-          truckPlate,
-          positionsOccupied,
-          observations,
-          temp1er,
-          temp2do,
-          temp3er,
-          closeTime,
-          truckKilos,
-          truckAnden,
-          checklist,
-          selectedZonals,
-          photos
-        };
-        localStorage.setItem('NEXUS_CONTROL_DESPACHO_DRAFT_V1', JSON.stringify(draftData));
-        setHasRestoredDraft(true);
+        localStorage.setItem('NEXUS_CONTROL_DESPACHOS_OPEN_DRAFTS_V2', JSON.stringify({
+          drafts: updated,
+          activeDraftId
+        }));
       } catch (e) {
-        console.error('Error guardando borrador:', e);
+        console.error('Error guardando borradores:', e);
       }
+      return updated;
+    });
+  }, [activeDraftId, truckNumber, truckPlate, truckAnden, positionsOccupied, observations, temp1er, temp2do, temp3er, closeTime, truckKilos, checklist, selectedZonals, photos]);
+
+  // Cambiar entre borradores de camiones activos
+  const switchActiveDraft = (newId: string) => {
+    if (newId === activeDraftId) return;
+    const target = truckDrafts.find(d => d.id === newId);
+    if (target) {
+      setActiveDraftId(newId);
+      loadDraftIntoState(target);
     }
-  }, [truckNumber, truckPlate, positionsOccupied, observations, temp1er, temp2do, temp3er, closeTime, truckKilos, truckAnden, checklist, selectedZonals, photos]);
+  };
+
+  // Crear nuevo borrador de camión en paralelo
+  const addNewTruckDraft = () => {
+    const newDraft = createEmptyDraft();
+    const updated = [...truckDrafts, newDraft];
+    setTruckDrafts(updated);
+    setActiveDraftId(newDraft.id);
+    loadDraftIntoState(newDraft);
+  };
+
+  // Eliminar o reiniciar un borrador de camión específico
+  const deleteTruckDraft = (draftId: string) => {
+    if (truckDrafts.length <= 1) {
+      clearDraft(false);
+      return;
+    }
+
+    const target = truckDrafts.find(d => d.id === draftId);
+    const label = target?.truckNumber ? `Camión ${target.truckNumber}` : 'este camión';
+    if (!window.confirm(`¿Deseas descartar el borrador para ${label}?`)) return;
+
+    const updated = truckDrafts.filter(d => d.id !== draftId);
+    setTruckDrafts(updated);
+
+    if (activeDraftId === draftId) {
+      const nextDraft = updated[0];
+      setActiveDraftId(nextDraft.id);
+      loadDraftIntoState(nextDraft);
+    }
+  };
 
   const clearDraft = (silent = false) => {
     if (!silent) {
-      if (!window.confirm('¿Deseas descartar los datos del borrador actual y reiniciar el formulario?')) return;
+      if (!window.confirm('¿Deseas descartar los datos del camión actual y reiniciar su formulario?')) return;
     }
-    localStorage.removeItem('NEXUS_CONTROL_DESPACHO_DRAFT_V1');
     setTruckNumber('');
     setTruckPlate('');
+    setTruckAnden('');
     setPositionsOccupied(26);
     setObservations('');
     setTemp1er(0);
@@ -343,17 +493,9 @@ export default function App({ user }: { user: any }) {
     setTemp3er(0);
     setCloseTime('');
     setTruckKilos('');
-    setTruckAnden('');
-    setChecklist({
-      postura_anden: true,
-      limpieza_estructura: true,
-      luces_encendidas: true,
-      separador_termico: true,
-      lingas_camion: true
-    });
+    setChecklist({ ...INITIAL_CHECKLIST });
     setSelectedZonals([]);
     setPhotos([]);
-    setHasRestoredDraft(false);
   };
 
   // Cargar historial y retornos
@@ -1205,8 +1347,19 @@ export default function App({ user }: { user: any }) {
 
       setSuccessMsg("¡Despacho registrado correctamente!");
       
-      // Resetear borrador y formulario
-      clearDraft(true);
+      // Remover el camión completado de la lista de borradores abiertos
+      const remainingDrafts = truckDrafts.filter(d => d.id !== activeDraftId);
+      if (remainingDrafts.length > 0) {
+        setTruckDrafts(remainingDrafts);
+        setActiveDraftId(remainingDrafts[0].id);
+        loadDraftIntoState(remainingDrafts[0]);
+      } else {
+        const fresh = createEmptyDraft();
+        setTruckDrafts([fresh]);
+        setActiveDraftId(fresh.id);
+        loadDraftIntoState(fresh);
+      }
+      
       setExpandedZonalIndex(null);
       
       // Actualizar datos
@@ -1400,26 +1553,71 @@ export default function App({ user }: { user: any }) {
         {activeTab === 'nuevo' && (
           <form onSubmit={handleSubmit} className="space-y-6">
             
-            {/* INDICADOR DE AUTO-GUARDADO DE BORRADOR */}
-            {hasRestoredDraft && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 px-4 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-2 text-xs font-extrabold text-emerald-950 flex-wrap">
-                  <Save className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>💾 Borrador guardado automáticamente</span>
-                  <span className="text-[10px] bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-md font-mono font-bold">
-                    Protegido ante recargas o salida accidental
+            {/* BARRA MULTI-CAMIÓN: PESTAÑAS DE CAMIONES EN PROCESO EN PARALELO */}
+            <div className="bg-slate-900 rounded-2xl p-4 shadow-md text-white space-y-3 select-none">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-white/10 pb-2.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Truck className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span className="text-sm font-black uppercase tracking-wider text-emerald-400">
+                    Camiones en Carga ({truckDrafts.length})
+                  </span>
+                  <span className="text-[10px] text-slate-300 font-bold bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
+                    Carga Múltiple en Paralelo
                   </span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => clearDraft(false)}
-                  className="text-xs text-rose-600 hover:text-rose-800 font-extrabold hover:underline cursor-pointer flex items-center gap-1 shrink-0 ml-2"
+                  onClick={addNewTruckDraft}
+                  className="bg-brand-emerald hover:bg-emerald-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center gap-1.5"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Limpiar borrador
+                  <Plus className="w-4 h-4" />
+                  + Nuevo Camión en Proceso
                 </button>
               </div>
-            )}
+
+              {/* Pestañas / Píldoras de Camiones Abiertos */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {truckDrafts.map((d, idx) => {
+                  const isActive = d.id === activeDraftId;
+                  const truckLabel = d.truckNumber ? `Camión ${d.truckNumber}` : `Camión #${idx + 1}`;
+                  const plateLabel = d.truckPlate ? ` (${d.truckPlate})` : '';
+                  const zonalCount = (d.selectedZonals || []).length;
+
+                  return (
+                    <div
+                      key={d.id}
+                      onClick={() => switchActiveDraft(d.id)}
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer shrink-0 shadow-sm ${
+                        isActive
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-black scale-[1.01]'
+                          : 'bg-white/10 hover:bg-white/20 text-slate-200 border-white/15'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span>🚚</span>
+                        <span>{truckLabel}{plateLabel}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${isActive ? 'bg-slate-950 text-emerald-300 font-bold' : 'bg-black/30 text-slate-300'}`}>
+                          {zonalCount} zonales
+                        </span>
+                      </span>
+                      {truckDrafts.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteTruckDraft(d.id);
+                          }}
+                          className={`p-0.5 rounded-full hover:bg-black/20 text-slate-400 hover:text-white transition-colors cursor-pointer ${isActive ? 'text-slate-900 hover:text-slate-950' : ''}`}
+                          title="Descartar borrador de este camión"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             
             {/* CARD 1: DATOS DEL SUPERVISOR Y CAMIÓN */}
             <section className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4">
@@ -2041,18 +2239,30 @@ export default function App({ user }: { user: any }) {
                                     Fotos de Respaldo Zonal ({(zonal.photos || []).length}/4)
                                   </label>
                                   {(!zonal.photos || zonal.photos.length < 4) && (
-                                    <label className="bg-white hover:bg-slate-100 text-slate-700 px-3.5 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 border border-slate-200 shadow-sm active:scale-95">
-                                      <Camera className="w-4 h-4 text-brand-primary" />
-                                      Adjuntar / Tomar Foto
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        multiple
-                                        capture="environment"
-                                        className="hidden"
-                                        onChange={(e) => handleAddZonalPhoto(zonalIndex, e.target.files)}
-                                      />
-                                    </label>
+                                    <div className="flex items-center gap-2 select-none">
+                                      <label className="flex-1 bg-white hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs active:scale-95" title="Tomar foto directa con la cámara">
+                                        <Camera className="w-4 h-4 text-brand-primary shrink-0" />
+                                        <span>Tomar Foto</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          capture="environment"
+                                          className="hidden"
+                                          onChange={(e) => handleAddZonalPhoto(zonalIndex, e.target.files)}
+                                        />
+                                      </label>
+                                      <label className="flex-1 bg-white hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs active:scale-95" title="Seleccionar fotos guardadas desde la galería">
+                                        <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                                        <span>Galería</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          multiple
+                                          className="hidden"
+                                          onChange={(e) => handleAddZonalPhoto(zonalIndex, e.target.files)}
+                                        />
+                                      </label>
+                                    </div>
                                   )}
                                 </div>
                               </div>
