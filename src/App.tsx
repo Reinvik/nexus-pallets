@@ -2678,28 +2678,36 @@ export default function App({ user }: { user: any }) {
                               PDF
                             </button>
 
-                            {isAdmin && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => openEditDispatchModal(rec)}
-                                  className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1"
-                                  title="Editar Despacho (Solo Admin)"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                  EDITAR
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteDispatch(rec)}
-                                  className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1"
-                                  title="Eliminar Despacho (Solo Admin)"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  ELIMINAR
-                                </button>
-                              </>
-                            )}
+                            {(() => {
+                              const today = new Date().toISOString().split('T')[0];
+                              const isToday = rec.inspection_date === today;
+                              const isMine = rec.supervisor_name?.toLowerCase() === supervisorName?.toLowerCase();
+                              const canEdit = isAdmin || (isToday && isMine);
+                              return canEdit ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditDispatchModal(rec)}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1"
+                                    title={isAdmin ? 'Editar Despacho (Admin)' : 'Editar mi despacho de hoy'}
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                    EDITAR
+                                  </button>
+                                  {isAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteDispatch(rec)}
+                                      className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1"
+                                      title="Eliminar Despacho (Solo Admin)"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      ELIMINAR
+                                    </button>
+                                  )}
+                                </>
+                              ) : null;
+                            })()}
 
                             <button
                               type="button"
