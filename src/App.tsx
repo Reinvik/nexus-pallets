@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Truck, 
   Check, 
@@ -25,7 +25,10 @@ import {
   Image as ImageIcon,
   X,
   Users,
-  UserPlus
+  UserPlus,
+  PenTool,
+  Eye,
+  CheckCircle2
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -101,6 +104,9 @@ interface DispatchRecord {
   close_time?: string | null;
   truck_kilos?: string | number | null;
   anden_number?: string | null;
+  signed_by?: string | null;
+  signed_at?: string | null;
+  signature_b64?: string | null;
 }
 
 interface PalletReturnRecord {
@@ -289,6 +295,136 @@ export default function App({ user }: { user: any }) {
 
   // Sub-tab dentro del módulo Usuarios
   const [adminSubTab, setAdminSubTab] = useState<'usuarios' | 'almacenamiento'>('usuarios');
+
+  // ═══════════════════════════════════════════════════
+  // SISTEMA DE FIRMA DIGITAL
+  // ═══════════════════════════════════════════════════
+  const [signPreviewRecord, setSignPreviewRecord] = useState<DispatchRecord | null>(null);
+  const [userSignature, setUserSignature] = useState<string | null>(null); // firma guardada del usuario
+  const [signingInProgress, setSigningInProgress] = useState(false);
+
+  // Canvas para dibujar firma en perfil
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [savingSignature, setSavingSignature] = useState(false);
+
+  // Cargar firma del usuario actual desde BD
+  const loadUserSignature = async () => {
+    if (!user?.email) return;
+    try {
+      const { data } = await supabase
+        .from('pallet_users')
+        .select('signature_b64')
+        .eq('email', (user.email || '').toLowerCase())
+        .single();
+      if (data?.signature_b64) setUserSignature(data.signature_b64);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (isShiftLeader) loadUserSignature();
+  }, [user]);
+
+  // Funciones del canvas de firma
+  const getCanvasPos = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if ('touches' in e) {
+      return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  };
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const pos = getCanvasPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const pos = getCanvasPos(e, canvas);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => setIsDrawing(false);
+
+  const clearCanvas = () => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const saveSignatureToProfile = async () => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    setSavingSignature(true);
+    try {
+      const { error } = await supabase
+        .from('pallet_users')
+        .update({ signature_b64: dataUrl, updated_at: new Date().toISOString() })
+        .eq('email', (user?.email || '').toLowerCase());
+      if (error) throw error;
+      setUserSignature(dataUrl);
+      setShowSignaturePad(false);
+      setSuccessMsg('Firma guardada correctamente en tu perfil.');
+    } catch (err: any) {
+      alert('Error guardando firma: ' + err.message);
+    } finally {
+      setSavingSignature(false);
+    }
+  };
+
+  // Estampar firma en despacho
+  const handleSignDispatch = async () => {
+    if (!signPreviewRecord || !userSignature) return;
+    setSigningInProgress(true);
+    try {
+      const signedAt = new Date().toISOString();
+      const { error } = await supabase
+        .from('pallet_dispatches')
+        .update({
+          signed_by: user?.email || '',
+          signed_at: signedAt,
+          signature_b64: userSignature,
+        })
+        .eq('id', signPreviewRecord.id);
+      if (error) throw error;
+      // Actualizar en estado local
+      setRecords(prev => prev.map(r =>
+        r.id === signPreviewRecord.id
+          ? { ...r, signed_by: user?.email || '', signed_at: signedAt, signature_b64: userSignature }
+          : r
+      ));
+      setSignPreviewRecord(null);
+      setSuccessMsg(`✅ Despacho firmado correctamente por ${supervisorName}.`);
+    } catch (err: any) {
+      alert('Error al firmar: ' + err.message);
+    } finally {
+      setSigningInProgress(false);
+    }
+  };
+
 
   // Estado del análisis de almacenamiento
   type StorageRecord = { id: string; date: string; supervisor: string; truck: string; photoCount: number; sizeKB: number; isOld: boolean; };
@@ -1656,6 +1792,18 @@ export default function App({ user }: { user: any }) {
               <span className="text-xs font-bold hidden md:inline">Perfil</span>
             </button>
 
+            {isShiftLeader && (
+              <button
+                type="button"
+                onClick={() => setShowSignaturePad(true)}
+                className={`border p-2.5 rounded-xl transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center gap-1.5 ${userSignature ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200 hover:bg-emerald-500/30' : 'bg-white/10 border-white/20 text-white hover:bg-white/20'}`}
+                title={userSignature ? 'Actualizar mi firma' : 'Configurar mi firma digital'}
+              >
+                <PenTool className="w-4.5 h-4.5" />
+                <span className="text-xs font-bold hidden md:inline">{userSignature ? 'Mi Firma ✓' : 'Mi Firma'}</span>
+              </button>
+            )}
+
             <button
               onClick={() => supabase.auth.signOut()}
               className="bg-white/10 hover:bg-white/20 border border-white/20 p-2.5 rounded-xl transition-all active:scale-95 text-white cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
@@ -2892,8 +3040,28 @@ export default function App({ user }: { user: any }) {
                                     </button>
                                   )}
                                 </>
-                              ) : null;
-                            })()}
+                                ) : null;
+                              })()}
+
+                            {/* BOTÓN FIRMAR (Jefes de Turno + Admin) */}
+                            {isShiftLeader && (
+                              rec.signed_by ? (
+                                <span className="px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 select-none" title={`Firmado por ${rec.signed_by} el ${rec.signed_at ? new Date(rec.signed_at).toLocaleString('es-CL') : ''}`}>
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  FIRMADO
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setSignPreviewRecord(rec)}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-violet-500 bg-violet-500 hover:bg-violet-600 text-white flex items-center gap-1"
+                                  title="Firmar este despacho digitalmente"
+                                >
+                                  <PenTool className="w-3.5 h-3.5" />
+                                  FIRMAR
+                                </button>
+                              )
+                            )}
 
                             <button
                               type="button"
@@ -4629,6 +4797,165 @@ export default function App({ user }: { user: any }) {
             >
               <X className="w-5 h-5" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* MODAL: CANVAS DE FIRMA DE PERFIL                     */}
+      {/* ══════════════════════════════════════════════════════ */}
+      {showSignaturePad && (
+        <div className="fixed inset-0 z-[99990] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
+                  <PenTool className="w-5 h-5 text-violet-500" />
+                  Mi Firma Digital
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">Dibuja tu firma con el dedo o mouse</p>
+              </div>
+              <button type="button" onClick={() => setShowSignaturePad(false)} className="p-2 hover:bg-slate-100 rounded-xl cursor-pointer"><X className="w-5 h-5 text-slate-500" /></button>
+            </div>
+
+            {/* Canvas */}
+            <div className="border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 overflow-hidden" style={{ touchAction: 'none' }}>
+              <canvas
+                ref={signatureCanvasRef}
+                width={400}
+                height={160}
+                className="w-full cursor-crosshair"
+                onMouseDown={startDrawing}
+                onMouseMove={draw}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
+                onTouchStart={startDrawing}
+                onTouchMove={draw}
+                onTouchEnd={stopDrawing}
+              />
+            </div>
+
+            {userSignature && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1.5">Firma actual guardada:</p>
+                <img src={userSignature} alt="Firma actual" className="h-10 object-contain" />
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={clearCanvas}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl text-xs font-black cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Limpiar
+              </button>
+              <button
+                type="button"
+                onClick={saveSignatureToProfile}
+                disabled={savingSignature}
+                className="flex-2 flex-grow bg-violet-500 hover:bg-violet-600 text-white py-2.5 rounded-xl text-xs font-black cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {savingSignature ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                {savingSignature ? 'Guardando...' : 'GUARDAR FIRMA'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* MODAL: VISTA PREVIA + FIRMA DE DESPACHO              */}
+      {/* ══════════════════════════════════════════════════════ */}
+      {signPreviewRecord && (
+        <div className="fixed inset-0 z-[99991] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-y-auto flex flex-col">
+            {/* Header */}
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between rounded-t-3xl shrink-0 z-10">
+              <div>
+                <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-violet-500" />
+                  Vista Previa del Despacho
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">Revisa el documento antes de firmar</p>
+              </div>
+              <button type="button" onClick={() => setSignPreviewRecord(null)} className="p-2 hover:bg-slate-100 rounded-xl cursor-pointer"><X className="w-5 h-5 text-slate-500" /></button>
+            </div>
+
+            {/* Contenido del documento */}
+            <div className="p-6 space-y-4 flex-1">
+              {/* Encabezado del despacho */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                  <div><span className="font-black text-slate-400 uppercase text-[10px]">Fecha</span><p className="font-bold text-slate-800">{signPreviewRecord.inspection_date}</p></div>
+                  <div><span className="font-black text-slate-400 uppercase text-[10px]">Hora Inicio</span><p className="font-bold text-slate-800">{signPreviewRecord.inspection_time}</p></div>
+                  <div><span className="font-black text-slate-400 uppercase text-[10px]">Camión</span><p className="font-bold text-slate-800">{signPreviewRecord.truck_number} · {signPreviewRecord.truck_plate}</p></div>
+                  <div><span className="font-black text-slate-400 uppercase text-[10px]">Supervisor</span><p className="font-bold text-slate-800">{signPreviewRecord.supervisor_name}</p></div>
+                  {signPreviewRecord.truck_kilos && <div><span className="font-black text-slate-400 uppercase text-[10px]">Kilos</span><p className="font-bold text-slate-800">{signPreviewRecord.truck_kilos} kg</p></div>}
+                  {signPreviewRecord.close_time && <div><span className="font-black text-slate-400 uppercase text-[10px]">Hora Cierre</span><p className="font-bold text-slate-800">{signPreviewRecord.close_time}</p></div>}
+                </div>
+              </div>
+
+              {/* Zonales */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Zonales despachados</p>
+                {signPreviewRecord.zonals_detail.map((z, i) => {
+                  const woodTotal = (z.congelados?.wood_bases || 0) + (z.congelados?.wood_extra || 0) + (z.estandar?.wood_bases || 0) + (z.estandar?.wood_extra || 0);
+                  const plasticTotal = (z.congelados?.plastic_bases || 0) + (z.congelados?.plastic_extra || 0) + (z.estandar?.plastic_bases || 0) + (z.estandar?.plastic_extra || 0);
+                  const bandejaTotal = (z.bandejas?.bandejas_count || 0);
+                  return (
+                    <div key={i} className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2 text-xs">
+                      <span className="font-black text-slate-800">{z.zonal_name}</span>
+                      <div className="flex gap-3 text-slate-500">
+                        {woodTotal > 0 && <span>🪵 {woodTotal}</span>}
+                        {plasticTotal > 0 && <span>♻️ {plasticTotal}</span>}
+                        {bandejaTotal > 0 && <span>📦 {bandejaTotal}</span>}
+                        {z.sello && <span>🔒 {z.sello}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Separador */}
+              <div className="border-t-2 border-dashed border-slate-200 pt-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3">Firma de aprobación</p>
+
+                {!userSignature ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
+                    <PenTool className="w-6 h-6 text-amber-500 mx-auto mb-2" />
+                    <p className="text-sm font-black text-amber-800">No tienes firma configurada</p>
+                    <p className="text-xs text-amber-600 mt-1">Ve al botón <strong>"Mi Firma"</strong> en el encabezado para dibujarla.</p>
+                    <button
+                      type="button"
+                      onClick={() => { setSignPreviewRecord(null); setShowSignaturePad(true); }}
+                      className="mt-3 px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-black cursor-pointer hover:bg-amber-600"
+                    >
+                      Configurar firma ahora
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-5">
+                    <div className="flex items-end justify-between gap-4 flex-wrap">
+                      <div>
+                        <img src={userSignature} alt="Mi firma" className="h-16 object-contain mb-2" />
+                        <p className="text-sm font-black text-slate-800">{supervisorName}</p>
+                        <p className="text-xs text-slate-500">Jefe de Turno · {new Date().toLocaleDateString('es-CL')} {new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSignDispatch}
+                        disabled={signingInProgress}
+                        className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl text-sm font-black cursor-pointer active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg"
+                      >
+                        {signingInProgress ? <RefreshCw className="w-4 h-4 animate-spin" /> : <PenTool className="w-4 h-4" />}
+                        {signingInProgress ? 'Firmando...' : 'FIRMAR DOCUMENTO'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
