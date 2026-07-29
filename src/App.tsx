@@ -154,6 +154,7 @@ const formatSupervisorName = (email: string | undefined): string => {
 const ADMIN_EMAILS = [
   'ariel.mella@cial.cl',
   'euro.velasquez@cial.cl',
+  'francisco.lara@cial.cl',
   'admin@cial.cl'
 ];
 
@@ -161,8 +162,25 @@ const checkIsAdmin = (user: any): boolean => {
   if (!user) return false;
   const email = (user.email || '').toLowerCase();
   const role = (user.user_metadata?.role || user.app_metadata?.role || '').toLowerCase();
-  if (['admin', 'superadmin', 'jefe', 'supervisor_jefe'].includes(role)) return true;
+  if (['admin', 'superadmin'].includes(role)) return true;
   return ADMIN_EMAILS.includes(email);
+};
+
+// Jefes de Turno (Francisco, Euro, Alejandro) y Administradores tienen permisos de edición sobre todos los despachos
+const checkIsShiftLeaderOrAdmin = (user: any): boolean => {
+  if (!user) return false;
+  if (checkIsAdmin(user)) return true;
+  const email = (user.email || '').toLowerCase();
+  const username = email.split('@')[0];
+  if (
+    username.startsWith('francisco') ||
+    username.startsWith('euro') ||
+    username.startsWith('alejandro')
+  ) {
+    return true;
+  }
+  const role = (user.user_metadata?.role || user.app_metadata?.role || '').toLowerCase();
+  return ['jefe', 'jefe_turno', 'supervisor_jefe'].includes(role);
 };
 
 export default function App({ user }: { user: any }) {
@@ -193,6 +211,7 @@ export default function App({ user }: { user: any }) {
   const [truckAnden, setTruckAnden] = useState<string>('');
 
   const isAdmin = checkIsAdmin(user);
+  const isShiftLeader = checkIsShiftLeaderOrAdmin(user);
 
   // Estados para edición diferida de hora de cierre de camión en historial
   const [editingCloseTimes, setEditingCloseTimes] = useState<{ [key: string]: string }>({});
@@ -1273,6 +1292,7 @@ export default function App({ user }: { user: any }) {
       
       // Actualizar estado local para evitar recarga completa
       setRecords(prev => prev.map(r => r.id === recordId ? { ...r, close_time: time || null } : r));
+      setSuccessMsg('¡Hora de cierre guardada con éxito en la base de datos!');
       
       // Salir del modo edición
       setEditingCloseTimes(prev => {
@@ -2682,14 +2702,14 @@ export default function App({ user }: { user: any }) {
                               const today = new Date().toISOString().split('T')[0];
                               const isToday = rec.inspection_date === today;
                               const isMine = rec.supervisor_name?.toLowerCase() === supervisorName?.toLowerCase();
-                              const canEdit = isAdmin || (isToday && isMine);
+                              const canEdit = isAdmin || isShiftLeader || (isToday && isMine);
                               return canEdit ? (
                                 <>
                                   <button
                                     type="button"
                                     onClick={() => openEditDispatchModal(rec)}
                                     className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1"
-                                    title={isAdmin ? 'Editar Despacho (Admin)' : 'Editar mi despacho de hoy'}
+                                    title={isAdmin ? 'Editar Despacho (Admin)' : isShiftLeader ? 'Editar Despacho (Jefe de Turno)' : 'Editar mi despacho de hoy'}
                                   >
                                     <Edit2 className="w-3.5 h-3.5" />
                                     EDITAR
@@ -3700,7 +3720,9 @@ export default function App({ user }: { user: any }) {
                   <h3 className="text-base font-black text-slate-800 uppercase tracking-wider">
                     Editar Despacho #{editingDispatchRecord.truck_number !== 'N/A' ? editingDispatchRecord.truck_number : editingDispatchRecord.id.slice(0, 6)}
                   </h3>
-                  <p className="text-xs text-amber-700 font-bold">Modo Administrador — Edición Directa</p>
+                  <p className="text-xs text-amber-700 font-bold">
+                    {isAdmin ? 'Modo Administrador — Edición Directa' : isShiftLeader ? 'Jefe de Turno — Edición de Despacho' : 'Edición de Mi Despacho'}
+                  </p>
                 </div>
               </div>
               <button
