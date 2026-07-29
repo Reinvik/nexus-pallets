@@ -257,7 +257,7 @@ export default function App({ user }: { user: any }) {
 
 
 
-  // Fotos adjuntas en observaciones (max 4 fotos)
+  // Fotos adjuntas en observaciones (max 10 fotos)
   const [photos, setPhotos] = useState<string[]>([]);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
 
@@ -2236,9 +2236,9 @@ export default function App({ user }: { user: any }) {
 
                                 <div>
                                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-                                    Fotos de Respaldo Zonal ({(zonal.photos || []).length}/4)
+                                    Fotos de Respaldo Zonal ({(zonal.photos || []).length}/10)
                                   </label>
-                                  {(!zonal.photos || zonal.photos.length < 4) && (
+                                  {(!zonal.photos || zonal.photos.length < 10) && (
                                     <div className="flex items-center gap-2 select-none">
                                       <label className="flex-1 bg-white hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs active:scale-95" title="Tomar foto directa con la cámara">
                                         <Camera className="w-4 h-4 text-brand-primary shrink-0" />
