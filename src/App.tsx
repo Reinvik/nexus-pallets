@@ -287,6 +287,87 @@ export default function App({ user }: { user: any }) {
     }
   };
 
+  // Sub-tab dentro del módulo Usuarios
+  const [adminSubTab, setAdminSubTab] = useState<'usuarios' | 'almacenamiento'>('usuarios');
+
+  // Estado del análisis de almacenamiento
+  type StorageRecord = { id: string; date: string; supervisor: string; truck: string; photoCount: number; sizeKB: number; isOld: boolean; };
+  const [storageRecords, setStorageRecords] = useState<StorageRecord[]>([]);
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupDone, setCleanupDone] = useState(false);
+
+  const analyzeStorage = async () => {
+    setStorageLoading(true);
+    setCleanupDone(false);
+    try {
+      const { data, error } = await supabase
+        .from('pallet_dispatches')
+        .select('id, inspection_date, supervisor_name, truck_number, zonals_detail')
+        .order('inspection_date', { ascending: false });
+      if (error) throw error;
+
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 30);
+
+      const result: StorageRecord[] = (data || []).map(rec => {
+        const zonals = rec.zonals_detail || [];
+        let totalPhotos = 0;
+        let totalBytes = 0;
+        zonals.forEach((z: any) => {
+          const photos: string[] = z.photos || [];
+          totalPhotos += photos.length;
+          photos.forEach(p => { totalBytes += p.length * 0.75; }); // base64 → bytes
+        });
+        const recDate = new Date(rec.inspection_date);
+        return {
+          id: rec.id,
+          date: rec.inspection_date,
+          supervisor: rec.supervisor_name || '—',
+          truck: rec.truck_number || '—',
+          photoCount: totalPhotos,
+          sizeKB: Math.round(totalBytes / 1024),
+          isOld: recDate < cutoff,
+        };
+      }).filter(r => r.photoCount > 0);
+
+      setStorageRecords(result);
+    } catch (err: any) {
+      alert('Error al analizar almacenamiento: ' + err.message);
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  const handleCleanOldPhotos = async () => {
+    const oldRecords = storageRecords.filter(r => r.isOld);
+    if (oldRecords.length === 0) { alert('No hay registros con fotos de más de 30 días.'); return; }
+    const totalKB = oldRecords.reduce((sum, r) => sum + r.sizeKB, 0);
+    if (!window.confirm(`¿Eliminar fotos de ${oldRecords.length} despachos con más de 30 días?\n\nSe liberarán aprox. ${(totalKB / 1024).toFixed(1)} MB.\nLos registros de pallets se conservan, solo se borran las fotos.`)) return;
+
+    setCleanupLoading(true);
+    try {
+      for (const rec of oldRecords) {
+        // Obtener los zonals_detail del registro y limpiar sus fotos
+        const { data } = await supabase
+          .from('pallet_dispatches')
+          .select('zonals_detail')
+          .eq('id', rec.id)
+          .single();
+        if (!data) continue;
+        const cleaned = (data.zonals_detail || []).map((z: any) => ({ ...z, photos: [] }));
+        await supabase.from('pallet_dispatches').update({ zonals_detail: cleaned }).eq('id', rec.id);
+      }
+      setSuccessMsg(`✅ Fotos eliminadas de ${oldRecords.length} despachos. Espacio liberado: ~${(totalKB / 1024).toFixed(1)} MB`);
+      setCleanupDone(true);
+      await analyzeStorage();
+    } catch (err: any) {
+      alert('Error durante la limpieza: ' + err.message);
+    } finally {
+      setCleanupLoading(false);
+    }
+  };
+
   // Estados para edición diferida de hora de cierre de camión en historial
   const [editingCloseTimes, setEditingCloseTimes] = useState<{ [key: string]: string }>({});
   const [savingCloseTimeId, setSavingCloseTimeId] = useState<string | null>(null);
@@ -3158,27 +3239,59 @@ export default function App({ user }: { user: any }) {
                 <p className="text-xs text-slate-400 mt-0.5">Solo visible para Administrador del Sistema</p>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => fetchPalletUsers()}
-                  className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer shadow-sm"
-                  title="Actualizar"
-                >
-                  <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowNewUserForm(v => !v)}
-                  className="px-3 py-2 bg-brand-primary text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm hover:bg-emerald-700 active:scale-95"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Agregar Usuario
-                </button>
+                {adminSubTab === 'usuarios' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => fetchPalletUsers()}
+                      className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer shadow-sm"
+                      title="Actualizar"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowNewUserForm(v => !v)}
+                      className="px-3 py-2 bg-brand-primary text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm hover:bg-emerald-700 active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Agregar Usuario
+                    </button>
+                  </>
+                )}
+                {adminSubTab === 'almacenamiento' && (
+                  <button
+                    type="button"
+                    onClick={analyzeStorage}
+                    className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer shadow-sm"
+                    title="Analizar almacenamiento"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${storageLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
               </div>
             </div>
 
+            {/* SUB-TABS: Usuarios / Almacenamiento */}
+            <div className="flex bg-slate-100 rounded-xl p-1 gap-1 select-none">
+              <button
+                type="button"
+                onClick={() => setAdminSubTab('usuarios')}
+                className={`flex-1 py-2 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${adminSubTab === 'usuarios' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Users className="w-3.5 h-3.5" /> Usuarios
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAdminSubTab('almacenamiento'); analyzeStorage(); }}
+                className={`flex-1 py-2 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${adminSubTab === 'almacenamiento' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Package className="w-3.5 h-3.5" /> Almacenamiento
+              </button>
+            </div>
+
             {/* FORMULARIO NUEVO USUARIO */}
-            {showNewUserForm && (
+            {adminSubTab === 'usuarios' && showNewUserForm && (
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3 shadow-sm">
                 <h3 className="text-xs font-black text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
                   <UserPlus className="w-4 h-4" />
@@ -3249,7 +3362,7 @@ export default function App({ user }: { user: any }) {
             )}
 
             {/* TABLA DE USUARIOS */}
-            {usersLoading ? (
+            {adminSubTab === 'usuarios' && (usersLoading ? (
               <div className="flex items-center justify-center py-12 text-slate-400">
                 <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Cargando usuarios...
               </div>
@@ -3363,7 +3476,127 @@ export default function App({ user }: { user: any }) {
                   <div className="text-center py-10 text-slate-400 text-sm">No hay usuarios registrados.</div>
                 )}
               </div>
-            )}
+            ))}
+
+            {/* SUB-TAB: ALMACENAMIENTO */}
+            {adminSubTab === 'almacenamiento' && (() => {
+              const totalPhotos = storageRecords.reduce((s, r) => s + r.photoCount, 0);
+              const totalKB = storageRecords.reduce((s, r) => s + r.sizeKB, 0);
+              const oldRecs = storageRecords.filter(r => r.isOld);
+              const oldKB = oldRecs.reduce((s, r) => s + r.sizeKB, 0);
+              return (
+                <div className="space-y-4">
+                  {storageLoading && (
+                    <div className="flex items-center justify-center py-12 text-slate-400">
+                      <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Analizando almacenamiento...
+                    </div>
+                  )}
+
+                  {!storageLoading && storageRecords.length === 0 && (
+                    <div className="text-center py-12 text-slate-400">
+                      <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">Presiona ↻ para analizar el almacenamiento</p>
+                    </div>
+                  )}
+
+                  {!storageLoading && storageRecords.length > 0 && (
+                    <>
+                      {/* RESUMEN */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm">
+                          <p className="text-[10px] font-black text-slate-400 uppercase">Despachos con fotos</p>
+                          <p className="text-xl font-black text-slate-800 mt-1">{storageRecords.length}</p>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm">
+                          <p className="text-[10px] font-black text-slate-400 uppercase">Total fotos</p>
+                          <p className="text-xl font-black text-slate-800 mt-1">{totalPhotos}</p>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5 shadow-sm">
+                          <p className="text-[10px] font-black text-blue-600 uppercase">Espacio usado</p>
+                          <p className="text-xl font-black text-blue-800 mt-1">{totalKB >= 1024 ? `${(totalKB/1024).toFixed(1)} MB` : `${totalKB} KB`}</p>
+                        </div>
+                        <div className={`${oldRecs.length > 0 ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-3.5 shadow-sm`}>
+                          <p className={`text-[10px] font-black uppercase ${oldRecs.length > 0 ? 'text-rose-600' : 'text-slate-400'}`}>Fotos +30 días</p>
+                          <p className={`text-xl font-black mt-1 ${oldRecs.length > 0 ? 'text-rose-800' : 'text-slate-500'}`}>
+                            {oldKB >= 1024 ? `${(oldKB/1024).toFixed(1)} MB` : `${oldKB} KB`}
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">{oldRecs.length} despachos</p>
+                        </div>
+                      </div>
+
+                      {/* BOTÓN DE LIMPIEZA */}
+                      {oldRecs.length > 0 && (
+                        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap">
+                          <div>
+                            <p className="text-sm font-black text-rose-800">🗑️ Limpiar fotos de más de 30 días</p>
+                            <p className="text-xs text-rose-600 mt-0.5">{oldRecs.length} despachos · ~{(oldKB/1024).toFixed(1)} MB por liberar · Los registros de pallets se conservan</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleCleanOldPhotos}
+                            disabled={cleanupLoading}
+                            className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black cursor-pointer active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                          >
+                            {cleanupLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            {cleanupLoading ? 'Limpiando...' : 'LIMPIAR FOTOS ANTIGUAS'}
+                          </button>
+                        </div>
+                      )}
+
+                      {cleanupDone && oldRecs.length === 0 && (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
+                          <ShieldCheck className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
+                          <p className="text-sm font-black text-emerald-800">Almacenamiento limpio</p>
+                          <p className="text-xs text-emerald-600">No quedan fotos de más de 30 días.</p>
+                        </div>
+                      )}
+
+                      {/* LISTA DETALLADA */}
+                      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Detalle por despacho (con fotos)</p>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead className="border-b border-slate-100">
+                              <tr className="text-[10px] font-black text-slate-400 uppercase">
+                                <th className="p-3 text-left">Fecha</th>
+                                <th className="p-3 text-left">Supervisor</th>
+                                <th className="p-3 text-left">Camión</th>
+                                <th className="p-3 text-center">Fotos</th>
+                                <th className="p-3 text-right">Tamaño</th>
+                                <th className="p-3 text-center">Estado</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                              {storageRecords.map(r => (
+                                <tr key={r.id} className={`${r.isOld ? 'bg-rose-50/40' : ''} hover:bg-slate-50 transition-colors`}>
+                                  <td className="p-3 font-mono font-bold text-slate-700">{r.date}</td>
+                                  <td className="p-3 text-slate-600">{r.supervisor}</td>
+                                  <td className="p-3 text-slate-600 font-mono">{r.truck}</td>
+                                  <td className="p-3 text-center">
+                                    <span className="bg-slate-100 text-slate-700 font-black px-2 py-0.5 rounded-lg">{r.photoCount}</span>
+                                  </td>
+                                  <td className="p-3 text-right font-mono text-slate-600">
+                                    {r.sizeKB >= 1024 ? `${(r.sizeKB/1024).toFixed(1)} MB` : `${r.sizeKB} KB`}
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    {r.isOld
+                                      ? <span className="text-[10px] bg-rose-100 text-rose-700 font-black px-2 py-0.5 rounded-full">+30 días</span>
+                                      : <span className="text-[10px] bg-emerald-100 text-emerald-700 font-black px-2 py-0.5 rounded-full">Reciente</span>
+                                    }
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
