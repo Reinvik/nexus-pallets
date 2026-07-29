@@ -166,19 +166,19 @@ const checkIsAdmin = (user: any): boolean => {
   return ADMIN_EMAILS.includes(email);
 };
 
-// Jefes de Turno (Francisco, Euro, Alejandro) y Administradores tienen permisos de edición sobre todos los despachos
+// Emails de Jefes de Turno con acceso de edición sobre todos los despachos
+const SHIFT_LEADER_EMAILS = [
+  'francisco.lara@cial.cl',
+  'euro.velasquez@cial.cl',
+  'alejandro.ureta@cial.cl',
+];
+
+// Jefes de Turno y Administradores tienen permisos de edición sobre todos los despachos
 const checkIsShiftLeaderOrAdmin = (user: any): boolean => {
   if (!user) return false;
   if (checkIsAdmin(user)) return true;
   const email = (user.email || '').toLowerCase();
-  const username = email.split('@')[0];
-  if (
-    username.startsWith('francisco') ||
-    username.startsWith('euro') ||
-    username.startsWith('alejandro')
-  ) {
-    return true;
-  }
+  if (SHIFT_LEADER_EMAILS.includes(email)) return true;
   const role = (user.user_metadata?.role || user.app_metadata?.role || '').toLowerCase();
   return ['jefe', 'jefe_turno', 'supervisor_jefe'].includes(role);
 };
