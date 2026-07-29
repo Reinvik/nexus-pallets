@@ -23,7 +23,9 @@ import {
   FileDown,
   Camera,
   Image as ImageIcon,
-  X
+  X,
+  Users,
+  UserPlus
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -184,7 +186,7 @@ const checkIsShiftLeaderOrAdmin = (user: any): boolean => {
 };
 
 export default function App({ user }: { user: any }) {
-  const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales'>('nuevo');
+  const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'usuarios'>('nuevo');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -212,6 +214,78 @@ export default function App({ user }: { user: any }) {
 
   const isAdmin = checkIsAdmin(user);
   const isShiftLeader = checkIsShiftLeaderOrAdmin(user);
+  const isSuperAdmin = (user?.email || '').toLowerCase() === 'ariel.mella@cial.cl';
+
+  // Estado módulo gestión de usuarios
+  type PalletUser = { id: string; email: string; display_name: string; role: string; is_active: boolean; notes: string; };
+  const [palletUsers, setPalletUsers] = useState<PalletUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [editingUser, setEditingUser] = useState<PalletUser | null>(null);
+  const [showNewUserForm, setShowNewUserForm] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserRole, setNewUserRole] = useState('supervisor');
+  const [newUserNotes, setNewUserNotes] = useState('');
+  const [savingUser, setSavingUser] = useState(false);
+
+  const fetchPalletUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('pallet_users')
+        .select('*')
+        .order('role')
+        .order('display_name');
+      if (error) throw error;
+      setPalletUsers(data || []);
+    } catch (err: any) {
+      console.error('Error cargando usuarios:', err);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  const handleSaveUser = async (u: PalletUser) => {
+    setSavingUser(true);
+    try {
+      const { error } = await supabase
+        .from('pallet_users')
+        .update({ display_name: u.display_name, role: u.role, is_active: u.is_active, notes: u.notes, updated_at: new Date().toISOString() })
+        .eq('id', u.id);
+      if (error) throw error;
+      setPalletUsers(prev => prev.map(p => p.id === u.id ? u : p));
+      setEditingUser(null);
+      setSuccessMsg(`Usuario ${u.display_name} actualizado.`);
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const handleToggleUserActive = async (u: PalletUser) => {
+    const updated = { ...u, is_active: !u.is_active };
+    await handleSaveUser(updated);
+  };
+
+  const handleCreateUser = async () => {
+    if (!newUserEmail || !newUserName) { alert('Email y nombre son requeridos.'); return; }
+    setSavingUser(true);
+    try {
+      const { error } = await supabase
+        .from('pallet_users')
+        .insert({ email: newUserEmail.toLowerCase().trim(), display_name: newUserName.trim(), role: newUserRole, is_active: true, notes: newUserNotes.trim() });
+      if (error) throw error;
+      setSuccessMsg(`Usuario ${newUserName} creado exitosamente.`);
+      setShowNewUserForm(false);
+      setNewUserEmail(''); setNewUserName(''); setNewUserRole('supervisor'); setNewUserNotes('');
+      fetchPalletUsers();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    } finally {
+      setSavingUser(false);
+    }
+  };
 
   // Estados para edición diferida de hora de cierre de camión en historial
   const [editingCloseTimes, setEditingCloseTimes] = useState<{ [key: string]: string }>({});
@@ -1543,6 +1617,17 @@ export default function App({ user }: { user: any }) {
               Saldos Zonales
             </span>
           </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => { setActiveTab('usuarios'); fetchPalletUsers(); }}
+              className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'usuarios' ? 'border-amber-500 text-amber-600 bg-amber-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+            >
+              <span className="flex items-center justify-center gap-2">
+                <Users className="w-4.5 h-4.5" />
+                Usuarios
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -3058,6 +3143,227 @@ export default function App({ user }: { user: any }) {
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {activeTab === 'usuarios' && isSuperAdmin && (
+          <div className="space-y-5">
+            {/* ENCABEZADO */}
+            <div className="flex items-center justify-between border-b pb-3 select-none">
+              <div>
+                <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-amber-500" />
+                  Gestión de Usuarios
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">Solo visible para Administrador del Sistema</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fetchPalletUsers()}
+                  className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer shadow-sm"
+                  title="Actualizar"
+                >
+                  <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowNewUserForm(v => !v)}
+                  className="px-3 py-2 bg-brand-primary text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm hover:bg-emerald-700 active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Agregar Usuario
+                </button>
+              </div>
+            </div>
+
+            {/* FORMULARIO NUEVO USUARIO */}
+            {showNewUserForm && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                <h3 className="text-xs font-black text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <UserPlus className="w-4 h-4" />
+                  Nuevo Usuario
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={newUserEmail}
+                      onChange={e => setNewUserEmail(e.target.value)}
+                      placeholder="usuario@cial.cl"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Completo</label>
+                    <input
+                      type="text"
+                      value={newUserName}
+                      onChange={e => setNewUserName(e.target.value)}
+                      placeholder="Nombre Apellido"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rol</label>
+                    <select
+                      value={newUserRole}
+                      onChange={e => setNewUserRole(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400 cursor-pointer"
+                    >
+                      <option value="admin">🔴 Administrador</option>
+                      <option value="jefe_turno">🟡 Jefe de Turno</option>
+                      <option value="supervisor">🟢 Supervisor</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Notas</label>
+                    <input
+                      type="text"
+                      value={newUserNotes}
+                      onChange={e => setNewUserNotes(e.target.value)}
+                      placeholder="Observaciones..."
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewUserForm(false); setNewUserEmail(''); setNewUserName(''); }}
+                    className="flex-1 bg-white border border-slate-200 text-slate-600 py-2 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-50"
+                  >
+                    CANCELAR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateUser}
+                    disabled={savingUser}
+                    className="flex-1 bg-amber-500 text-white py-2 rounded-xl text-xs font-black cursor-pointer hover:bg-amber-600 disabled:opacity-50 flex items-center justify-center gap-1"
+                  >
+                    {savingUser ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'CREAR USUARIO'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TABLA DE USUARIOS */}
+            {usersLoading ? (
+              <div className="flex items-center justify-center py-12 text-slate-400">
+                <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Cargando usuarios...
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {/* Leyenda de roles */}
+                <div className="flex gap-3 text-[10px] font-bold text-slate-400 uppercase px-1 select-none">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>Admin</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>Jefe Turno</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>Supervisor</span>
+                </div>
+
+                {palletUsers.map(u => (
+                  <div
+                    key={u.id}
+                    className={`bg-white border rounded-2xl p-4 shadow-sm transition-all ${!u.is_active ? 'opacity-50 border-slate-100' : 'border-slate-200'}`}
+                  >
+                    {editingUser?.id === u.id ? (
+                      /* MODO EDICIÓN */
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nombre</label>
+                            <input
+                              type="text"
+                              value={editingUser.display_name}
+                              onChange={e => setEditingUser({ ...editingUser, display_name: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rol</label>
+                            <select
+                              value={editingUser.role}
+                              onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400 cursor-pointer"
+                            >
+                              <option value="admin">🔴 Administrador</option>
+                              <option value="jefe_turno">🟡 Jefe de Turno</option>
+                              <option value="supervisor">🟢 Supervisor</option>
+                            </select>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Notas</label>
+                            <input
+                              type="text"
+                              value={editingUser.notes}
+                              onChange={e => setEditingUser({ ...editingUser, notes: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingUser(null)}
+                            className="flex-1 bg-slate-100 text-slate-600 py-2 rounded-xl text-xs font-black cursor-pointer hover:bg-slate-200"
+                          >
+                            CANCELAR
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveUser(editingUser)}
+                            disabled={savingUser}
+                            className="flex-1 bg-amber-500 text-white py-2 rounded-xl text-xs font-black cursor-pointer hover:bg-amber-600 disabled:opacity-50 flex items-center justify-center gap-1"
+                          >
+                            {savingUser ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'GUARDAR'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* MODO VISTA */
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${u.role === 'admin' ? 'bg-rose-500' : u.role === 'jefe_turno' ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-black text-slate-800">{u.display_name}</span>
+                              {!u.is_active && <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">INACTIVO</span>}
+                            </div>
+                            <span className="text-xs text-slate-400 font-mono">{u.email}</span>
+                            {u.notes && <p className="text-[10px] text-slate-400 mt-0.5">{u.notes}</p>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase ${u.role === 'admin' ? 'bg-rose-100 text-rose-700' : u.role === 'jefe_turno' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {u.role === 'admin' ? 'Admin' : u.role === 'jefe_turno' ? 'Jefe Turno' : 'Supervisor'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingUser({ ...u })}
+                            className="px-2.5 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-[10px] font-black cursor-pointer hover:bg-amber-100 active:scale-95 flex items-center gap-1"
+                          >
+                            <Edit2 className="w-3 h-3" /> Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleUserActive(u)}
+                            className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black cursor-pointer active:scale-95 flex items-center gap-1 border ${u.is_active ? 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'}`}
+                            title={u.is_active ? 'Desactivar usuario' : 'Activar usuario'}
+                          >
+                            {u.is_active ? <><ShieldCheck className="w-3 h-3" /> Activo</> : <><ShieldCheck className="w-3 h-3" /> Activar</>}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {palletUsers.length === 0 && (
+                  <div className="text-center py-10 text-slate-400 text-sm">No hay usuarios registrados.</div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
