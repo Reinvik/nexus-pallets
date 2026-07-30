@@ -1285,7 +1285,7 @@ export default function App({ user }: { user: any }) {
           </table>
 
           <!-- Tabla principal de carga -->
-          <div style="font-size: 10px; font-weight: 900; text-align: center; margin-top: 15px; margin-bottom: 5px; letter-spacing: 0.5px; text-transform: uppercase; font-family: sans-serif;">CARGIO DE ZONALES</div>
+          <div style="font-size: 10px; font-weight: 900; text-align: center; margin-top: 15px; margin-bottom: 5px; letter-spacing: 0.5px; text-transform: uppercase; font-family: sans-serif;">CARGA DE ZONALES</div>
           <div style="display: flex; width: 100%; margin-bottom: 12px; gap: 0; box-sizing: border-box; align-items: stretch;">
             
             <!-- Tabla de Zonales (6 celdas por fila, ancho 86%) -->
