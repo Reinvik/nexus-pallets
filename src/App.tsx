@@ -1215,7 +1215,7 @@ export default function App({ user }: { user: any }) {
               </td>
               <td style="width: 25%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle; background-color: #fafafa;">
                 <div style="font-size: 7.5px; font-weight: 800; color: #666; text-transform: uppercase; letter-spacing: 0.5px; font-family: sans-serif;">NUMERO CAMIÓN</div>
-                <div style="font-size: 17px; font-weight: 900; margin-top: 2px; font-family: monospace;">${rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'}</div>
+                <div style="font-size: 18px; font-weight: 900; margin-top: 2px; font-family: monospace; color: #000;">${rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'}</div>
               </td>
             </tr>
           </table>
@@ -1223,15 +1223,15 @@ export default function App({ user }: { user: any }) {
           <!-- Datos generales -->
           <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
             <tr style="height: 24px;">
-              <td style="width: 65%; border: 1px solid #000; padding: 5px;"><strong>ZONALES:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.zonals_detail.map(z => {
+              <td style="width: 65%; border: 1px solid #000; padding: 5px;"><strong>ZONALES:</strong> <span style="font-weight: 900; text-transform: uppercase; font-size: 12.5px; color: #000;">${rec.zonals_detail.map(z => {
                 const viajeNum = z.viaje_numero || 1;
                 return viajeNum > 1 ? `${z.zonal_name} ${viajeNum}` : z.zonal_name;
               }).join(' - ')}</span></td>
-              <td style="width: 35%; border: 1px solid #000; padding: 5px;"><strong>PATENTE:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.truck_plate !== 'N/A' ? rec.truck_plate : 'S/A'}</span></td>
+              <td style="width: 35%; border: 1px solid #000; padding: 5px;"><strong>PATENTE:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000;">${rec.truck_plate !== 'N/A' ? rec.truck_plate : 'S/A'}</span></td>
             </tr>
             <tr style="height: 24px;">
-              <td style="border: 1px solid #000; padding: 5px;"><strong>Hora Inspección:</strong> <span style="font-family: monospace; font-weight: bold;">${rec.inspection_time}</span></td>
-              <td style="border: 1px solid #000; padding: 5px;"><strong>FECHA:</strong> <span style="font-family: monospace; font-weight: bold;">${getFormatDate(rec.inspection_date)}</span></td>
+              <td style="border: 1px solid #000; padding: 5px;"><strong>Hora Inspección:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000;">${rec.inspection_time}</span></td>
+              <td style="border: 1px solid #000; padding: 5px;"><strong>FECHA:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000;">${getFormatDate(rec.inspection_date)}</span></td>
             </tr>
           </table>
 
@@ -1247,28 +1247,28 @@ export default function App({ user }: { user: any }) {
             <tbody>
               <tr style="height: 24px;">
                 <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">1. Horario de postura en el Andén</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.postura_anden ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.postura_anden ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.postura_anden ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.postura_anden ? 'X' : ''}</td>
               </tr>
               <tr style="height: 24px;">
                 <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">2. Estado de camión a Cargar (Limpieza, Daño estructural)</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.limpieza_estructura ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.limpieza_estructura ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.limpieza_estructura ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.limpieza_estructura ? 'X' : ''}</td>
               </tr>
               <tr style="height: 24px;">
                 <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">3. Estado de Luces (ENCENDIDAS)</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.luces_encendidas ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.luces_encendidas ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.luces_encendidas ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.luces_encendidas ? 'X' : ''}</td>
               </tr>
               <tr style="height: 24px;">
                 <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">4. Verificación Separador Térmico</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.separador_termico ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.separador_termico ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.separador_termico ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.separador_termico ? 'X' : ''}</td>
               </tr>
               <tr style="height: 24px;">
                 <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">5. Verificación Lingas por camión</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.lingas_camion ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.lingas_camion ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.lingas_camion ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.lingas_camion ? 'X' : ''}</td>
               </tr>
             </tbody>
           </table>
@@ -1276,8 +1276,8 @@ export default function App({ user }: { user: any }) {
           <!-- Posiciones ocupadas -->
           <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
             <tr style="height: 24px;">
-              <td style="width: 40%; border: 1px solid #000; padding: 5px;"><strong>Posiciones ocupadas dentro del camión:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 10.5px;">${rec.positions_occupied}</span></td>
-              <td style="width: 60%; border: 1px solid #000; padding: 5px; font-size: 8.5px;"><strong>Alto de Bandejas:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 9.5px;">${altoBandejasFormulas || ''}</span></td>
+              <td style="width: 40%; border: 1px solid #000; padding: 5px;"><strong>Posiciones ocupadas dentro del camión:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000;">${rec.positions_occupied}</span></td>
+              <td style="width: 60%; border: 1px solid #000; padding: 5px; font-size: 8.5px;"><strong>Alto de Bandejas:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 11px; color: #000;">${altoBandejasFormulas || ''}</span></td>
             </tr>
             <tr style="height: 24px;">
               <td colspan="2" style="border: 1px solid #000; padding: 5px;"><strong>Motivos del alto:</strong> </td>
@@ -1316,19 +1316,19 @@ export default function App({ user }: { user: any }) {
                 <!-- 1ER -->
                 <div style="display: flex; height: 33.3%; align-items: center; border-bottom: 1px solid #000; box-sizing: border-box;">
                   <div style="width: 45%; font-weight: bold; font-size: 7.5px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">1ER</div>
-                  <div style="width: 55%; font-weight: bold; font-family: monospace; font-size: 10px; text-align: center;">${rec.temp_1er}°C</div>
+                  <div style="width: 55%; font-weight: 900; font-family: monospace; font-size: 12.5px; text-align: center; color: #000;">${rec.temp_1er}°C</div>
                 </div>
                 
                 <!-- 2DO -->
                 <div style="display: flex; height: 33.3%; align-items: center; border-bottom: 1px solid #000; box-sizing: border-box;">
                   <div style="width: 45%; font-weight: bold; font-size: 7.5px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">2DO</div>
-                  <div style="width: 55%; font-weight: bold; font-family: monospace; font-size: 10px; text-align: center;">${rec.temp_2do}°C</div>
+                  <div style="width: 55%; font-weight: 900; font-family: monospace; font-size: 12.5px; text-align: center; color: #000;">${rec.temp_2do}°C</div>
                 </div>
                 
                 <!-- 3ER -->
                 <div style="display: flex; height: 33.3%; align-items: center; box-sizing: border-box;">
                   <div style="width: 45%; font-weight: bold; font-size: 7.5px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">3ER</div>
-                  <div style="width: 55%; font-weight: bold; font-family: monospace; font-size: 10px; text-align: center;">${rec.temp_3er}°C</div>
+                  <div style="width: 55%; font-weight: 900; font-family: monospace; font-size: 12.5px; text-align: center; color: #000;">${rec.temp_3er}°C</div>
                 </div>
 
               </div>
@@ -1362,7 +1362,7 @@ export default function App({ user }: { user: any }) {
             })()}
             <tr>
               <td style="width: 55%; border: 1px solid #000; padding: 5px; vertical-align: top; height: 32px;">
-                <strong>SUP. ENCARGADO:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.supervisor_name}</span>
+                <strong>SUP. ENCARGADO:</strong> <span style="font-weight: 900; text-transform: uppercase; font-size: 12.5px; color: #000;">${rec.supervisor_name}</span>
               </td>
               <td rowspan="2" style="width: 45%; border: 1px solid #000; padding: 6px; text-align: center; vertical-align: middle; height: 70px; background-color: #fafafa;">
                 ${rec.signature_b64 ? `
@@ -1379,14 +1379,14 @@ export default function App({ user }: { user: any }) {
             </tr>
             <tr>
               <td style="border: 1px solid #000; padding: 5px; height: 32px;">
-                <strong>HORA CIERRE DE CAMION:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12px; color: #000; margin-left: 2px;">${rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}</span>
+                <strong>HORA CIERRE DE CAMION:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000; margin-left: 2px;">${rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}</span>
               </td>
             </tr>
             <tr style="height: 24px;">
               <td colspan="2" style="border: 1px solid #000; padding: 5px; background-color: #fcfcfc;">
                 <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 8.5px; text-transform: uppercase;">
-                  <span>KILOS TOTALES DEL CAMIÓN: <strong style="font-family: monospace; font-size: 12px; font-weight: 900; color: #000; margin-left: 2px;">${rec.truck_kilos ? (typeof rec.truck_kilos === 'number' ? rec.truck_kilos.toLocaleString('es-CL') : rec.truck_kilos) + ' kg' : '___________________________'}</strong></span>
-                  <span style="font-family: monospace; padding-right: 10px; font-size: 11px; font-weight: 900; color: #000;">TOTALES DESPACHO: M:${totalW} | P:${totalP} | B:${totalB}</span>
+                  <span>KILOS TOTALES DEL CAMIÓN: <strong style="font-family: monospace; font-size: 12.5px; font-weight: 900; color: #000; margin-left: 2px;">${rec.truck_kilos ? (typeof rec.truck_kilos === 'number' ? rec.truck_kilos.toLocaleString('es-CL') : rec.truck_kilos) + ' kg' : '___________________________'}</strong></span>
+                  <span style="font-family: monospace; padding-right: 10px; font-size: 12.5px; font-weight: 900; color: #000;">TOTALES DESPACHO: M:${totalW} | P:${totalP} | B:${totalB}</span>
                 </div>
               </td>
             </tr>
