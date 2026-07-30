@@ -871,7 +871,7 @@ export default function App({ user }: { user: any }) {
     const fileArray = Array.from(files);
     const updated = [...selectedZonals];
     const currentPhotos = [...(updated[zonalIndex].photos || [])];
-    const remaining = 4 - currentPhotos.length;
+    const remaining = 6 - currentPhotos.length;
     const toProcess = fileArray.slice(0, remaining);
 
     for (const f of toProcess) {
@@ -2570,9 +2570,9 @@ export default function App({ user }: { user: any }) {
 
                                 <div>
                                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-                                    Fotos de Respaldo Zonal ({(zonal.photos || []).length}/10)
+                                    Fotos de Respaldo Zonal ({(zonal.photos || []).length}/6)
                                   </label>
-                                  {(!zonal.photos || zonal.photos.length < 10) && (
+                                  {(!zonal.photos || zonal.photos.length < 6) && (
                                     <div className="flex items-center gap-2 select-none">
                                       <label className="flex-1 bg-white hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs active:scale-95" title="Tomar foto directa con la cámara">
                                         <Camera className="w-4 h-4 text-brand-primary shrink-0" />
