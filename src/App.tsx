@@ -1365,20 +1365,28 @@ export default function App({ user }: { user: any }) {
                 <strong>SUP. ENCARGADO:</strong> <span style="font-weight: bold; text-transform: uppercase;">${rec.supervisor_name}</span>
               </td>
               <td rowspan="2" style="width: 45%; border: 1px solid #000; padding: 6px; text-align: center; vertical-align: middle; height: 70px; background-color: #fafafa;">
-                <div style="font-size: 7.5px; color: #555; font-weight: bold; text-transform: uppercase; margin-bottom: 25px; letter-spacing: 0.5px;">Timbre y Firma</div>
-                <div style="border-top: 1.5px dashed #000; width: 85%; margin: 0 auto;"></div>
+                ${rec.signature_b64 ? `
+                  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; box-sizing: border-box; padding: 2px;">
+                    <img src="${rec.signature_b64}" style="height: 42px; width: auto; max-width: 95%; object-fit: contain; margin-top: -6px; margin-bottom: 2px;" />
+                    <div style="font-size: 8px; font-weight: 900; color: #000; text-transform: uppercase; line-height: 1;">${rec.signed_by ? rec.signed_by.split('@')[0].replace('.', ' ') : 'JEFE DE TURNO'}</div>
+                    <div style="font-size: 6.5px; color: #666; margin-top: 1px; line-height: 1;">Firma Digital: ${rec.signed_at ? new Date(rec.signed_at).toLocaleDateString('es-CL') : ''}</div>
+                  </div>
+                ` : `
+                  <div style="font-size: 7.5px; color: #555; font-weight: bold; text-transform: uppercase; margin-bottom: 25px; letter-spacing: 0.5px;">Timbre y Firma</div>
+                  <div style="border-top: 1.5px dashed #000; width: 85%; margin: 0 auto;"></div>
+                `}
               </td>
             </tr>
             <tr>
               <td style="border: 1px solid #000; padding: 5px; height: 32px;">
-                <strong>HORA CIERRE DE CAMION:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 10.5px;">${rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}</span>
+                <strong>HORA CIERRE DE CAMION:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12px; color: #000; margin-left: 2px;">${rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}</span>
               </td>
             </tr>
             <tr style="height: 24px;">
               <td colspan="2" style="border: 1px solid #000; padding: 5px; background-color: #fcfcfc;">
                 <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 8.5px; text-transform: uppercase;">
-                  <span>KILOS TOTALES DEL CAMIÓN: <strong style="font-family: monospace; font-size: 10px;">${rec.truck_kilos ? (typeof rec.truck_kilos === 'number' ? rec.truck_kilos.toLocaleString('es-CL') : rec.truck_kilos) + ' kg' : '___________________________'}</strong></span>
-                  <span style="font-family: monospace; padding-right: 10px;">TOTALES DESPACHO: M:${totalW} | P:${totalP} | B:${totalB}</span>
+                  <span>KILOS TOTALES DEL CAMIÓN: <strong style="font-family: monospace; font-size: 12px; font-weight: 900; color: #000; margin-left: 2px;">${rec.truck_kilos ? (typeof rec.truck_kilos === 'number' ? rec.truck_kilos.toLocaleString('es-CL') : rec.truck_kilos) + ' kg' : '___________________________'}</strong></span>
+                  <span style="font-family: monospace; padding-right: 10px; font-size: 11px; font-weight: 900; color: #000;">TOTALES DESPACHO: M:${totalW} | P:${totalP} | B:${totalB}</span>
                 </div>
               </td>
             </tr>
