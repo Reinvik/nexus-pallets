@@ -55,7 +55,8 @@ const ZONALES_LIST = [
   "Calama",
   "Los Ángeles",
   "San Felipe",
-  "Coyhaique"
+  "Coyhaique",
+  "Los Vilos"
 ].sort();
 
 interface CategoryData {
