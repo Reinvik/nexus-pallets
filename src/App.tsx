@@ -1160,13 +1160,17 @@ export default function App({ user }: { user: any }) {
     return selectedZonals.reduce(
       (acc, zonal) => {
         const t = getZonalTotals(zonal);
+        const bases = (zonal.congelados.wood_bases || 0) + (zonal.congelados.plastic_bases || 0) +
+                      (zonal.estandar.wood_bases || 0) + (zonal.estandar.plastic_bases || 0) +
+                      (zonal.bandejas.wood_bases || 0) + (zonal.bandejas.plastic_bases || 0);
         return {
           wood: acc.wood + t.wood,
           plastic: acc.plastic + t.plastic,
-          bandejas: acc.bandejas + t.bandejas
+          bandejas: acc.bandejas + t.bandejas,
+          bases: acc.bases + bases
         };
       },
-      { wood: 0, plastic: 0, bandejas: 0 }
+      { wood: 0, plastic: 0, bandejas: 0, bases: 0 }
     );
   };
 
@@ -1686,6 +1690,11 @@ export default function App({ user }: { user: any }) {
         missing.push(`N° de Sello en Zonal "${z.zonal_name}"`);
       }
     });
+
+    const currentTotals = getCamionTotals();
+    if (currentTotals.bases > positionsOccupied) {
+      missing.push(`Exceso de Capacidad: La suma de pallets base (${currentTotals.bases}) supera la cantidad de posiciones del camión (${positionsOccupied} pos).`);
+    }
 
     return missing;
   };
@@ -2833,11 +2842,22 @@ export default function App({ user }: { user: any }) {
               )}
 
               {/* TOTALES CONSOLIDADOS DEL CAMIÓN */}
-              <div className="space-y-1.5 pt-1 border-t border-white/10">
-                <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                  Totales Consolidados del Camión:
-                </span>
-                <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="space-y-2 pt-2 border-t border-white/10">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                    Totales Consolidados del Camión:
+                  </span>
+                  <div className={`px-2.5 py-1 rounded-lg text-xs font-black flex items-center gap-1.5 border transition-all ${
+                    totals.bases > positionsOccupied
+                      ? 'bg-rose-500/20 border-rose-500/40 text-rose-300 animate-pulse'
+                      : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                  }`}>
+                    <span>Posiciones Ocupadas (Bases):</span>
+                    <span className="font-mono text-sm font-black">{totals.bases} / {positionsOccupied}</span>
+                    {totals.bases > positionsOccupied && <span>⚠️ Excede capacidad</span>}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                   <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
                     <span className="text-[10px] text-amber-300/80 font-bold block uppercase">Pallets Madera</span>
                     <span className="text-2xl font-mono font-black text-amber-400 mt-0.5 block">{totals.wood}</span>
@@ -2849,6 +2869,14 @@ export default function App({ user }: { user: any }) {
                   <div className="bg-white/10 p-3 rounded-xl border border-white/20">
                     <span className="text-[10px] text-slate-300 font-bold block uppercase">Bandejas Totales</span>
                     <span className="text-2xl font-mono font-black text-white mt-0.5 block">{totals.bandejas}</span>
+                  </div>
+                  <div className={`p-3 rounded-xl border transition-all ${
+                    totals.bases > positionsOccupied
+                      ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                      : 'bg-violet-500/10 border-violet-500/20 text-violet-300'
+                  }`}>
+                    <span className="text-[10px] font-bold block uppercase opacity-80">Posiciones (Bases)</span>
+                    <span className="text-2xl font-mono font-black mt-0.5 block">{totals.bases} / {positionsOccupied}</span>
                   </div>
                 </div>
               </div>
