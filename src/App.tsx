@@ -843,16 +843,45 @@ export default function App({ user }: { user: any }) {
     }
   }, [user]);
 
-  const fetchHistory = async () => {
+  const [historyPeriod, setHistoryPeriod] = useState<'hoy' | 'semana' | 'todo'>('hoy');
+
+  const fetchHistory = async (period: 'hoy' | 'semana' | 'todo' = historyPeriod) => {
     setLoading(true);
+    setHistoryPeriod(period);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('pallet_dispatches')
         .select('*')
         .order('created_at', { ascending: false });
 
+      const now = new Date();
+      if (period === 'hoy') {
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        query = query.gte('created_at', startOfToday);
+      } else if (period === 'semana') {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        query = query.gte('created_at', sevenDaysAgo);
+      } else {
+        query = query.limit(200);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
-      setRecords(data || []);
+
+      let res = data || [];
+      // Si 'hoy' retorna 0 registros (ej: temprano en la mañana sin despachos aún hoy),
+      // cargar los últimos 15 despachos como respaldo para que no quede vacía la pantalla.
+      if (period === 'hoy' && res.length === 0) {
+        const fallbackQuery = await supabase
+          .from('pallet_dispatches')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(15);
+        if (!fallbackQuery.error && fallbackQuery.data) {
+          res = fallbackQuery.data;
+        }
+      }
+      setRecords(res);
     } catch (err: any) {
       console.error('Error cargando historial:', err);
       setErrorMsg('No se pudo cargar el historial de despachos.');
@@ -2824,7 +2853,44 @@ export default function App({ user }: { user: any }) {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Selector de Período Rápido */}
+                <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => fetchHistory('hoy')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      historyPeriod === 'hoy'
+                        ? 'bg-brand-primary text-white shadow-sm font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    ⚡ Hoy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fetchHistory('semana')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      historyPeriod === 'semana'
+                        ? 'bg-brand-primary text-white shadow-sm font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    🗓️ Esta Semana
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fetchHistory('todo')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      historyPeriod === 'todo'
+                        ? 'bg-brand-primary text-white shadow-sm font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    🗂️ Ver Todo
+                  </button>
+                </div>
+
                 {/* Subpestañas */}
                 <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
                   <button
@@ -2854,11 +2920,11 @@ export default function App({ user }: { user: any }) {
                 </div>
 
                 <button 
-                  onClick={fetchHistory}
+                  onClick={() => fetchHistory(historyPeriod)}
                   className="p-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-all active:scale-95 text-slate-600 cursor-pointer shadow-sm"
                   title="Actualizar Historial"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </button>
               </div>
             </div>
@@ -3223,6 +3289,34 @@ export default function App({ user }: { user: any }) {
                       </div>
                     );
                   })}
+
+                  {historyPeriod !== 'todo' && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-2 mt-6">
+                      <p className="text-xs font-bold text-slate-500">
+                        {historyPeriod === 'hoy'
+                          ? 'Mostrando despachos de hoy.'
+                          : 'Mostrando despachos de esta semana.'}
+                      </p>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        {historyPeriod === 'hoy' && (
+                          <button
+                            type="button"
+                            onClick={() => fetchHistory('semana')}
+                            className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-black cursor-pointer shadow-sm transition-all active:scale-95"
+                          >
+                            🗓️ Cargar Esta Semana (7 días)
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => fetchHistory('todo')}
+                          className="px-4 py-2 bg-brand-primary hover:bg-blue-700 text-white rounded-xl text-xs font-black cursor-pointer shadow-sm transition-all active:scale-95"
+                        >
+                          🗂️ Ver Todo el Historial Completo
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             )}
