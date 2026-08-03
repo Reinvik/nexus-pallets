@@ -342,7 +342,6 @@ export default function App({ user }: { user: any }) {
   useEffect(() => {
     if (user?.email) {
       loadUserProfile();
-      fetchPalletUsers();
     }
   }, [user]);
 

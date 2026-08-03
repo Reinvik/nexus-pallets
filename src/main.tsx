@@ -13,20 +13,35 @@ function Root() {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
+    // Timeout de seguridad máximo (2.5 s) para garantizar que la app nunca quede atascada
+    const timer = setTimeout(() => {
+      if (mounted) setAuthLoading(false);
+    }, 2500);
+
     // Obtener sesión inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      if (u && u.email?.endsWith(`@${ALLOWED_DOMAIN}`)) {
-        setUser(u);
-      } else if (u) {
-        supabase.auth.signOut();
-        setUser(null);
-      }
-      setAuthLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!mounted) return;
+        const u = session?.user ?? null;
+        if (u && u.email?.endsWith(`@${ALLOWED_DOMAIN}`)) {
+          setUser(u);
+        } else if (u) {
+          supabase.auth.signOut();
+          setUser(null);
+        }
+      })
+      .catch(() => {
+        if (mounted) setUser(null);
+      })
+      .finally(() => {
+        if (mounted) setAuthLoading(false);
+      });
 
     // Suscribirse a cambios de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
       const u = session?.user ?? null;
       if (u && u.email?.endsWith(`@${ALLOWED_DOMAIN}`)) {
         setUser(u);
@@ -34,9 +49,14 @@ function Root() {
         if (u) supabase.auth.signOut();
         setUser(null);
       }
+      setAuthLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (authLoading) {
