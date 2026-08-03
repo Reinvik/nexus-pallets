@@ -108,6 +108,7 @@ interface DispatchRecord {
   signed_by?: string | null;
   signed_at?: string | null;
   signature_b64?: string | null;
+  signed_by_title?: string | null;
 }
 
 interface PalletReturnRecord {
@@ -261,6 +262,10 @@ export default function App({ user }: { user: any }) {
         .eq('id', u.id);
       if (error) throw error;
       setPalletUsers(prev => prev.map(p => p.id === u.id ? u : p));
+      if (u.email.toLowerCase() === (user?.email || '').toLowerCase()) {
+        setUserTitle(u.notes?.trim() || null);
+        setUserDisplayName(u.display_name);
+      }
       setEditingUser(null);
       setSuccessMsg(`Usuario ${u.display_name} actualizado.`);
     } catch (err: any) {
@@ -300,8 +305,12 @@ export default function App({ user }: { user: any }) {
   // ═══════════════════════════════════════════════════
   // SISTEMA DE FIRMA DIGITAL
   // ═══════════════════════════════════════════════════
+  // SISTEMA DE FIRMA DIGITAL
+  // ═══════════════════════════════════════════════════
   const [signPreviewRecord, setSignPreviewRecord] = useState<DispatchRecord | null>(null);
   const [userSignature, setUserSignature] = useState<string | null>(null); // firma guardada del usuario
+  const [userTitle, setUserTitle] = useState<string | null>(null); // cargo (notas de pallet_users)
+  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
   const [signingInProgress, setSigningInProgress] = useState(false);
 
   // Canvas para dibujar firma en perfil
@@ -310,21 +319,31 @@ export default function App({ user }: { user: any }) {
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [savingSignature, setSavingSignature] = useState(false);
 
-  // Cargar firma del usuario actual desde BD
-  const loadUserSignature = async () => {
+  // Cargar firma y perfil del usuario actual desde BD
+  const loadUserProfile = async () => {
     if (!user?.email) return;
     try {
       const { data } = await supabase
         .from('pallet_users')
-        .select('signature_b64')
+        .select('signature_b64, notes, display_name, role')
         .eq('email', (user.email || '').toLowerCase())
         .single();
-      if (data?.signature_b64) setUserSignature(data.signature_b64);
+      if (data) {
+        if (data.signature_b64) setUserSignature(data.signature_b64);
+        if (data.notes && data.notes.trim()) setUserTitle(data.notes.trim());
+        else if (data.role) {
+          setUserTitle(data.role === 'admin' ? 'Administrador' : data.role === 'jefe_turno' ? 'Jefe de Turno' : 'Supervisor');
+        }
+        if (data.display_name) setUserDisplayName(data.display_name);
+      }
     } catch {}
   };
 
   useEffect(() => {
-    if (isShiftLeader) loadUserSignature();
+    if (user?.email) {
+      loadUserProfile();
+      fetchPalletUsers();
+    }
   }, [user]);
 
   // Funciones del canvas de firma
@@ -402,23 +421,25 @@ export default function App({ user }: { user: any }) {
     setSigningInProgress(true);
     try {
       const signedAt = new Date().toISOString();
+      const signedTitle = userTitle || (isAdmin ? 'Administrador' : isShiftLeader ? 'Jefe de Turno' : 'Supervisor');
       const { error } = await supabase
         .from('pallet_dispatches')
         .update({
           signed_by: user?.email || '',
           signed_at: signedAt,
           signature_b64: userSignature,
+          signed_by_title: signedTitle,
         })
         .eq('id', signPreviewRecord.id);
       if (error) throw error;
       // Actualizar en estado local
       setRecords(prev => prev.map(r =>
         r.id === signPreviewRecord.id
-          ? { ...r, signed_by: user?.email || '', signed_at: signedAt, signature_b64: userSignature }
+          ? { ...r, signed_by: user?.email || '', signed_at: signedAt, signature_b64: userSignature, signed_by_title: signedTitle }
           : r
       ));
       setSignPreviewRecord(null);
-      setSuccessMsg(`✅ Despacho firmado correctamente por ${supervisorName}.`);
+      setSuccessMsg(`✅ Despacho firmado correctamente por ${userDisplayName || supervisorName} (${signedTitle}).`);
     } catch (err: any) {
       alert('Error al firmar: ' + err.message);
     } finally {
@@ -1147,6 +1168,11 @@ export default function App({ user }: { user: any }) {
       // Convertir el logo a Base64 para incrustación directa sin llamadas de red
       const logoBase64 = await getLogoBase64(cialLogo);
 
+      // Datos del firmante para el PDF
+      const signerUser = palletUsers.find(u => u.email.toLowerCase() === (rec.signed_by || '').toLowerCase());
+      const signerName = signerUser?.display_name || (rec.signed_by ? formatSupervisorName(rec.signed_by) : 'JEFE DE TURNO');
+      const signerTitle = rec.signed_by_title || signerUser?.notes?.trim() || (signerUser?.role === 'admin' ? 'Administrador' : signerUser?.role === 'jefe_turno' ? 'Jefe de Turno' : 'Supervisor');
+
       // 1. Obtener los renglones correspondientes a los 4 zonales (con vacíos si son menos de 4)
       const rows: string[] = [];
       for (let i = 0; i < 4; i++) {
@@ -1368,8 +1394,9 @@ export default function App({ user }: { user: any }) {
               <td rowspan="2" style="width: 45%; border: 1px solid #000; padding: 6px; text-align: center; vertical-align: middle; height: 70px; background-color: #fafafa;">
                 ${rec.signature_b64 ? `
                   <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; box-sizing: border-box; padding: 2px;">
-                    <img src="${rec.signature_b64}" style="height: 42px; width: auto; max-width: 95%; object-fit: contain; margin-top: -6px; margin-bottom: 2px;" />
-                    <div style="font-size: 8px; font-weight: 900; color: #000; text-transform: uppercase; line-height: 1;">${rec.signed_by ? rec.signed_by.split('@')[0].replace('.', ' ') : 'JEFE DE TURNO'}</div>
+                    <img src="${rec.signature_b64}" style="height: 38px; width: auto; max-width: 95%; object-fit: contain; margin-top: -4px; margin-bottom: 2px;" />
+                    <div style="font-size: 8px; font-weight: 900; color: #000; text-transform: uppercase; line-height: 1;">${signerName}</div>
+                    <div style="font-size: 7px; font-weight: 800; color: #333; text-transform: uppercase; line-height: 1.1; margin-top: 1px;">${signerTitle}</div>
                     <div style="font-size: 6.5px; color: #666; margin-top: 1px; line-height: 1;">Firma Digital: ${rec.signed_at ? new Date(rec.signed_at).toLocaleDateString('es-CL') : ''}</div>
                   </div>
                 ` : `
@@ -1801,7 +1828,7 @@ export default function App({ user }: { user: any }) {
               <span className="text-xs font-bold hidden md:inline">Perfil</span>
             </button>
 
-            {isShiftLeader && (
+            {user && (
               <button
                 type="button"
                 onClick={() => setShowSignaturePad(true)}
@@ -3052,24 +3079,22 @@ export default function App({ user }: { user: any }) {
                                 ) : null;
                               })()}
 
-                            {/* BOTÓN FIRMAR (Jefes de Turno + Admin) */}
-                            {isShiftLeader && (
-                              rec.signed_by ? (
-                                <span className="px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 select-none" title={`Firmado por ${rec.signed_by} el ${rec.signed_at ? new Date(rec.signed_at).toLocaleString('es-CL') : ''}`}>
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  FIRMADO
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setSignPreviewRecord(rec)}
-                                  className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-violet-500 bg-violet-500 hover:bg-violet-600 text-white flex items-center gap-1"
-                                  title="Firmar este despacho digitalmente"
-                                >
-                                  <PenTool className="w-3.5 h-3.5" />
-                                  FIRMAR
-                                </button>
-                              )
+                            {/* BOTÓN FIRMAR (Todos los usuarios) */}
+                            {rec.signed_by ? (
+                              <span className="px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 select-none" title={`Firmado por ${rec.signed_by} (${rec.signed_by_title || 'Supervisor'}) el ${rec.signed_at ? new Date(rec.signed_at).toLocaleString('es-CL') : ''}`}>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                FIRMADO
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setSignPreviewRecord(rec)}
+                                className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-violet-500 bg-violet-500 hover:bg-violet-600 text-white flex items-center gap-1"
+                                title="Firmar este despacho digitalmente"
+                              >
+                                <PenTool className="w-3.5 h-3.5" />
+                                FIRMAR
+                              </button>
                             )}
 
                             <button
@@ -3583,11 +3608,12 @@ export default function App({ user }: { user: any }) {
                             </select>
                           </div>
                           <div className="sm:col-span-2">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Notas</label>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Cargo para Firma (Notas)</label>
                             <input
                               type="text"
                               value={editingUser.notes}
                               onChange={e => setEditingUser({ ...editingUser, notes: e.target.value })}
+                              placeholder="Ej: Supervisor de Despacho, Jefe de Turno"
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400"
                             />
                           </div>
@@ -3621,7 +3647,11 @@ export default function App({ user }: { user: any }) {
                               {!u.is_active && <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">INACTIVO</span>}
                             </div>
                             <span className="text-xs text-slate-400 font-mono">{u.email}</span>
-                            {u.notes && <p className="text-[10px] text-slate-400 mt-0.5">{u.notes}</p>}
+                            {u.notes ? (
+                              <p className="text-[11px] text-violet-600 font-bold mt-0.5">Cargo: {u.notes}</p>
+                            ) : (
+                              <p className="text-[10px] text-slate-400 italic mt-0.5">Sin cargo para firma asignado</p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -4827,6 +4857,12 @@ export default function App({ user }: { user: any }) {
               <button type="button" onClick={() => setShowSignaturePad(false)} className="p-2 hover:bg-slate-100 rounded-xl cursor-pointer"><X className="w-5 h-5 text-slate-500" /></button>
             </div>
 
+            {/* Indicador de Cargo */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-500 uppercase text-[10px]">Cargo registrado:</span>
+              <span className="font-black text-violet-700">{userTitle || (isAdmin ? 'Administrador' : isShiftLeader ? 'Jefe de Turno' : 'Supervisor')}</span>
+            </div>
+
             {/* Canvas */}
             <div className="border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 overflow-hidden" style={{ touchAction: 'none' }}>
               <canvas
@@ -4948,8 +4984,8 @@ export default function App({ user }: { user: any }) {
                     <div className="flex items-end justify-between gap-4 flex-wrap">
                       <div>
                         <img src={userSignature} alt="Mi firma" className="h-16 object-contain mb-2" />
-                        <p className="text-sm font-black text-slate-800">{supervisorName}</p>
-                        <p className="text-xs text-slate-500">Jefe de Turno · {new Date().toLocaleDateString('es-CL')} {new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="text-sm font-black text-slate-800">{userDisplayName || supervisorName}</p>
+                        <p className="text-xs text-slate-500"><strong className="text-violet-700 font-extrabold">{userTitle || (isAdmin ? 'Administrador' : isShiftLeader ? 'Jefe de Turno' : 'Supervisor')}</strong> · {new Date().toLocaleDateString('es-CL')} {new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                       <button
                         type="button"
