@@ -2127,25 +2127,34 @@ export default function App({ user }: { user: any }) {
                   </span>
                 </div>
 
-                {/* Diagrama Camión Cenital Responsivo */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-2.5 sm:p-4 overflow-hidden">
+                {/* Diagrama Camión Cenital Compacto y Realista */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-1.5 sm:p-3 overflow-hidden">
                   <div className="w-full flex items-center justify-center">
                     
-                    {/* CABINA DE CAMIÓN (Izquierda) */}
-                    <div className="relative w-12 sm:w-20 h-32 sm:h-36 bg-gradient-to-r from-slate-200 to-slate-300 rounded-l-xl sm:rounded-l-2xl border-2 border-r-0 border-slate-400 shadow-sm flex items-center justify-center shrink-0">
-                      {/* Parabrisas y detalles cabina */}
-                      <div className="w-3 sm:w-5 h-20 sm:h-24 bg-slate-700/80 rounded-r border border-slate-500 flex items-center justify-center">
-                        <span className="text-[7px] sm:text-[8px] font-black text-slate-300 transform -rotate-90 tracking-widest uppercase">
+                    {/* CABINA DE CAMIÓN REALISTA (Izquierda) */}
+                    <div className="relative w-10 sm:w-16 h-28 sm:h-34 bg-gradient-to-r from-slate-400 via-slate-300 to-slate-200 rounded-l-[1.2rem] sm:rounded-l-[2rem] border-2 border-r-0 border-slate-500 shadow-sm flex items-center justify-center shrink-0">
+                      {/* Faros delanteros superiores e inferiores */}
+                      <div className="absolute top-1 left-1.5 w-1.5 sm:w-2 h-1 bg-amber-300 rounded-full shadow-[0_0_4px_rgba(252,211,77,0.9)]"></div>
+                      <div className="absolute bottom-1 left-1.5 w-1.5 sm:w-2 h-1 bg-amber-300 rounded-full shadow-[0_0_4px_rgba(252,211,77,0.9)]"></div>
+
+                      {/* Parabrisas y reflejo cristal */}
+                      <div className="w-3 sm:w-5 h-16 sm:h-22 bg-slate-900 rounded-r-lg border border-cyan-500/40 relative overflow-hidden flex items-center justify-center shadow-inner">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/20 via-transparent to-white/10"></div>
+                        <span className="text-[6.5px] sm:text-[8px] font-black text-slate-300 transform -rotate-90 tracking-widest uppercase select-none">
                           CAB
                         </span>
                       </div>
-                      {/* Espejos */}
-                      <div className="absolute -top-2 left-2 sm:left-4 w-2 sm:w-2.5 h-1.5 sm:h-2 bg-slate-400 border border-slate-500 rounded-t"></div>
-                      <div className="absolute -bottom-2 left-2 sm:left-4 w-2 sm:w-2.5 h-1.5 sm:h-2 bg-slate-400 border border-slate-500 rounded-b"></div>
+
+                      {/* Espejos retrovisores realistas */}
+                      <div className="absolute -top-2 left-2 sm:left-4 w-2 sm:w-3 h-1.5 sm:h-2 bg-slate-700 border border-slate-500 rounded-t-md shadow-2xs"></div>
+                      <div className="absolute -bottom-2 left-2 sm:left-4 w-2 sm:w-3 h-1.5 sm:h-2 bg-slate-700 border border-slate-500 rounded-b-md shadow-2xs"></div>
                     </div>
 
+                    {/* CONECTOR / FUELLE ENTRE CABINA Y CARROCERÍA */}
+                    <div className="w-1 h-20 sm:h-24 bg-slate-600 rounded-xs shrink-0 z-10 shadow-inner"></div>
+
                     {/* CARROCERÍA / FURGÓN TÉRMICO (Derecha con 3 zonas) */}
-                    <div className="flex-1 h-32 sm:h-36 bg-slate-300 border-2 border-slate-400 rounded-r-xl p-1.5 sm:p-2.5 flex gap-1.5 sm:gap-3 shadow-inner relative min-w-0">
+                    <div className="flex-1 h-28 sm:h-34 bg-slate-300 border-2 border-slate-400 rounded-r-xl p-1 sm:p-2 flex gap-1 sm:gap-2.5 shadow-inner relative min-w-0">
                       
                       {/* POSICIÓN 1 (Izquierda / 1er Termo) */}
                       <button
@@ -2156,30 +2165,30 @@ export default function App({ user }: { user: any }) {
                             ? 'bg-sky-500 border-sky-400 text-white shadow-sky-500/30'
                             : 'bg-emerald-600 border-emerald-500 text-white shadow-emerald-500/30'
                         }`}
-                        title="Haz clic para cambiar temperatura"
+                        title="Haz clic para alternar entre 0°C y -18°C"
                       >
-                        <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-tight truncate w-full text-center">
+                        <span className="text-[7.5px] sm:text-[9.5px] font-black uppercase tracking-tight truncate w-full text-center">
                           Pos. 1 (Frente)
                         </span>
                         
                         <div className="text-center my-0.5">
-                          <span className="text-base sm:text-2xl font-black font-mono tracking-tight block">
+                          <span className="text-sm sm:text-2xl font-black font-mono tracking-tight block leading-none">
                             {temp1er > 0 ? `+${temp1er}` : temp1er}°C
                           </span>
-                          <span className="text-[7.5px] sm:text-[9px] font-extrabold uppercase px-1 sm:px-2 py-0.5 rounded-full bg-white/20 inline-block mt-0.5">
+                          <span className="text-[7px] sm:text-[8.5px] font-extrabold uppercase px-1 sm:px-2 py-0.5 rounded-full bg-white/20 inline-block mt-0.5">
                             {temp1er <= -9 ? '❄️ Congel' : '🥬 Refri'}
                           </span>
                         </div>
 
                         {/* Direct input option */}
-                        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5 sm:gap-1 bg-black/20 rounded-md sm:rounded-lg px-1 sm:px-1.5 py-0.5">
+                        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5 sm:gap-1 bg-black/20 rounded px-1 py-0.5">
                           <input
                             type="number"
                             value={temp1er}
                             onChange={(e) => setTemp1er(parseInt(e.target.value) || 0)}
-                            className="w-8 sm:w-10 bg-white text-slate-900 text-[10px] sm:text-xs font-mono font-black text-center rounded py-0.5 focus:outline-none"
+                            className="w-7 sm:w-10 bg-white text-slate-900 text-[9px] sm:text-xs font-mono font-black text-center rounded py-0 focus:outline-none"
                           />
-                          <span className="text-[8px] sm:text-[9px] font-bold">°C</span>
+                          <span className="text-[7.5px] sm:text-[9px] font-bold">°C</span>
                         </div>
                       </button>
 
@@ -2192,30 +2201,30 @@ export default function App({ user }: { user: any }) {
                             ? 'bg-sky-500 border-sky-400 text-white shadow-sky-500/30'
                             : 'bg-emerald-600 border-emerald-500 text-white shadow-emerald-500/30'
                         }`}
-                        title="Haz clic para cambiar temperatura"
+                        title="Haz clic para alternar entre 0°C y -18°C"
                       >
-                        <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-tight truncate w-full text-center">
+                        <span className="text-[7.5px] sm:text-[9.5px] font-black uppercase tracking-tight truncate w-full text-center">
                           Pos. 2 (Centro)
                         </span>
                         
                         <div className="text-center my-0.5">
-                          <span className="text-base sm:text-2xl font-black font-mono tracking-tight block">
+                          <span className="text-sm sm:text-2xl font-black font-mono tracking-tight block leading-none">
                             {temp2do > 0 ? `+${temp2do}` : temp2do}°C
                           </span>
-                          <span className="text-[7.5px] sm:text-[9px] font-extrabold uppercase px-1 sm:px-2 py-0.5 rounded-full bg-white/20 inline-block mt-0.5">
+                          <span className="text-[7px] sm:text-[8.5px] font-extrabold uppercase px-1 sm:px-2 py-0.5 rounded-full bg-white/20 inline-block mt-0.5">
                             {temp2do <= -9 ? '❄️ Congel' : '🥬 Refri'}
                           </span>
                         </div>
 
                         {/* Direct input option */}
-                        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5 sm:gap-1 bg-black/20 rounded-md sm:rounded-lg px-1 sm:px-1.5 py-0.5">
+                        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5 sm:gap-1 bg-black/20 rounded px-1 py-0.5">
                           <input
                             type="number"
                             value={temp2do}
                             onChange={(e) => setTemp2do(parseInt(e.target.value) || 0)}
-                            className="w-8 sm:w-10 bg-white text-slate-900 text-[10px] sm:text-xs font-mono font-black text-center rounded py-0.5 focus:outline-none"
+                            className="w-7 sm:w-10 bg-white text-slate-900 text-[9px] sm:text-xs font-mono font-black text-center rounded py-0 focus:outline-none"
                           />
-                          <span className="text-[8px] sm:text-[9px] font-bold">°C</span>
+                          <span className="text-[7.5px] sm:text-[9px] font-bold">°C</span>
                         </div>
                       </button>
 
@@ -2228,30 +2237,30 @@ export default function App({ user }: { user: any }) {
                             ? 'bg-sky-500 border-sky-400 text-white shadow-sky-500/30'
                             : 'bg-emerald-600 border-emerald-500 text-white shadow-emerald-500/30'
                         }`}
-                        title="Haz clic para cambiar temperatura"
+                        title="Haz clic para alternar entre 0°C y -18°C"
                       >
-                        <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-tight truncate w-full text-center">
+                        <span className="text-[7.5px] sm:text-[9.5px] font-black uppercase tracking-tight truncate w-full text-center">
                           Pos. 3 (Atrás)
                         </span>
                         
                         <div className="text-center my-0.5">
-                          <span className="text-base sm:text-2xl font-black font-mono tracking-tight block">
+                          <span className="text-sm sm:text-2xl font-black font-mono tracking-tight block leading-none">
                             {temp3er > 0 ? `+${temp3er}` : temp3er}°C
                           </span>
-                          <span className="text-[7.5px] sm:text-[9px] font-extrabold uppercase px-1 sm:px-2 py-0.5 rounded-full bg-white/20 inline-block mt-0.5">
+                          <span className="text-[7px] sm:text-[8.5px] font-extrabold uppercase px-1 sm:px-2 py-0.5 rounded-full bg-white/20 inline-block mt-0.5">
                             {temp3er <= -9 ? '❄️ Congel' : '🥬 Refri'}
                           </span>
                         </div>
 
                         {/* Direct input option */}
-                        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5 sm:gap-1 bg-black/20 rounded-md sm:rounded-lg px-1 sm:px-1.5 py-0.5">
+                        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5 sm:gap-1 bg-black/20 rounded px-1 py-0.5">
                           <input
                             type="number"
                             value={temp3er}
                             onChange={(e) => setTemp3er(parseInt(e.target.value) || 0)}
-                            className="w-8 sm:w-10 bg-white text-slate-900 text-[10px] sm:text-xs font-mono font-black text-center rounded py-0.5 focus:outline-none"
+                            className="w-7 sm:w-10 bg-white text-slate-900 text-[9px] sm:text-xs font-mono font-black text-center rounded py-0 focus:outline-none"
                           />
-                          <span className="text-[8px] sm:text-[9px] font-bold">°C</span>
+                          <span className="text-[7.5px] sm:text-[9px] font-bold">°C</span>
                         </div>
                       </button>
 
