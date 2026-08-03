@@ -1662,8 +1662,36 @@ export default function App({ user }: { user: any }) {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Estado Poka-Yoke: Advertencia por datos faltantes del camión
+  const [missingFieldsAlert, setMissingFieldsAlert] = useState<string[] | null>(null);
+
+  const getMissingDispatchData = (): string[] => {
+    const missing: string[] = [];
+
+    if (!truckNumber || !truckNumber.trim()) {
+      missing.push('N° de Camión');
+    }
+    if (!truckPlate || !truckPlate.trim()) {
+      missing.push('Patente del Camión');
+    }
+    if (!truckAnden || !truckAnden.trim()) {
+      missing.push('N° de Andén');
+    }
+    if (!truckKilos || (typeof truckKilos === 'string' && !truckKilos.trim())) {
+      missing.push('Kilos Totales del Camión');
+    }
+
+    selectedZonals.forEach((z) => {
+      if (!z.sello || !z.sello.trim()) {
+        missing.push(`N° de Sello en Zonal "${z.zonal_name}"`);
+      }
+    });
+
+    return missing;
+  };
+
+  const handleSubmit = async (e?: React.FormEvent, forceConfirm = false) => {
+    if (e) e.preventDefault();
     if (!supervisorName) {
       alert("Por favor ingresa el nombre del Supervisor.");
       return;
@@ -1672,6 +1700,17 @@ export default function App({ user }: { user: any }) {
       alert("Por favor agrega al menos un Zonal.");
       return;
     }
+
+    // Poka-Yoke: Advertencia por datos faltantes del camión
+    if (!forceConfirm) {
+      const missing = getMissingDispatchData();
+      if (missing.length > 0) {
+        setMissingFieldsAlert(missing);
+        return;
+      }
+    }
+
+    setMissingFieldsAlert(null);
 
     setLoading(true);
     setErrorMsg(null);
@@ -5094,6 +5133,67 @@ export default function App({ user }: { user: any }) {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* MODAL POKA-YOKE: ADVERTENCIA DATOS INCOMPLETOS       */}
+      {/* ══════════════════════════════════════════════════════ */}
+      {missingFieldsAlert && (
+        <div className="fixed inset-0 z-[99999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-7 space-y-5 border-2 border-amber-400">
+            
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-300 text-amber-600 flex items-center justify-center shrink-0 shadow-sm">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                  ⚠️ Poka-Yoke: Datos Incompletos del Camión
+                </h3>
+                <p className="text-xs font-semibold text-slate-500 mt-1">
+                  Se detectaron los siguientes datos faltantes antes de registrar el despacho:
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 space-y-2">
+              <span className="text-[11px] font-black uppercase text-amber-800 tracking-wider block">
+                Campos no ingresados:
+              </span>
+              <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {missingFieldsAlert.map((field, idx) => (
+                  <li key={idx} className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-white border border-amber-200 rounded-xl px-3 py-2 shadow-2xs">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                    <span>{field}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <p className="text-xs font-semibold text-slate-600 text-center">
+              ¿Deseas volver atrás para completar los datos o prefieres continuar y confirmar el despacho de todas formas?
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setMissingFieldsAlert(null)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-2xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 border border-slate-300"
+              >
+                ✏️ VOLVER Y COMPLETAR
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSubmit(undefined, true)}
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-2xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 shadow-md"
+              >
+                ⚠️ CONTINUAR Y CONFIRMAR
+              </button>
+            </div>
+
           </div>
         </div>
       )}
