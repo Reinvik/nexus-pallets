@@ -2140,8 +2140,8 @@ export default function App({ user }: { user: any }) {
                       {/* Parabrisas y reflejo cristal */}
                       <div className="w-3 sm:w-5 h-16 sm:h-22 bg-slate-900 rounded-r-lg border border-cyan-500/40 relative overflow-hidden flex items-center justify-center shadow-inner">
                         <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/20 via-transparent to-white/10"></div>
-                        <span className="text-[6.5px] sm:text-[8px] font-black text-slate-300 transform -rotate-90 tracking-widest uppercase select-none">
-                          CAB
+                        <span className="text-[5.5px] sm:text-[7.5px] font-black text-slate-300 transform -rotate-90 tracking-wider uppercase select-none">
+                          CABINA
                         </span>
                       </div>
 
