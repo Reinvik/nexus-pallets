@@ -4662,13 +4662,8 @@ export default function App({ user }: { user: any }) {
                             card.status === 'ON_TIME' ? 'bg-emerald-500' : card.status === 'LATE' ? 'bg-rose-500' : card.status === 'OVERDUE' ? 'bg-rose-600 animate-pulse' : 'bg-amber-400'
                           }`} />
                           <div>
-                            <h3 className="font-black text-slate-900 text-base uppercase tracking-tight flex items-center gap-2">
-                              {card.zonalName}
-                              {card.viajeNumero > 1 && (
-                                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold border border-slate-200">
-                                  Viaje {card.viajeNumero}
-                                </span>
-                              )}
+                            <h3 className="font-black text-slate-900 text-base uppercase tracking-tight">
+                              {card.zonalName} {card.viajeNumero > 1 ? card.viajeNumero : ''}
                             </h3>
                             <span className="text-xs text-slate-500 font-bold block">
                               Meta Cierre: <strong className="text-slate-800 font-mono">{card.targetTime} hrs</strong>
@@ -6218,12 +6213,7 @@ export default function App({ user }: { user: any }) {
                     }`} />
                     <div>
                       <h2 className="text-xl font-black uppercase tracking-wider text-white">
-                        {card.zonalName}
-                        {card.viajeNumero > 1 && (
-                          <span className="text-xs bg-white/10 text-amber-300 ml-2 px-2.5 py-0.5 rounded-full font-bold">
-                            Viaje {card.viajeNumero}
-                          </span>
-                        )}
+                        {card.zonalName} {card.viajeNumero > 1 ? card.viajeNumero : ''}
                       </h2>
                       <span className="text-xs text-slate-400 font-mono font-bold">
                         Meta Cierre: <strong className="text-amber-400">{card.targetTime} hrs</strong>
@@ -6335,7 +6325,7 @@ export default function App({ user }: { user: any }) {
                 <div key={item.id || `${item.zonal_name}-${item.viaje_numero}`} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
                   <div>
                     <span className="font-black text-xs text-slate-800 uppercase">
-                      {item.zonal_name} {item.viaje_numero > 1 ? `(Viaje ${item.viaje_numero})` : ''}
+                      {item.zonal_name} {item.viaje_numero > 1 ? item.viaje_numero : ''}
                     </span>
                     <span className="text-[10px] text-slate-400 font-bold block">
                       Viaje N° {item.viaje_numero}
