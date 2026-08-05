@@ -4468,27 +4468,31 @@ export default function App({ user }: { user: any }) {
 
           const dayDispatches = records.filter(r => r.inspection_date === departuresDate);
 
-          const departureCards = zonalTargetTimes.map((target) => {
-            let matchedDispatch: DispatchRecord | null = null;
-            let matchedZonalDetail: any = null;
+          // Extraer únicamente las zonales agregadas a camiones de despacho para el día seleccionado
+          const activeZonalEntries = new Map<string, { zonalName: string; viajeNumero: number; matchedDispatch: DispatchRecord; matchedZonalDetail: any }>();
 
-            for (const rec of dayDispatches) {
-              for (const z of rec.zonals_detail) {
-                const baseName = getBaseZonalName(z.zonal_name);
-                const viajeNum = z.viaje_numero || 1;
-                if (
-                  (baseName === target.zonal_name || z.zonal_name === target.zonal_name) &&
-                  viajeNum === target.viaje_numero
-                ) {
-                  matchedDispatch = rec;
-                  matchedZonalDetail = z;
-                  break;
-                }
+          dayDispatches.forEach(rec => {
+            (rec.zonals_detail || []).forEach(z => {
+              const baseName = getBaseZonalName(z.zonal_name);
+              const viajeNum = z.viaje_numero || 1;
+              const key = `${baseName}-${viajeNum}`;
+              if (!activeZonalEntries.has(key)) {
+                activeZonalEntries.set(key, {
+                  zonalName: baseName,
+                  viajeNumero: viajeNum,
+                  matchedDispatch: rec,
+                  matchedZonalDetail: z
+                });
               }
-              if (matchedDispatch) break;
-            }
+            });
+          });
 
-            const targetTime = target.target_time;
+          const departureCards = Array.from(activeZonalEntries.values()).map(({ zonalName, viajeNumero, matchedDispatch, matchedZonalDetail }) => {
+            const targetConfig = zonalTargetTimes.find(t => t.zonal_name === zonalName && t.viaje_numero === viajeNumero)
+              || zonalTargetTimes.find(t => t.zonal_name === zonalName)
+              || { target_time: '18:00' };
+
+            const targetTime = targetConfig.target_time;
             const isClosed = !!matchedDispatch;
             const actualTime = matchedDispatch ? (matchedDispatch.inspection_time || matchedDispatch.created_at.slice(11, 16)) : null;
 
@@ -4507,9 +4511,9 @@ export default function App({ user }: { user: any }) {
             }
 
             return {
-              id: target.id || `${target.zonal_name}-${target.viaje_numero}`,
-              zonalName: target.zonal_name,
-              viajeNumero: target.viaje_numero,
+              id: `${zonalName}-${viajeNumero}`,
+              zonalName,
+              viajeNumero,
               targetTime,
               isClosed,
               actualTime,
@@ -4617,7 +4621,27 @@ export default function App({ user }: { user: any }) {
               </div>
 
               {/* GRID DE ZONALES / TARJETAS DE SALIDA */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {departureCards.length === 0 ? (
+                <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-8 text-center space-y-3 select-none">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-black text-slate-800">
+                    No hay zonales asignadas a camiones para la fecha {departuresDate}
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto font-medium">
+                    Las zonales se activarán automáticamente en este monitor con su cuenta regresiva una vez que se agreguen en un despacho en la pestaña <strong>"Despacho Camión"</strong>.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('nuevo')}
+                    className="px-4 py-2 bg-brand-primary hover:bg-brand-secondary text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95 inline-flex items-center gap-1.5"
+                  >
+                    <ClipboardList className="w-4 h-4" /> IR A REGISTRAR DESPACHO
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {departureCards.map((card) => {
                   return (
                     <div
@@ -4713,7 +4737,8 @@ export default function App({ user }: { user: any }) {
                   );
                 })}
               </div>
-            </div>
+            )}
+          </div>
           );
         })()}
 
@@ -6020,24 +6045,30 @@ export default function App({ user }: { user: any }) {
       {isTvMonitorMode && (() => {
         const dayDispatches = records.filter(r => r.inspection_date === departuresDate);
         
-        const departureCards = zonalTargetTimes.map((target) => {
-          let matchedDispatch: DispatchRecord | null = null;
-          for (const rec of dayDispatches) {
-            for (const z of rec.zonals_detail) {
-              const baseName = getBaseZonalName(z.zonal_name);
-              const viajeNum = z.viaje_numero || 1;
-              if (
-                (baseName === target.zonal_name || z.zonal_name === target.zonal_name) &&
-                viajeNum === target.viaje_numero
-              ) {
-                matchedDispatch = rec;
-                break;
-              }
-            }
-            if (matchedDispatch) break;
-          }
+        const activeZonalEntries = new Map<string, { zonalName: string; viajeNumero: number; matchedDispatch: DispatchRecord; matchedZonalDetail: any }>();
 
-          const targetTime = target.target_time;
+        dayDispatches.forEach(rec => {
+          (rec.zonals_detail || []).forEach(z => {
+            const baseName = getBaseZonalName(z.zonal_name);
+            const viajeNum = z.viaje_numero || 1;
+            const key = `${baseName}-${viajeNum}`;
+            if (!activeZonalEntries.has(key)) {
+              activeZonalEntries.set(key, {
+                zonalName: baseName,
+                viajeNumero: viajeNum,
+                matchedDispatch: rec,
+                matchedZonalDetail: z
+              });
+            }
+          });
+        });
+
+        const departureCards = Array.from(activeZonalEntries.values()).map(({ zonalName, viajeNumero, matchedDispatch }) => {
+          const targetConfig = zonalTargetTimes.find(t => t.zonal_name === zonalName && t.viaje_numero === viajeNumero)
+            || zonalTargetTimes.find(t => t.zonal_name === zonalName)
+            || { target_time: '18:00' };
+
+          const targetTime = targetConfig.target_time;
           const isClosed = !!matchedDispatch;
           const actualTime = matchedDispatch ? (matchedDispatch.inspection_time || matchedDispatch.created_at.slice(11, 16)) : null;
 
@@ -6074,9 +6105,9 @@ export default function App({ user }: { user: any }) {
           }
 
           return {
-            id: target.id || `${target.zonal_name}-${target.viaje_numero}`,
-            zonalName: target.zonal_name,
-            viajeNumero: target.viaje_numero,
+            id: `${zonalName}-${viajeNumero}`,
+            zonalName,
+            viajeNumero,
             targetTime,
             isClosed,
             actualTime,
