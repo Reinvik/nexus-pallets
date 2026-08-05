@@ -226,7 +226,7 @@ export default function App({ user }: { user: any }) {
   const isSuperAdmin = (user?.email || '').toLowerCase() === 'ariel.mella@cial.cl';
 
   // Estado módulo gestión de usuarios
-  type PalletUser = { id: string; email: string; display_name: string; role: string; is_active: boolean; notes: string; };
+  type PalletUser = { id: string; email: string; display_name: string; role: string; is_active: boolean; can_sign?: boolean; notes: string; };
   const [palletUsers, setPalletUsers] = useState<PalletUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [editingUser, setEditingUser] = useState<PalletUser | null>(null);
@@ -235,6 +235,7 @@ export default function App({ user }: { user: any }) {
   const [newUserName, setNewUserName] = useState('');
   const [newUserRole, setNewUserRole] = useState('supervisor');
   const [newUserNotes, setNewUserNotes] = useState('');
+  const [newUserCanSign, setNewUserCanSign] = useState(true);
   const [savingUser, setSavingUser] = useState(false);
 
   const fetchPalletUsers = async () => {
@@ -257,15 +258,24 @@ export default function App({ user }: { user: any }) {
   const handleSaveUser = async (u: PalletUser) => {
     setSavingUser(true);
     try {
+      const canSignVal = u.can_sign !== false;
       const { error } = await supabase
         .from('pallet_users')
-        .update({ display_name: u.display_name, role: u.role, is_active: u.is_active, notes: u.notes, updated_at: new Date().toISOString() })
+        .update({ 
+          display_name: u.display_name, 
+          role: u.role, 
+          is_active: u.is_active, 
+          can_sign: canSignVal, 
+          notes: u.notes, 
+          updated_at: new Date().toISOString() 
+        })
         .eq('id', u.id);
       if (error) throw error;
       setPalletUsers(prev => prev.map(p => p.id === u.id ? u : p));
       if (u.email.toLowerCase() === (user?.email || '').toLowerCase()) {
         setUserTitle(u.notes?.trim() || null);
         setUserDisplayName(u.display_name);
+        setUserCanSign(canSignVal);
       }
       setEditingUser(null);
       setSuccessMsg(`Usuario ${u.display_name} actualizado.`);
@@ -281,17 +291,43 @@ export default function App({ user }: { user: any }) {
     await handleSaveUser(updated);
   };
 
+  const handleToggleUserCanSign = async (u: PalletUser) => {
+    const newCanSign = u.can_sign === false ? true : false;
+    const updated = { ...u, can_sign: newCanSign };
+    try {
+      const { error } = await supabase
+        .from('pallet_users')
+        .update({ can_sign: newCanSign, updated_at: new Date().toISOString() })
+        .eq('id', u.id);
+      if (error) throw error;
+      setPalletUsers(prev => prev.map(p => p.id === u.id ? updated : p));
+      if (u.email.toLowerCase() === (user?.email || '').toLowerCase()) {
+        setUserCanSign(newCanSign);
+      }
+      setSuccessMsg(`Permiso de firma para ${u.display_name} ${newCanSign ? 'habilitado ✍️' : 'deshabilitado (Facturador) 🚫'}.`);
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  };
+
   const handleCreateUser = async () => {
     if (!newUserEmail || !newUserName) { alert('Email y nombre son requeridos.'); return; }
     setSavingUser(true);
     try {
       const { error } = await supabase
         .from('pallet_users')
-        .insert({ email: newUserEmail.toLowerCase().trim(), display_name: newUserName.trim(), role: newUserRole, is_active: true, notes: newUserNotes.trim() });
+        .insert({ 
+          email: newUserEmail.toLowerCase().trim(), 
+          display_name: newUserName.trim(), 
+          role: newUserRole, 
+          is_active: true, 
+          can_sign: newUserCanSign, 
+          notes: newUserNotes.trim() 
+        });
       if (error) throw error;
       setSuccessMsg(`Usuario ${newUserName} creado exitosamente.`);
       setShowNewUserForm(false);
-      setNewUserEmail(''); setNewUserName(''); setNewUserRole('supervisor'); setNewUserNotes('');
+      setNewUserEmail(''); setNewUserName(''); setNewUserRole('supervisor'); setNewUserNotes(''); setNewUserCanSign(true);
       fetchPalletUsers();
     } catch (err: any) {
       alert('Error: ' + err.message);
@@ -312,6 +348,7 @@ export default function App({ user }: { user: any }) {
   const [userSignature, setUserSignature] = useState<string | null>(null); // firma guardada del usuario
   const [userTitle, setUserTitle] = useState<string | null>(null); // cargo (notas de pallet_users)
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
+  const [userCanSign, setUserCanSign] = useState<boolean>(true); // Permiso para firmar despachos
   const [signingInProgress, setSigningInProgress] = useState(false);
 
   // Canvas para dibujar firma en perfil
@@ -326,7 +363,7 @@ export default function App({ user }: { user: any }) {
     try {
       const { data } = await supabase
         .from('pallet_users')
-        .select('signature_b64, notes, display_name, role')
+        .select('signature_b64, notes, display_name, role, can_sign')
         .eq('email', (user.email || '').toLowerCase())
         .single();
       if (data) {
@@ -336,6 +373,7 @@ export default function App({ user }: { user: any }) {
           setUserTitle(data.role === 'admin' ? 'Administrador' : data.role === 'jefe_turno' ? 'Jefe de Turno' : 'Supervisor');
         }
         if (data.display_name) setUserDisplayName(data.display_name);
+        setUserCanSign(data.can_sign !== false);
       }
     } catch {}
   };
@@ -3261,13 +3299,13 @@ export default function App({ user }: { user: any }) {
                                 ) : null;
                               })()}
 
-                            {/* BOTÓN FIRMAR (Todos los usuarios) */}
+                            {/* BOTÓN FIRMAR (Sujeto a permiso can_sign) */}
                             {rec.signed_by ? (
                               <span className="px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 select-none" title={`Firmado por ${rec.signed_by} (${rec.signed_by_title || 'Supervisor'}) el ${rec.signed_at ? new Date(rec.signed_at).toLocaleString('es-CL') : ''}`}>
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 FIRMADO
                               </span>
-                            ) : (
+                            ) : userCanSign !== false ? (
                               <button
                                 type="button"
                                 onClick={() => setSignPreviewRecord(rec)}
@@ -3277,6 +3315,10 @@ export default function App({ user }: { user: any }) {
                                 <PenTool className="w-3.5 h-3.5" />
                                 FIRMAR
                               </button>
+                            ) : (
+                              <span className="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed select-none flex items-center gap-1" title="Tu usuario no tiene permiso para firmar despachos (Facturador)">
+                                🚫 Sin Permiso Firma
+                              </span>
                             )}
 
                             <button
@@ -3743,14 +3785,25 @@ export default function App({ user }: { user: any }) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Notas</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cargo para Firma (Notas)</label>
                     <input
                       type="text"
                       value={newUserNotes}
                       onChange={e => setNewUserNotes(e.target.value)}
-                      placeholder="Observaciones..."
+                      placeholder="Ej: Facturador, Supervisor"
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400"
                     />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={newUserCanSign}
+                        onChange={e => setNewUserCanSign(e.target.checked)}
+                        className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+                      />
+                      <span>Permitido Firmar Despachos (Marcar si el usuario firma en la app)</span>
+                    </label>
                   </div>
                 </div>
                 <div className="flex gap-2 pt-1">
@@ -3817,15 +3870,27 @@ export default function App({ user }: { user: any }) {
                               <option value="supervisor">🟢 Supervisor</option>
                             </select>
                           </div>
-                          <div className="sm:col-span-2">
+                          <div>
                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Cargo para Firma (Notas)</label>
                             <input
                               type="text"
                               value={editingUser.notes}
                               onChange={e => setEditingUser({ ...editingUser, notes: e.target.value })}
-                              placeholder="Ej: Supervisor de Despacho, Jefe de Turno"
+                              placeholder="Ej: Supervisor de Despacho, Facturador"
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400"
                             />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Permiso para Firmar</label>
+                            <label className="flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={editingUser.can_sign !== false}
+                                onChange={e => setEditingUser({ ...editingUser, can_sign: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+                              />
+                              <span>Permitido Firmar</span>
+                            </label>
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -3860,14 +3925,33 @@ export default function App({ user }: { user: any }) {
                             {u.notes ? (
                               <p className="text-[11px] text-violet-600 font-bold mt-0.5">Cargo: {u.notes}</p>
                             ) : (
-                              <p className="text-[10px] text-slate-400 italic mt-0.5">Sin cargo para firma asignado</p>
+                              <p className="text-[10px] text-slate-400 italic mt-0.5">Sin cargo asignado</p>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
                           <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase ${u.role === 'admin' ? 'bg-rose-100 text-rose-700' : u.role === 'jefe_turno' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                             {u.role === 'admin' ? 'Admin' : u.role === 'jefe_turno' ? 'Jefe Turno' : 'Supervisor'}
                           </span>
+
+                          {/* BOTÓN CONCEDER / QUITAR PERMISO FIRMA */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleUserCanSign(u)}
+                            className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black cursor-pointer active:scale-95 flex items-center gap-1 border transition-all ${
+                              u.can_sign !== false 
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600' 
+                                : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700'
+                            }`}
+                            title={u.can_sign !== false ? 'Clic para quitar permiso de firma (Facturador)' : 'Clic para conceder permiso de firma'}
+                          >
+                            {u.can_sign !== false ? (
+                              <><PenTool className="w-3 h-3 text-emerald-600" /> Puede Firmar</>
+                            ) : (
+                              <><PenTool className="w-3 h-3 text-slate-400 opacity-50" /> 🚫 Sin Firma</>
+                            )}
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => setEditingUser({ ...u })}
