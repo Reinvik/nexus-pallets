@@ -204,6 +204,7 @@ export default function App({ user }: { user: any }) {
   const [records, setRecords] = useState<DispatchRecord[]>([]);
   const [returnsList, setReturnsList] = useState<PalletReturnRecord[]>([]);
   const [expandedRecords, setExpandedRecords] = useState<{ [key: string]: boolean }>({});
+  const [expandedZonalRows, setExpandedZonalRows] = useState<{ [key: string]: boolean }>({});
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
   const [historySubTab, setHistorySubTab] = useState<'camiones' | 'zonales'>('camiones');
   const [historyZonalFilter, setHistoryZonalFilter] = useState<string>('ALL');
@@ -3508,7 +3509,11 @@ export default function App({ user }: { user: any }) {
                     wood,
                     plastic,
                     bandejas,
-                    sello: z.sello || '-'
+                    sello: z.sello || '-',
+                    congelados: z.congelados,
+                    estandar: z.estandar,
+                    bandejasData: z.bandejas,
+                    photos: z.photos || []
                   };
                 });
               });
@@ -3605,71 +3610,239 @@ export default function App({ user }: { user: any }) {
                               <th className="p-3.5">Camión / Patente</th>
                               <th className="p-3.5">Sello</th>
                               <th className="p-3.5">Supervisor</th>
+                              <th className="p-3.5 text-right">Detalle / Fotos</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                            {filteredRows.map((row) => (
-                              <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                                <td className="p-3.5 font-mono text-[11px] whitespace-nowrap">
-                                  <div>{getFormatDate(row.date)}</div>
-                                  <div className="text-[10px] text-slate-400 font-normal">{row.time} hrs</div>
-                                </td>
+                            {filteredRows.map((row) => {
+                              const isExpanded = !!expandedZonalRows[row.id];
+                              return (
+                                <>
+                                  <tr 
+                                    key={row.id} 
+                                    onClick={() => setExpandedZonalRows(prev => ({ ...prev, [row.id]: !prev[row.id] }))}
+                                    className={`hover:bg-slate-50/90 cursor-pointer transition-colors ${isExpanded ? 'bg-slate-50/80' : ''}`}
+                                  >
+                                    <td className="p-3.5 font-mono text-[11px] whitespace-nowrap">
+                                      <div>{getFormatDate(row.date)}</div>
+                                      <div className="text-[10px] text-slate-400 font-normal">{row.time} hrs</div>
+                                    </td>
 
-                                <td className="p-3.5">
-                                  <div className="font-bold text-slate-800 uppercase text-xs">
-                                    {row.zonalName} {row.viajeNumero > 1 ? `(${row.viajeNumero})` : ''}
-                                  </div>
-                                  <div className="text-[10px] text-slate-400 font-normal">{row.lugarCamion}</div>
-                                </td>
+                                    <td className="p-3.5">
+                                      <div className="font-bold text-slate-800 uppercase text-xs">
+                                        {row.zonalName} {row.viajeNumero > 1 ? `(${row.viajeNumero})` : ''}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 font-normal">{row.lugarCamion}</div>
+                                    </td>
 
-                                <td className="p-3.5 text-center">
-                                  <span className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-xs ${
-                                    row.wood > 0 
-                                      ? 'bg-amber-100 text-amber-800 border border-amber-200' 
-                                      : 'text-slate-300 font-normal'
-                                  }`}>
-                                    {row.wood > 0 ? row.wood : '0'}
-                                  </span>
-                                </td>
+                                    <td className="p-3.5 text-center">
+                                      <span className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-xs ${
+                                        row.wood > 0 
+                                          ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                                          : 'text-slate-300 font-normal'
+                                      }`}>
+                                        {row.wood > 0 ? row.wood : '0'}
+                                      </span>
+                                    </td>
 
-                                <td className="p-3.5 text-center">
-                                  <span className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-xs ${
-                                    row.plastic > 0 
-                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
-                                      : 'text-slate-300 font-normal'
-                                  }`}>
-                                    {row.plastic > 0 ? row.plastic : '0'}
-                                  </span>
-                                </td>
+                                    <td className="p-3.5 text-center">
+                                      <span className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-xs ${
+                                        row.plastic > 0 
+                                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                                          : 'text-slate-300 font-normal'
+                                      }`}>
+                                        {row.plastic > 0 ? row.plastic : '0'}
+                                      </span>
+                                    </td>
 
-                                <td className="p-3.5 text-center">
-                                  <span className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-xs ${
-                                    row.bandejas > 0 
-                                      ? 'bg-blue-100 text-blue-800 border border-blue-200' 
-                                      : 'text-slate-300 font-normal'
-                                  }`}>
-                                    {row.bandejas > 0 ? row.bandejas : '0'}
-                                  </span>
-                                </td>
+                                    <td className="p-3.5 text-center">
+                                      <span className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-xs ${
+                                        row.bandejas > 0 
+                                          ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                                          : 'text-slate-300 font-normal'
+                                      }`}>
+                                        {row.bandejas > 0 ? row.bandejas : '0'}
+                                      </span>
+                                    </td>
 
-                                <td className="p-3.5 text-xs whitespace-nowrap">
-                                  <div className="font-bold text-slate-700">Camión: {row.truckNumber}</div>
-                                  <div className="text-[10px] font-mono text-slate-400 uppercase">{row.truckPlate}</div>
-                                </td>
+                                    <td className="p-3.5 text-xs whitespace-nowrap">
+                                      <div className="font-bold text-slate-700">Camión: {row.truckNumber}</div>
+                                      <div className="text-[10px] font-mono text-slate-400 uppercase">{row.truckPlate}</div>
+                                    </td>
 
-                                <td className="p-3.5 font-mono text-xs text-slate-600">
-                                  {row.sello !== '-' ? (
-                                    <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{row.sello}</span>
-                                  ) : (
-                                    <span className="text-slate-300">—</span>
+                                    <td className="p-3.5 font-mono text-xs text-slate-600">
+                                      {row.sello !== '-' ? (
+                                        <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{row.sello}</span>
+                                      ) : (
+                                        <span className="text-slate-300">—</span>
+                                      )}
+                                    </td>
+
+                                    <td className="p-3.5 text-xs text-slate-500 uppercase font-medium whitespace-nowrap">
+                                      {row.supervisor}
+                                    </td>
+
+                                    <td className="p-3.5 text-right whitespace-nowrap">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setExpandedZonalRows(prev => ({ ...prev, [row.id]: !prev[row.id] }));
+                                        }}
+                                        className={`px-2.5 py-1 rounded-xl text-[10px] font-black transition-all active:scale-95 cursor-pointer border flex items-center gap-1 ml-auto ${
+                                          isExpanded 
+                                            ? 'bg-brand-primary text-white border-brand-primary' 
+                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                      >
+                                        {row.photos.length > 0 && <Camera className="w-3 h-3 text-amber-500" />}
+                                        <span>{isExpanded ? 'Ocultar' : 'Detalles'}</span>
+                                        {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                      </button>
+                                    </td>
+                                  </tr>
+
+                                  {/* FILA DESPLEGABLE CON DETALLES Y FOTOS DEL ZONAL */}
+                                  {isExpanded && (
+                                    <tr key={`${row.id}-details`} className="bg-slate-50/90 border-b border-slate-200">
+                                      <td colSpan={9} className="p-4">
+                                        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
+                                          
+                                          {/* ENCABEZADO DETALLE ZONAL */}
+                                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs font-black uppercase text-brand-primary">
+                                                📍 Zonal: {row.zonalName} {row.viajeNumero > 1 ? `(Viaje ${row.viajeNumero})` : ''}
+                                              </span>
+                                              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
+                                                Lugar: {row.lugarCamion}
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-xs font-mono font-bold text-slate-500">
+                                              <span>Sello: <strong className="text-slate-800">{row.sello}</strong></span>
+                                              <span>Camión N°: <strong className="text-slate-800">{row.truckNumber} ({row.truckPlate})</strong></span>
+                                            </div>
+                                          </div>
+
+                                          {/* TABLA DESGLOSE DE CATEGORÍAS */}
+                                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 select-none">
+                                            {/* CONGELADOS */}
+                                            <div className="bg-sky-50/70 border border-sky-100 rounded-xl p-3 space-y-1.5">
+                                              <div className="flex items-center justify-between text-xs font-black text-sky-900 uppercase border-b border-sky-200/60 pb-1">
+                                                <span>❄️ Congelados</span>
+                                                <span className="font-mono font-black">{(row.congelados?.kilos || 0).toLocaleString('es-CL')} kg</span>
+                                              </div>
+                                              <div className="text-[11px] text-slate-700 space-y-1 font-semibold pt-1">
+                                                <div className="flex justify-between items-center">
+                                                  <span>Pallet Madera:</span>
+                                                  <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-sky-200 text-sky-900">
+                                                    {(row.congelados?.wood_bases || 0) + (row.congelados?.wood_extra || 0)} <span className="text-[9px] text-slate-500 font-normal">(Base: {row.congelados?.wood_bases || 0}, Extra: {row.congelados?.wood_extra || 0})</span>
+                                                  </span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                  <span>Pallet Plástico:</span>
+                                                  <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-sky-200 text-sky-900">
+                                                    {(row.congelados?.plastic_bases || 0) + (row.congelados?.plastic_extra || 0)} <span className="text-[9px] text-slate-500 font-normal">(Base: {row.congelados?.plastic_bases || 0}, Extra: {row.congelados?.plastic_extra || 0})</span>
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            {/* ESTÁNDAR */}
+                                            <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 space-y-1.5">
+                                              <div className="flex items-center justify-between text-xs font-black text-emerald-900 uppercase border-b border-emerald-200/60 pb-1">
+                                                <span>📦 Estándar</span>
+                                                <span className="font-mono font-black">{(row.estandar?.kilos || 0).toLocaleString('es-CL')} kg</span>
+                                              </div>
+                                              <div className="text-[11px] text-slate-700 space-y-1 font-semibold pt-1">
+                                                <div className="flex justify-between items-center">
+                                                  <span>Pallet Madera:</span>
+                                                  <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-emerald-200 text-emerald-900">
+                                                    {(row.estandar?.wood_bases || 0) + (row.estandar?.wood_extra || 0)} <span className="text-[9px] text-slate-500 font-normal">(Base: {row.estandar?.wood_bases || 0}, Extra: {row.estandar?.wood_extra || 0})</span>
+                                                  </span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                  <span>Pallet Plástico:</span>
+                                                  <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-emerald-200 text-emerald-900">
+                                                    {(row.estandar?.plastic_bases || 0) + (row.estandar?.plastic_extra || 0)} <span className="text-[9px] text-slate-500 font-normal">(Base: {row.estandar?.plastic_bases || 0}, Extra: {row.estandar?.plastic_extra || 0})</span>
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            {/* BANDEJAS */}
+                                            <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-3 space-y-1.5">
+                                              <div className="flex items-center justify-between text-xs font-black text-blue-900 uppercase border-b border-blue-200/60 pb-1">
+                                                <span>🍞 Bandejas</span>
+                                                <span className="font-mono font-black">{row.bandejas} un.</span>
+                                              </div>
+                                              <div className="text-[11px] text-slate-700 space-y-1 font-semibold pt-1">
+                                                <div className="flex justify-between items-center">
+                                                  <span>Pallet Madera:</span>
+                                                  <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-blue-200 text-blue-900">
+                                                    {(row.bandejasData?.wood_bases || 0) + (row.bandejasData?.wood_extra || 0)}
+                                                  </span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                  <span>Pallet Plástico:</span>
+                                                  <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-blue-200 text-blue-900">
+                                                    {(row.bandejasData?.plastic_bases || 0) + (row.bandejasData?.plastic_extra || 0)}
+                                                  </span>
+                                                </div>
+                                                {row.bandejasData?.bandejas_formula && (
+                                                  <div className="text-[10px] text-blue-800 font-mono pt-0.5 bg-white/80 p-1 rounded border border-blue-200/60">
+                                                    Fórmula: {row.bandejasData.bandejas_formula}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* GALERÍA DE FOTOS ADJUNTAS DEL ZONAL */}
+                                          <div className="border-t border-slate-100 pt-3">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <span className="text-xs font-black text-slate-700 uppercase flex items-center gap-1.5 select-none">
+                                                <Camera className="w-3.5 h-3.5 text-brand-primary" />
+                                                Fotos Adjuntas de Zonal "{row.zonalName}" ({row.photos.length}):
+                                              </span>
+                                            </div>
+
+                                            {row.photos.length > 0 ? (
+                                              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                                                {row.photos.map((pUrl, pIdx) => (
+                                                  <div 
+                                                    key={pIdx} 
+                                                    className="relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 group cursor-pointer shadow-sm hover:shadow-md transition-all"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setPreviewPhoto(pUrl);
+                                                    }}
+                                                  >
+                                                    <img
+                                                      src={pUrl}
+                                                      alt={`Foto ${pIdx + 1} ${row.zonalName}`}
+                                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                                                      <span className="text-[10px] font-bold text-white opacity-0 group-hover:opacity-100 bg-black/60 px-2 py-0.5 rounded-full transition-opacity">
+                                                        Ampliar 🔍
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            ) : (
+                                              <p className="text-xs text-slate-400 italic">No se adjuntaron fotos para este zonal en la carga del camión.</p>
+                                            )}
+                                          </div>
+
+                                        </div>
+                                      </td>
+                                    </tr>
                                   )}
-                                </td>
-
-                                <td className="p-3.5 text-xs text-slate-500 uppercase font-medium whitespace-nowrap">
-                                  {row.supervisor}
-                                </td>
-                              </tr>
-                            ))}
+                                </>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
