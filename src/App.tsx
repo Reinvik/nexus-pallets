@@ -29,6 +29,7 @@ import {
   UserPlus,
   PenTool,
   Eye,
+  Search,
   CheckCircle2
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
@@ -237,6 +238,7 @@ export default function App({ user }: { user: any }) {
   const [newUserRole, setNewUserRole] = useState('supervisor');
   const [newUserNotes, setNewUserNotes] = useState('');
   const [newUserCanSign, setNewUserCanSign] = useState(true);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
   const [savingUser, setSavingUser] = useState(false);
 
   const fetchPalletUsers = async () => {
@@ -358,15 +360,17 @@ export default function App({ user }: { user: any }) {
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [savingSignature, setSavingSignature] = useState(false);
 
-  // Cargar firma y perfil del usuario actual desde BD
+  // Cargar firma y perfil del usuario actual desde BD (con auto-creación al iniciar sesión)
   const loadUserProfile = async () => {
     if (!user?.email) return;
+    const userEmail = (user.email || '').toLowerCase().trim();
     try {
       const { data } = await supabase
         .from('pallet_users')
         .select('signature_b64, notes, display_name, role, can_sign')
-        .eq('email', (user.email || '').toLowerCase())
-        .single();
+        .eq('email', userEmail)
+        .maybeSingle();
+
       if (data) {
         if (data.signature_b64) setUserSignature(data.signature_b64);
         if (data.notes && data.notes.trim()) setUserTitle(data.notes.trim());
@@ -375,8 +379,33 @@ export default function App({ user }: { user: any }) {
         }
         if (data.display_name) setUserDisplayName(data.display_name);
         setUserCanSign(data.can_sign !== false);
+      } else {
+        // Auto-registra el usuario en pallet_users si creó su cuenta en Auth
+        const meta = user.user_metadata || {};
+        const fallbackName = meta.full_name || meta.name || userEmail.split('@')[0].split('.').map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+        
+        const { data: newUser } = await supabase
+          .from('pallet_users')
+          .insert({
+            email: userEmail,
+            display_name: fallbackName,
+            role: 'supervisor',
+            is_active: true,
+            can_sign: true,
+            notes: ''
+          })
+          .select()
+          .single();
+
+        if (newUser) {
+          setUserDisplayName(newUser.display_name);
+          setUserTitle('Supervisor');
+          setUserCanSign(true);
+        }
       }
-    } catch {}
+    } catch (err) {
+      console.error('Error cargando/auto-registrando perfil:', err);
+    }
   };
 
   useEffect(() => {
@@ -4006,14 +4035,36 @@ export default function App({ user }: { user: any }) {
               </div>
             ) : (
               <div className="space-y-2">
-                {/* Leyenda de roles */}
-                <div className="flex gap-3 text-[10px] font-bold text-slate-400 uppercase px-1 select-none">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>Admin</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>Jefe Turno</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>Supervisor</span>
+                {/* Buscador de usuarios y Leyenda de roles */}
+                <div className="space-y-2 select-none">
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nombre o correo electrónico..."
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-primary text-slate-700 shadow-2xs"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase px-1">
+                    <div className="flex gap-3">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>Admin</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>Jefe Turno</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>Supervisor</span>
+                    </div>
+                    <span>Total: {palletUsers.filter(u => u.display_name.toLowerCase().includes(userSearchQuery.toLowerCase()) || u.email.toLowerCase().includes(userSearchQuery.toLowerCase()) || (u.notes && u.notes.toLowerCase().includes(userSearchQuery.toLowerCase()))).length} usuarios</span>
+                  </div>
                 </div>
 
-                {palletUsers.map(u => (
+                {palletUsers
+                  .filter(u => 
+                    u.display_name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+                    u.email.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+                    (u.notes && u.notes.toLowerCase().includes(userSearchQuery.toLowerCase()))
+                  )
+                  .map(u => (
                   <div
                     key={u.id}
                     className={`bg-white border rounded-2xl p-4 shadow-sm transition-all ${!u.is_active ? 'opacity-50 border-slate-100' : 'border-slate-200'}`}
