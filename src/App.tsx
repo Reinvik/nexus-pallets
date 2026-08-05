@@ -252,7 +252,8 @@ export default function App({ user }: { user: any }) {
         .order('role')
         .order('display_name');
       if (error) throw error;
-      setPalletUsers(data || []);
+      const cialOnlyUsers = (data || []).filter(u => (u.email || '').toLowerCase().endsWith('@cial.cl'));
+      setPalletUsers(cialOnlyUsers);
     } catch (err: any) {
       console.error('Error cargando usuarios:', err);
     } finally {
@@ -317,6 +318,10 @@ export default function App({ user }: { user: any }) {
 
   const handleCreateUser = async () => {
     if (!newUserEmail || !newUserName) { alert('Email y nombre son requeridos.'); return; }
+    if (!newUserEmail.toLowerCase().trim().endsWith('@cial.cl')) {
+      alert('Solo se permite registrar correos del dominio corporativo @cial.cl');
+      return;
+    }
     setSavingUser(true);
     try {
       const { error } = await supabase
@@ -381,8 +386,8 @@ export default function App({ user }: { user: any }) {
         }
         if (data.display_name) setUserDisplayName(data.display_name);
         setUserCanSign(data.can_sign !== false);
-      } else {
-        // Auto-registra el usuario en pallet_users si creó su cuenta en Auth
+      } else if (userEmail.endsWith('@cial.cl')) {
+        // Auto-registra el usuario en pallet_users solo si pertenece al dominio @cial.cl
         const meta = user.user_metadata || {};
         const fallbackName = meta.full_name || meta.name || userEmail.split('@')[0].split('.').map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
         
