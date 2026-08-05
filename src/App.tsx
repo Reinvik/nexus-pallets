@@ -16,6 +16,8 @@ import {
   Award,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   RotateCcw,
   Package,
   LogOut,
@@ -659,7 +661,32 @@ export default function App({ user }: { user: any }) {
 
   // Fotos adjuntas en observaciones (max 10 fotos)
   const [photos, setPhotos] = useState<string[]>([]);
-  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+
+  // Visor de Galería de fotos en tamaño completo con navegación Siguiente/Anterior
+  const [galleryPhotos, setGalleryPhotos] = useState<string[]>([]);
+  const [activePhotoIndex, setActivePhotoIndex] = useState<number>(0);
+
+  const openPhotoGallery = (photosList: string | string[], startIndex: number = 0) => {
+    const list = Array.isArray(photosList) ? photosList : [photosList];
+    if (list.length === 0) return;
+    setGalleryPhotos(list);
+    setActivePhotoIndex(startIndex >= 0 && startIndex < list.length ? startIndex : 0);
+  };
+
+  const closePhotoGallery = () => {
+    setGalleryPhotos([]);
+    setActivePhotoIndex(0);
+  };
+
+  const handleNextPhoto = () => {
+    if (galleryPhotos.length <= 1) return;
+    setActivePhotoIndex(prev => (prev + 1) % galleryPhotos.length);
+  };
+
+  const handlePrevPhoto = () => {
+    if (galleryPhotos.length <= 1) return;
+    setActivePhotoIndex(prev => (prev - 1 + galleryPhotos.length) % galleryPhotos.length);
+  };
 
   // Helper para comprimir imágenes cargadas a JPEG 800px para mantener rendimiento y peso liviano
   const compressImage = (file: File): Promise<string> => {
@@ -2840,7 +2867,7 @@ export default function App({ user }: { user: any }) {
                                         src={imgSrc}
                                         alt={`Zonal ${zonalIndex + 1} Foto ${pIdx + 1}`}
                                         className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                                        onClick={() => setPreviewPhoto(imgSrc)}
+                                        onClick={() => openPhotoGallery(zonal.photos || [], pIdx)}
                                       />
                                       <button
                                         type="button"
@@ -3428,7 +3455,7 @@ export default function App({ user }: { user: any }) {
                                                   src={pUrl}
                                                   alt={`Foto Zonal ${pIdx + 1}`}
                                                   className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                                                  onClick={() => setPreviewPhoto(pUrl)}
+                                                  onClick={() => openPhotoGallery(z.photos || [], pIdx)}
                                                 />
                                               </div>
                                             ))}
@@ -3463,7 +3490,7 @@ export default function App({ user }: { user: any }) {
                                             src={pUrl}
                                             alt={`Respaldo ${pIdx + 1}`}
                                             className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => setPreviewPhoto(pUrl)}
+                                            onClick={() => openPhotoGallery((rec.checklist as any)?.photos || [], pIdx)}
                                           />
                                         </div>
                                       ))}
@@ -3844,7 +3871,7 @@ export default function App({ user }: { user: any }) {
                                                     className="relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 group cursor-pointer shadow-sm hover:shadow-md transition-all"
                                                     onClick={(e) => {
                                                       e.stopPropagation();
-                                                      setPreviewPhoto(pUrl);
+                                                      openPhotoGallery(row.photos, pIdx);
                                                     }}
                                                   >
                                                     <img
@@ -5334,23 +5361,63 @@ export default function App({ user }: { user: any }) {
         </div>
       )}
 
-      {/* MODAL DE VISTA PREVIA DE FOTO EN TAMAÑO COMPLETO */}
-      {previewPhoto && (
+      {/* MODAL DE GALERÍA DE FOTOS EN TAMAÑO COMPLETO CON NAVEGACIÓN */}
+      {galleryPhotos.length > 0 && (
         <div 
-          className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in cursor-pointer select-none"
-          onClick={() => setPreviewPhoto(null)}
+          className="fixed inset-0 z-[999999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in select-none"
+          onClick={closePhotoGallery}
         >
-          <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
-            <img 
-              src={previewPhoto} 
-              alt="Respaldo ampliado" 
-              className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/20"
-            />
+          <div className="relative max-w-5xl w-full max-h-[92vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            
+            {/* CONTENEDOR DE LA IMAGEN CON FLECHAS */}
+            <div className="relative flex items-center justify-center w-full max-h-[82vh]">
+              <img 
+                src={galleryPhotos[activePhotoIndex]} 
+                alt={`Foto ${activePhotoIndex + 1}`} 
+                className="max-w-full max-h-[82vh] object-contain rounded-2xl shadow-2xl border border-white/20 transition-all duration-200"
+              />
+
+              {/* BOTÓN ANTERIOR (FLECHA IZQUIERDA) */}
+              {galleryPhotos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handlePrevPhoto}
+                  className="absolute left-2 sm:-left-6 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-3 rounded-full shadow-2xl cursor-pointer border border-white/30 backdrop-blur-sm transition-all active:scale-95 z-10"
+                  title="Foto anterior (Flecha Izquierda ⬅️)"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+              )}
+
+              {/* BOTÓN SIGUIENTE (FLECHA DERECHA) */}
+              {galleryPhotos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleNextPhoto}
+                  className="absolute right-2 sm:-right-6 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-3 rounded-full shadow-2xl cursor-pointer border border-white/30 backdrop-blur-sm transition-all active:scale-95 z-10"
+                  title="Siguiente foto (Flecha Derecha ➡️)"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              )}
+            </div>
+
+            {/* BARRA INFERIOR CON CONTADOR Y CONSEJO */}
+            <div className="mt-3 flex items-center gap-3 bg-black/60 border border-white/20 px-4 py-1.5 rounded-full text-white text-xs font-bold shadow-lg backdrop-blur-sm">
+              <span>📷 Foto {activePhotoIndex + 1} de {galleryPhotos.length}</span>
+              {galleryPhotos.length > 1 && (
+                <span className="text-[10px] text-slate-300 font-normal border-l border-white/20 pl-3 hidden sm:inline">
+                  Usa las flechas ⬅️ ➡️ del teclado para navegar
+                </span>
+              )}
+            </div>
+
+            {/* BOTÓN CERRAR */}
             <button
               type="button"
-              onClick={() => setPreviewPhoto(null)}
-              className="absolute -top-3 -right-3 bg-rose-600 hover:bg-rose-700 text-white p-2.5 rounded-full shadow-2xl cursor-pointer transition-all active:scale-95 border-2 border-white"
-              title="Cerrar vista previa"
+              onClick={closePhotoGallery}
+              className="absolute -top-4 -right-2 sm:-right-4 bg-rose-600 hover:bg-rose-700 text-white p-2.5 rounded-full shadow-2xl cursor-pointer transition-all active:scale-95 border-2 border-white z-20"
+              title="Cerrar (Esc)"
             >
               <X className="w-5 h-5" />
             </button>
