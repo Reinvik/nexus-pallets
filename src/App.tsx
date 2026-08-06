@@ -328,7 +328,7 @@ export default function App({ user }: { user: any }) {
   const [expandedRecords, setExpandedRecords] = useState<{ [key: string]: boolean }>({});
   const [expandedZonalRows, setExpandedZonalRows] = useState<{ [key: string]: boolean }>({});
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
-  const [historySubTab, setHistorySubTab] = useState<'camiones' | 'zonales'>('camiones');
+  const [historySubTab, setHistorySubTab] = useState<'camiones' | 'zonales' | 'saldos'>('camiones');
   const [historyZonalFilter, setHistoryZonalFilter] = useState<string>('ALL');
 
   // Datos del Formulario actual de Despacho
@@ -2269,15 +2269,6 @@ export default function App({ user }: { user: any }) {
             </span>
           </button>
           <button 
-            onClick={() => { setActiveTab('zonales'); fetchReturns(); }}
-            className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'zonales' ? 'border-brand-primary text-brand-primary bg-emerald-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-          >
-            <span className="flex items-center justify-center gap-2">
-              <Package className="w-4.5 h-4.5" />
-              Saldos Zonales
-            </span>
-          </button>
-          <button 
             onClick={() => { setActiveTab('salidas'); fetchHistory(); fetchZonalTargetTimes(); }}
             className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'salidas' ? 'border-brand-primary text-brand-primary bg-emerald-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
           >
@@ -3369,6 +3360,18 @@ export default function App({ user }: { user: any }) {
                     <Package className="w-3.5 h-3.5 text-brand-emerald" />
                     Reporte por Zonal
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => { setHistorySubTab('saldos'); fetchReturns(); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      historySubTab === 'saldos'
+                        ? 'bg-white text-slate-800 shadow-sm font-black'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Package className="w-3.5 h-3.5 text-amber-600" />
+                    Saldos Zonales
+                  </button>
                 </div>
 
                 <button 
@@ -4148,6 +4151,148 @@ export default function App({ user }: { user: any }) {
                 </div>
               );
             })()}
+
+            {historySubTab === 'saldos' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-black text-slate-800 flex items-center justify-between border-b pb-2 select-none">
+                  <span>Saldos y Retornos de Pallets por Zonal</span>
+                  <button 
+                    onClick={() => { fetchHistory(); fetchReturns(); }}
+                    className="p-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-all active:scale-95 text-slate-600 cursor-pointer shadow-sm"
+                    title="Actualizar Saldos"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </h2>
+
+                {/* LISTA COMPACTA DE SALDOS POR ZONAL CON FECHA DE ÚLTIMO DESPACHO */}
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden select-none">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
+                        <tr>
+                          <th className="p-3.5">Zonal / Región</th>
+                          <th className="p-3.5">Último Despacho Camión</th>
+                          <th className="p-3.5 text-center">Madera Neto</th>
+                          <th className="p-3.5 text-center">Plástico Neto</th>
+                          <th className="p-3.5 text-center">Estado</th>
+                          <th className="p-3.5 text-right">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                        {ZONALES_LIST.map((zonalName) => {
+                          const bal = balances[zonalName] || { wood_sent: 0, plastic_sent: 0, wood_ret: 0, plastic_ret: 0, last_dispatch_date: null };
+                          const woodSaldo = bal.wood_sent - bal.wood_ret;
+                          const plasticSaldo = bal.plastic_sent - bal.plastic_ret;
+                          const hasBalance = woodSaldo > 0 || plasticSaldo > 0;
+                          const lastDateStr = bal.last_dispatch_date ? getFormatDate(bal.last_dispatch_date) : 'Sin envíos';
+
+                          return (
+                            <tr key={zonalName} className={`hover:bg-slate-50/80 transition-colors ${hasBalance ? 'bg-emerald-50/20' : ''}`}>
+                              <td className="p-3.5">
+                                <div className="font-extrabold text-slate-800 uppercase text-xs flex items-center gap-2">
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${hasBalance ? 'bg-emerald-500 shadow-2xs' : 'bg-slate-300'}`}></span>
+                                  {zonalName}
+                                </div>
+                              </td>
+
+                              <td className="p-3.5 font-mono text-[11px] whitespace-nowrap">
+                                {bal.last_dispatch_date ? (
+                                  <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200/80 font-bold">
+                                    <Calendar className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                                    {lastDateStr}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 font-normal italic">Sin envíos</span>
+                                )}
+                              </td>
+
+                              <td className="p-3.5 text-center">
+                                <div className="inline-flex flex-col items-center">
+                                  <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-xs ${woodSaldo > 0 ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'text-slate-400 font-normal'}`}>
+                                    {woodSaldo}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-slate-400 font-normal">({bal.wood_sent} - {bal.wood_ret})</span>
+                                </div>
+                              </td>
+
+                              <td className="p-3.5 text-center">
+                                <div className="inline-flex flex-col items-center">
+                                  <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-xs ${plasticSaldo > 0 ? 'bg-emerald-100 text-emerald-900 border border-emerald-200' : 'text-slate-400 font-normal'}`}>
+                                    {plasticSaldo}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-slate-400 font-normal">({bal.plastic_sent} - {bal.plastic_ret})</span>
+                                </div>
+                              </td>
+
+                              <td className="p-3.5 text-center whitespace-nowrap">
+                                <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-extrabold uppercase ${hasBalance ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-400'}`}>
+                                  {hasBalance ? 'Saldo Activo' : 'Sin Pallets'}
+                                </span>
+                              </td>
+
+                              <td className="p-3.5 text-right whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowReturnModal(zonalName);
+                                    setReturnSupervisor(formatSupervisorName(user?.email));
+                                    setReturnWood(0);
+                                    setReturnPlastic(0);
+                                  }}
+                                  className="bg-brand-primary hover:bg-brand-secondary text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  Registrar Retorno CD
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* BITÁCORA DE RETORNOS RECIENTES */}
+                <div className="space-y-4 border-t pt-6">
+                  <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <FileText className="w-4.5 h-4.5" />
+                    Bitácora de Retornos al CD
+                  </h3>
+
+                  {returnsList.length === 0 ? (
+                    <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-xs font-bold text-slate-400">No se han registrado retornos desde zonales aún.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden divide-y">
+                      {returnsList.slice(0, 10).map((ret) => (
+                        <div key={ret.id} className="p-3.5 flex justify-between items-center text-xs">
+                          <div>
+                            <span className="font-extrabold text-slate-700 block">{ret.zonal_name}</span>
+                            <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
+                              Recibe: {ret.supervisor_name}
+                            </span>
+                          </div>
+                          <div className="text-right flex items-center gap-4">
+                            <div className="font-mono text-xs font-black space-x-3">
+                              {ret.wood_returned > 0 && <span className="text-amber-800">M: +{ret.wood_returned}</span>}
+                              {ret.plastic_returned > 0 && <span className="text-emerald-800">P: +{ret.plastic_returned}</span>}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              {new Date(ret.created_at).toLocaleDateString('es-CL')} 
+                              <span className="ml-1 text-[9px]">{new Date(ret.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
           </div>
         )}
 
@@ -5457,147 +5602,12 @@ export default function App({ user }: { user: any }) {
           );
         })()}
 
-        {activeTab === 'zonales' && (
-          <div className="space-y-6">
-            <h2 className="text-lg font-black text-slate-800 flex items-center justify-between border-b pb-2 select-none">
-              <span>Saldos y Retornos de Pallets por Zonal</span>
-              <button 
-                onClick={() => { fetchHistory(); fetchReturns(); }}
-                className="p-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-all active:scale-95 text-slate-600 cursor-pointer shadow-sm"
-                title="Actualizar Saldos"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            </h2>
-
-            {/* LISTA COMPACTA DE SALDOS POR ZONAL CON FECHA DE ÚLTIMO DESPACHO */}
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden select-none">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
-                    <tr>
-                      <th className="p-3.5">Zonal / Región</th>
-                      <th className="p-3.5">Último Despacho Camión</th>
-                      <th className="p-3.5 text-center">Madera Neto</th>
-                      <th className="p-3.5 text-center">Plástico Neto</th>
-                      <th className="p-3.5 text-center">Estado</th>
-                      <th className="p-3.5 text-right">Acción</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                    {ZONALES_LIST.map((zonalName) => {
-                      const bal = balances[zonalName] || { wood_sent: 0, plastic_sent: 0, wood_ret: 0, plastic_ret: 0, last_dispatch_date: null };
-                      const woodSaldo = bal.wood_sent - bal.wood_ret;
-                      const plasticSaldo = bal.plastic_sent - bal.plastic_ret;
-                      const hasBalance = woodSaldo > 0 || plasticSaldo > 0;
-                      const lastDateStr = bal.last_dispatch_date ? getFormatDate(bal.last_dispatch_date) : 'Sin envíos';
-
-                      return (
-                        <tr key={zonalName} className={`hover:bg-slate-50/80 transition-colors ${hasBalance ? 'bg-emerald-50/20' : ''}`}>
-                          <td className="p-3.5">
-                            <div className="font-extrabold text-slate-800 uppercase text-xs flex items-center gap-2">
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${hasBalance ? 'bg-emerald-500 shadow-2xs' : 'bg-slate-300'}`}></span>
-                              {zonalName}
-                            </div>
-                          </td>
-
-                          <td className="p-3.5 font-mono text-[11px] whitespace-nowrap">
-                            {bal.last_dispatch_date ? (
-                              <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200/80 font-bold">
-                                <Calendar className="w-3.5 h-3.5 text-brand-primary shrink-0" />
-                                {lastDateStr}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 font-normal italic">Sin envíos</span>
-                            )}
-                          </td>
-
-                          <td className="p-3.5 text-center">
-                            <div className="inline-flex flex-col items-center">
-                              <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-xs ${woodSaldo > 0 ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'text-slate-400 font-normal'}`}>
-                                {woodSaldo}
-                              </span>
-                              <span className="text-[9px] font-mono text-slate-400 font-normal">({bal.wood_sent} - {bal.wood_ret})</span>
-                            </div>
-                          </td>
-
-                          <td className="p-3.5 text-center">
-                            <div className="inline-flex flex-col items-center">
-                              <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-xs ${plasticSaldo > 0 ? 'bg-emerald-100 text-emerald-900 border border-emerald-200' : 'text-slate-400 font-normal'}`}>
-                                {plasticSaldo}
-                              </span>
-                              <span className="text-[9px] font-mono text-slate-400 font-normal">({bal.plastic_sent} - {bal.plastic_ret})</span>
-                            </div>
-                          </td>
-
-                          <td className="p-3.5 text-center whitespace-nowrap">
-                            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-extrabold uppercase ${hasBalance ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-400'}`}>
-                              {hasBalance ? 'Saldo Activo' : 'Sin Pallets'}
-                            </span>
-                          </td>
-
-                          <td className="p-3.5 text-right whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowReturnModal(zonalName);
-                                setReturnSupervisor(formatSupervisorName(user?.email));
-                                setReturnWood(0);
-                                setReturnPlastic(0);
-                              }}
-                              className="bg-brand-primary hover:bg-brand-secondary text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                              Registrar Retorno CD
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* BITÁCORA DE RETORNOS RECIENTES */}
-            <div className="space-y-4 border-t pt-6">
-              <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <FileText className="w-4.5 h-4.5" />
-                Bitácora de Retornos al CD
-              </h3>
-
-              {returnsList.length === 0 ? (
-                <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                  <p className="text-xs font-bold text-slate-400">No se han registrado retornos desde zonales aún.</p>
-                </div>
-              ) : (
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden divide-y">
-                  {returnsList.slice(0, 10).map((ret) => (
-                    <div key={ret.id} className="p-3.5 flex justify-between items-center text-xs">
-                      <div>
-                        <span className="font-extrabold text-slate-700 block">{ret.zonal_name}</span>
-                        <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
-                          Recibe: {ret.supervisor_name}
-                        </span>
-                      </div>
-                      <div className="text-right flex items-center gap-4">
-                        <div className="font-mono text-xs font-black space-x-3">
-                          {ret.wood_returned > 0 && <span className="text-amber-800">M: +{ret.wood_returned}</span>}
-                          {ret.plastic_returned > 0 && <span className="text-emerald-800">P: +{ret.plastic_returned}</span>}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          {new Date(ret.created_at).toLocaleDateString('es-CL')} 
-                          <span className="ml-1 text-[9px]">{new Date(ret.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-          </div>
-        )}
+        {activeTab === 'zonales' && (() => {
+          setActiveTab('historial');
+          setHistorySubTab('saldos');
+          fetchReturns();
+          return null;
+        })()}
 
       </main>
 
