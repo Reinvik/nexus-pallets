@@ -3107,33 +3107,90 @@ export default function App({ user }: { user: any }) {
               </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
-                {/* Columna Izquierda: Check list de Inspección */}
-                <div className="space-y-2">
-                  <span className="block text-xs font-bold text-slate-500 uppercase">Check List de Inspección</span>
-                  <div className="space-y-2.5 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                    {[
-                      { key: 'postura_anden', label: '1. Horario de postura en el Andén' },
-                      { key: 'limpieza_estructura', label: '2. Estado camión (Limpieza, Sin daños)' },
-                      { key: 'luces_encendidas', label: '3. Estado de Luces (ENCENDIDAS)' },
-                      { key: 'separador_termico', label: '4. Verificación Separador Térmico / Colchonetas' },
-                      { key: 'lingas_camion', label: '5. Verificación Lingas por camión' }
-                    ].map((item) => (
-                      <div key={item.key} className="space-y-2">
-                        <label className="flex items-center justify-between text-xs font-bold text-slate-700 py-1.5 cursor-pointer select-none border-b border-slate-200/50 last:border-0">
-                          <span>{item.label}</span>
-                          <input 
-                            type="checkbox"
-                            checked={(checklist as any)[item.key]}
-                            onChange={(e) => setChecklist({ ...checklist, [item.key]: e.target.checked })}
-                            className="w-5 h-5 rounded text-brand-primary focus:ring-brand-primary border-slate-300 cursor-pointer"
+                {/* Columna Izquierda: Check list + Fotos Colchonetas */}
+                <div className="space-y-4">
+                  {/* Check List de Inspección */}
+                  <div className="space-y-2">
+                    <span className="block text-xs font-bold text-slate-500 uppercase">Check List de Inspección</span>
+                    <div className="space-y-2.5 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                      {[
+                        { key: 'postura_anden', label: '1. Horario de postura en el Andén' },
+                        { key: 'limpieza_estructura', label: '2. Estado camión (Limpieza, Sin daños)' },
+                        { key: 'luces_encendidas', label: '3. Estado de Luces (ENCENDIDAS)' },
+                        { key: 'separador_termico', label: '4. Verificación Separador Térmico / Colchonetas' },
+                        { key: 'lingas_camion', label: '5. Verificación Lingas por camión' }
+                      ].map((item) => (
+                        <div key={item.key} className="space-y-2">
+                          <label className="flex items-center justify-between text-xs font-bold text-slate-700 py-1.5 cursor-pointer select-none border-b border-slate-200/50 last:border-0">
+                            <span>{item.label}</span>
+                            <input 
+                              type="checkbox"
+                              checked={(checklist as any)[item.key]}
+                              onChange={(e) => setChecklist({ ...checklist, [item.key]: e.target.checked })}
+                              className="w-5 h-5 rounded text-brand-primary focus:ring-brand-primary border-slate-300 cursor-pointer"
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* FOTOS & COMENTARIO DE COLCHONETAS / SEPARADOR TÉRMICO (IZQUIERDA) */}
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5 shadow-2xs">
+                    <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                      <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        📸 Fotos Colchonetas ({colchonetasPhotos.length})
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] text-slate-400 font-semibold hidden sm:inline">(o Ctrl+V)</span>
+                        <label className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95 shadow-2xs">
+                          <Camera className="w-3.5 h-3.5 text-amber-600" /> + Adjuntar Foto
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            capture="environment"
+                            onChange={handleColchonetasPhotoUpload}
+                            className="hidden"
                           />
                         </label>
                       </div>
-                    ))}
+                    </div>
+
+                    {colchonetasPhotos.length > 0 && (
+                      <div className="grid grid-cols-3 gap-2">
+                        {colchonetasPhotos.map((pUrl, pIdx) => (
+                          <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100 group">
+                            <img
+                              src={pUrl}
+                              alt={`Colchoneta ${pIdx + 1}`}
+                              className="w-full h-full object-cover cursor-pointer"
+                              onClick={() => openPhotoGallery(colchonetasPhotos, pIdx)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeColchonetasPhoto(pIdx)}
+                              className="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-0.5 opacity-90 hover:opacity-100 shadow-sm cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <input
+                      type="text"
+                      placeholder="Comentario sobre colchonetas / separador térmico..."
+                      value={colchonetasComment}
+                      onChange={(e) => setColchonetasComment(e.target.value)}
+                      onPaste={handlePasteEquipmentPhotos('colchonetas')}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-amber-500 transition-all shadow-2xs"
+                    />
                   </div>
                 </div>
 
-                {/* Columna Derecha: Posiciones, Kilos y Fotos/Comentarios de Equipamiento */}
+                {/* Columna Derecha: Posiciones, Kilos y Fotos Lingas */}
                 <div className="space-y-4">
                   {/* POSICIONES OCUPADAS DENTRO DEL CAMIÓN */}
                   <div className="space-y-2">
@@ -3178,120 +3235,58 @@ export default function App({ user }: { user: any }) {
                     </div>
                   </div>
 
-                  {/* EVIDENCIA EQUIPAMIENTO CAMIÓN (COLCHONETAS Y LINGAS) */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
-                    <span className="block text-xs font-black text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-2 flex items-center gap-1.5">
-                      <Camera className="w-4 h-4 text-amber-600" />
-                      Evidencia Equipamiento del Camión
-                    </span>
-
-                    {/* FOTOS & COMENTARIO DE COLCHONETAS / SEPARADOR TÉRMICO */}
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2.5 shadow-2xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-black text-slate-700 uppercase flex items-center gap-1.5">
-                          📸 Fotos Colchonetas ({colchonetasPhotos.length})
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[9px] text-slate-400 font-semibold hidden sm:inline">(o Ctrl+V)</span>
-                          <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95">
-                            <Camera className="w-3.5 h-3.5 text-amber-600" /> + Adjuntar Foto
-                            <input
-                              type="file"
-                              accept="image/*"
-                              multiple
-                              capture="environment"
-                              onChange={handleColchonetasPhotoUpload}
-                              className="hidden"
-                            />
-                          </label>
-                        </div>
+                  {/* FOTOS & COMENTARIO DE LINGAS (DERECHA) */}
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5 shadow-2xs">
+                    <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                      <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        📸 Fotos Lingas ({lingasPhotos.length})
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] text-slate-400 font-semibold hidden sm:inline">(o Ctrl+V)</span>
+                        <label className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95 shadow-2xs">
+                          <Camera className="w-3.5 h-3.5 text-amber-600" /> + Adjuntar Foto
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            capture="environment"
+                            onChange={handleLingasPhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
                       </div>
-
-                      {colchonetasPhotos.length > 0 && (
-                        <div className="grid grid-cols-3 gap-2">
-                          {colchonetasPhotos.map((pUrl, pIdx) => (
-                            <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100 group">
-                              <img
-                                src={pUrl}
-                                alt={`Colchoneta ${pIdx + 1}`}
-                                className="w-full h-full object-cover cursor-pointer"
-                                onClick={() => openPhotoGallery(colchonetasPhotos, pIdx)}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeColchonetasPhoto(pIdx)}
-                                className="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-0.5 opacity-90 hover:opacity-100 shadow-sm cursor-pointer"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <input
-                        type="text"
-                        placeholder="Comentario sobre colchonetas / separador térmico..."
-                        value={colchonetasComment}
-                        onChange={(e) => setColchonetasComment(e.target.value)}
-                        onPaste={handlePasteEquipmentPhotos('colchonetas')}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-amber-500 focus:bg-white transition-all"
-                      />
                     </div>
 
-                    {/* FOTOS & COMENTARIO DE LINGAS */}
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2.5 shadow-2xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-black text-slate-700 uppercase flex items-center gap-1.5">
-                          📸 Fotos Lingas ({lingasPhotos.length})
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[9px] text-slate-400 font-semibold hidden sm:inline">(o Ctrl+V)</span>
-                          <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95">
-                            <Camera className="w-3.5 h-3.5 text-amber-600" /> + Adjuntar Foto
-                            <input
-                              type="file"
-                              accept="image/*"
-                              multiple
-                              capture="environment"
-                              onChange={handleLingasPhotoUpload}
-                              className="hidden"
+                    {lingasPhotos.length > 0 && (
+                      <div className="grid grid-cols-3 gap-2">
+                        {lingasPhotos.map((pUrl, pIdx) => (
+                          <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100 group">
+                            <img
+                              src={pUrl}
+                              alt={`Linga ${pIdx + 1}`}
+                              className="w-full h-full object-cover cursor-pointer"
+                              onClick={() => openPhotoGallery(lingasPhotos, pIdx)}
                             />
-                          </label>
-                        </div>
+                            <button
+                              type="button"
+                              onClick={() => removeLingasPhoto(pIdx)}
+                              className="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-0.5 opacity-90 hover:opacity-100 shadow-sm cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
+                    )}
 
-                      {lingasPhotos.length > 0 && (
-                        <div className="grid grid-cols-3 gap-2">
-                          {lingasPhotos.map((pUrl, pIdx) => (
-                            <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100 group">
-                              <img
-                                src={pUrl}
-                                alt={`Linga ${pIdx + 1}`}
-                                className="w-full h-full object-cover cursor-pointer"
-                                onClick={() => openPhotoGallery(lingasPhotos, pIdx)}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeLingasPhoto(pIdx)}
-                                className="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-0.5 opacity-90 hover:opacity-100 shadow-sm cursor-pointer"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <input
-                        type="text"
-                        placeholder="Comentario sobre estado de lingas..."
-                        value={lingasComment}
-                        onChange={(e) => setLingasComment(e.target.value)}
-                        onPaste={handlePasteEquipmentPhotos('lingas')}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-amber-500 focus:bg-white transition-all"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      placeholder="Comentario sobre estado de lingas..."
+                      value={lingasComment}
+                      onChange={(e) => setLingasComment(e.target.value)}
+                      onPaste={handlePasteEquipmentPhotos('lingas')}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-amber-500 transition-all shadow-2xs"
+                    />
                   </div>
                 </div>
               </div>
