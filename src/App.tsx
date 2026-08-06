@@ -171,6 +171,60 @@ const getSignerName = (rec: DispatchRecord, palletUsers: any[]): string | null =
   return signerUser?.display_name || formatSupervisorName(rec.signed_by);
 };
 
+/**
+ * Retorna la fecha ISO (YYYY-MM-DD) oficial de la jornada logística en Chile ('America/Santiago').
+ * El primer camión del día inicia a las 07:00 AM.
+ * Todo lo registrado entre 00:00 AM y 06:59 AM corresponde a la jornada del día anterior.
+ */
+export const getChileDateString = (dateObj: Date = new Date()): string => {
+  const chileTimeFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Santiago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+
+  const parts = chileTimeFormatter.formatToParts(dateObj);
+  const getPart = (type: string) => parts.find(p => p.type === type)?.value || '00';
+
+  const year = getPart('year');
+  const month = getPart('month');
+  const day = getPart('day');
+  let hour = parseInt(getPart('hour'), 10);
+  if (hour === 24) hour = 0;
+
+  const localDate = new Date(`${year}-${month}-${day}T${getPart('hour')}:${getPart('minute')}:${getPart('second')}`);
+
+  // Si la hora en Chile es antes de las 7:00 AM, pertenece a la jornada del día anterior
+  if (hour < 7) {
+    localDate.setDate(localDate.getDate() - 1);
+  }
+
+  const resYear = localDate.getFullYear();
+  const resMonth = (localDate.getMonth() + 1).toString().padStart(2, '0');
+  const resDay = localDate.getDate().toString().padStart(2, '0');
+
+  return `${resYear}-${resMonth}-${resDay}`;
+};
+
+/**
+ * Retorna la hora HH:MM:SS en zona horaria de Santiago de Chile ('America/Santiago').
+ */
+export const getChileTimeString = (dateObj: Date = new Date()): string => {
+  const formatter = new Intl.DateTimeFormat('es-CL', {
+    timeZone: 'America/Santiago',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  return formatter.format(dateObj);
+};
+
 const ADMIN_EMAILS = [
   'ariel.mella@cial.cl',
   'euro.velasquez@cial.cl',
@@ -219,7 +273,7 @@ export default function App({ user }: { user: any }) {
   };
 
   const [zonalTargetTimes, setZonalTargetTimes] = useState<ZonalTargetTime[]>([]);
-  const [departuresDate, setDeparturesDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [departuresDate, setDeparturesDate] = useState<string>(() => getChileDateString());
   const [showConfigTargetsModal, setShowConfigTargetsModal] = useState(false);
   const [isTvMonitorMode, setIsTvMonitorMode] = useState(false);
   const [nowTime, setNowTime] = useState<Date>(new Date());
@@ -1892,11 +1946,8 @@ export default function App({ user }: { user: any }) {
     setSuccessMsg(null);
 
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    
-    // Formato manual de 24 horas robusto (HH:MM:SS) para evitar errores de timezone con localestring
-    const pad = (num: number) => num.toString().padStart(2, '0');
-    const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const dateStr = getChileDateString(now);
+    const timeStr = getChileTimeString(now);
 
     try {
       // Mapear zonales para concatenar el número de viaje/carga si es mayor que 1
@@ -3405,7 +3456,7 @@ export default function App({ user }: { user: any }) {
                             </button>
 
                             {(() => {
-                              const today = new Date().toISOString().split('T')[0];
+                              const today = getChileDateString();
                               const isToday = rec.inspection_date === today;
                               const isMine = rec.supervisor_name?.toLowerCase() === supervisorName?.toLowerCase();
                               const canEdit = isAdmin || isShiftLeader || (isToday && isMine);
