@@ -397,7 +397,7 @@ export default function App({ user }: { user: any }) {
   const [positionsOccupied, setPositionsOccupied] = useState<number>(26);
   const [observations, setObservations] = useState('');
   const [temp1er, setTemp1er] = useState<number>(0);
-  const [temp2do, setTemp2do] = useState<number>(-18);
+  const [temp2do, setTemp2do] = useState<number>(0);
   const [temp3er, setTemp3er] = useState<number>(0);
 
   // Manejo de Temperaturas Termos: Solo 1 congelado (<= -9°C) a la vez. Si uno se activa, los demás pasan a 0°C (Refrigerado).
@@ -1072,7 +1072,7 @@ export default function App({ user }: { user: any }) {
   const [editingSupervisorName, setEditingSupervisorName] = useState('');
   const [editingPositions, setEditingPositions] = useState(26);
   const [editingTemp1er, setEditingTemp1er] = useState(0);
-  const [editingTemp2do, setEditingTemp2do] = useState(-18);
+  const [editingTemp2do, setEditingTemp2do] = useState(0);
   const [editingTemp3er, setEditingTemp3er] = useState(0);
   const [editingZonalsDetail, setEditingZonalsDetail] = useState<ZonalDetail[]>([]);
   const [editingObservations, setEditingObservations] = useState('');
@@ -1249,7 +1249,7 @@ export default function App({ user }: { user: any }) {
     positionsOccupied: 26,
     observations: '',
     temp1er: 0,
-    temp2do: -18,
+    temp2do: 0,
     temp3er: 0,
     closeTime: '',
     truckKilos: '',
@@ -1266,7 +1266,7 @@ export default function App({ user }: { user: any }) {
     setPositionsOccupied(draft.positionsOccupied ?? 26);
     setObservations(draft.observations || '');
     setTemp1er(draft.temp1er ?? 0);
-    setTemp2do(draft.temp2do ?? -18);
+    setTemp2do(draft.temp2do ?? 0);
     setTemp3er(draft.temp3er ?? 0);
     setCloseTime(draft.closeTime || '');
     setTruckKilos(draft.truckKilos || '');
@@ -1298,7 +1298,7 @@ export default function App({ user }: { user: any }) {
           positionsOccupied: d.positions_occupied ?? 26,
           observations: d.observations || '',
           temp1er: Number(d.temp_1er) || 0,
-          temp2do: Number(d.temp_2do) || -18,
+          temp2do: d.temp_2do !== undefined && d.temp_2do !== null ? Number(d.temp_2do) : 0,
           temp3er: Number(d.temp_3er) || 0,
           closeTime: d.close_time || '',
           truckKilos: d.truck_kilos || '',
@@ -1339,7 +1339,7 @@ export default function App({ user }: { user: any }) {
         positions_occupied: draft.positionsOccupied ?? 26,
         observations: draft.observations || '',
         temp_1er: draft.temp1er ?? 0,
-        temp_2do: draft.temp2do ?? -18,
+        temp_2do: draft.temp2do ?? 0,
         temp_3er: draft.temp3er ?? 0,
         close_time: draft.closeTime || '',
         truck_kilos: draft.truckKilos || '',
@@ -1477,7 +1477,7 @@ export default function App({ user }: { user: any }) {
     setPositionsOccupied(26);
     setObservations('');
     setTemp1er(0);
-    setTemp2do(-18);
+    setTemp2do(0);
     setTemp3er(0);
     setCloseTime('');
     setTruckKilos('');
@@ -2194,7 +2194,7 @@ export default function App({ user }: { user: any }) {
     setPositionsOccupied(rec.positions_occupied || 26);
     setObservations(rec.observations || '');
     setTemp1er(rec.temp_1er ?? 0);
-    setTemp2do(rec.temp_2do ?? -18);
+    setTemp2do(rec.temp_2do ?? 0);
     setTemp3er(rec.temp_3er ?? 0);
     setCloseTime(rec.close_time || '');
     setTruckKilos(rec.truck_kilos ? String(rec.truck_kilos) : '');
