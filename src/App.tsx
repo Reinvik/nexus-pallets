@@ -2263,6 +2263,36 @@ export default function App({ user }: { user: any }) {
       
       // Actualizar estado local para evitar recarga completa
       setRecords(prev => prev.map(r => r.id === recordId ? { ...r, close_time: time || null } : r));
+      
+      // Sincronizar zonal_departure_logs para que KPI Salidas y Salidas a Tiempo usen la nueva Hora de Cierre
+      const targetRecord = records.find(r => r.id === recordId);
+      if (targetRecord && time && time.trim()) {
+        const actualTime = time.trim().slice(0, 5);
+        for (const sz of (targetRecord.zonals_detail || [])) {
+          const baseName = getBaseZonalName(sz.zonal_name);
+          const viajeNum = sz.viaje_numero || 1;
+          const targetConfig = zonalTargetTimes.find(t => t.zonal_name === baseName && t.viaje_numero === viajeNum)
+            || zonalTargetTimes.find(t => t.zonal_name === baseName)
+            || { target_time: '18:00' };
+
+          const targetTime = targetConfig.target_time;
+          const comp = compareTimes(actualTime, targetTime);
+
+          await supabase.from('zonal_departure_logs').upsert([{
+            dispatch_id: recordId,
+            inspection_date: targetRecord.inspection_date,
+            zonal_name: baseName,
+            viaje_numero: viajeNum,
+            target_time: targetTime,
+            actual_time: actualTime,
+            is_on_time: comp.isOnTime,
+            diff_minutes: comp.diffMinutes,
+            supervisor_name: targetRecord.supervisor_name
+          }], { onConflict: 'dispatch_id,zonal_name,viaje_numero' });
+        }
+        await fetchZonalDepartureLogs();
+      }
+
       setSuccessMsg('¡Hora de cierre guardada con éxito en la base de datos!');
       
       // Salir del modo edición
@@ -2395,7 +2425,8 @@ export default function App({ user }: { user: any }) {
             || { target_time: '18:00' };
 
           const targetTime = targetConfig.target_time;
-          const actualTime = timeStr.slice(0, 5);
+          // Hora de Cierre Camión manda por sobre la hora de confirmación de despacho
+          const actualTime = (closeTime && closeTime.trim()) ? closeTime.trim().slice(0, 5) : timeStr.slice(0, 5);
           const comp = compareTimes(actualTime, targetTime);
 
           await supabase.from('zonal_departure_logs').upsert([{
@@ -5360,7 +5391,12 @@ export default function App({ user }: { user: any }) {
 
             const targetTime = targetConfig.target_time;
             const isClosed = !!matchedDispatch;
-            const actualTime = matchedDispatch ? (matchedDispatch.inspection_time || matchedDispatch.created_at.slice(11, 16)) : null;
+            // Hora de Cierre Camión manda por sobre la hora de confirmación de despacho
+            const actualTime = matchedDispatch 
+              ? ((matchedDispatch.close_time && matchedDispatch.close_time.trim()) 
+                  ? matchedDispatch.close_time.trim().slice(0, 5) 
+                  : (matchedDispatch.inspection_time || matchedDispatch.created_at.slice(11, 16))) 
+              : null;
 
             let status: 'ON_TIME' | 'LATE' | 'IN_PROGRESS' | 'OVERDUE' = 'IN_PROGRESS';
             let diffMinutes = 0;
