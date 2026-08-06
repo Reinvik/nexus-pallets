@@ -279,7 +279,7 @@ const checkIsShiftLeaderOrAdmin = (user: any): boolean => {
 };
 
 export default function App({ user }: { user: any }) {
-  const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'salidas' | 'kpi_salidas' | 'usuarios'>('nuevo');
+  const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'salidas' | 'kpi_salidas' | 'bitacora_atrasos' | 'usuarios'>('nuevo');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -320,6 +320,46 @@ export default function App({ user }: { user: any }) {
   };
   const [kpiDetailModal, setKpiDetailModal] = useState<KpiDetailModalData | null>(null);
   const [kpiDetailSearch, setKpiDetailSearch] = useState<string>('');
+
+  // Estado para Pestaña "Bitácora de Atrasos"
+  type DelayLogEntry = {
+    id?: string;
+    departure_log_id?: string;
+    dispatch_id?: string;
+    zonal_name: string;
+    viaje_numero: number;
+    inspection_date: string;
+    target_time: string;
+    actual_time: string;
+    diff_minutes: number;
+    supervisor_name?: string;
+    responsible_name?: string;
+    category: 'Operación' | 'Transporte' | 'Facturación' | 'Planificación' | 'Otro';
+    justification: string;
+    photos?: string[];
+    created_by?: string;
+    created_at?: string;
+    updated_at?: string;
+  };
+
+  const [delayLogs, setDelayLogs] = useState<DelayLogEntry[]>([]);
+  const [bitacoraPeriod, setBitacoraPeriod] = useState<'semana_actual' | 'semana_pasada' | 'ultimas_4_semanas' | 'todo' | 'personalizado'>('semana_actual');
+  const [bitacoraStartDate, setBitacoraStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return getChileDateString(d);
+  });
+  const [bitacoraEndDate, setBitacoraEndDate] = useState<string>(() => getChileDateString());
+  const [bitacoraSearchQuery, setBitacoraSearchQuery] = useState<string>('');
+  const [bitacoraCategoryFilter, setBitacoraCategoryFilter] = useState<string>('todos');
+  const [bitacoraStatusFilter, setBitacoraStatusFilter] = useState<string>('todos');
+
+  // Estado para Modal de Edición de Justificación de Atraso
+  const [editingDelayModal, setEditingDelayModal] = useState<{ logItem: ZonalDepartureLog; delayEntry?: DelayLogEntry } | null>(null);
+  const [delayCategory, setDelayCategory] = useState<'Operación' | 'Transporte' | 'Facturación' | 'Planificación' | 'Otro'>('Operación');
+  const [delayJustification, setDelayJustification] = useState<string>('');
+  const [delayPhotos, setDelayPhotos] = useState<string[]>([]);
+  const [delaySaveLoading, setDelaySaveLoading] = useState<boolean>(false);
 
   // Estado para Pestaña "Salidas a Tiempo" (Control Room Dashboard)
   type ZonalTargetTime = {
@@ -630,6 +670,118 @@ export default function App({ user }: { user: any }) {
       }
     } catch (err) {
       console.error('Error cargando logs históricos de salidas:', err);
+    }
+  };
+
+  const fetchDelayLogbook = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('delay_logbook')
+        .select('*')
+        .order('inspection_date', { ascending: false });
+
+      if (error) throw error;
+      setDelayLogs(data || []);
+    } catch (e) {
+      console.error('Error cargando bitácora de atrasos:', e);
+    }
+  };
+
+  const getSignerNameFromLog = (log: ZonalDepartureLog, users: PalletUser[]) => {
+    if (log.signed_by_name) return log.signed_by_name;
+    if (log.signed_by) {
+      const u = users.find(user => (user.email || '').toLowerCase() === log.signed_by?.toLowerCase());
+      return u ? u.display_name : log.signed_by;
+    }
+    return log.supervisor_name;
+  };
+
+  const openDelayModal = (logItem: ZonalDepartureLog) => {
+    const baseZonal = getBaseZonalName(logItem.zonal_name);
+    const viajeNum = logItem.viaje_numero || 1;
+    const existing = delayLogs.find(d => 
+      d.departure_log_id === logItem.id || 
+      (d.zonal_name === baseZonal && d.viaje_numero === viajeNum && d.inspection_date === logItem.inspection_date)
+    );
+
+    setEditingDelayModal({ logItem, delayEntry: existing });
+    setDelayCategory(existing?.category || 'Operación');
+    setDelayJustification(existing?.justification || '');
+    setDelayPhotos(existing?.photos || []);
+  };
+
+  const handleDelayPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const newPhotos: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      if (delayPhotos.length + newPhotos.length >= 4) break;
+      try {
+        const compressed = await compressImage(files[i]);
+        newPhotos.push(compressed);
+      } catch (err) {
+        console.error('Error comprimiendo foto de atraso:', err);
+      }
+    }
+    setDelayPhotos(prev => [...prev, ...newPhotos]);
+  };
+
+  const removeDelayPhoto = (index: number) => {
+    setDelayPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveDelayJustification = async () => {
+    if (!editingDelayModal) return;
+    if (!delayJustification || !delayJustification.trim()) {
+      alert('Por favor ingresa la justificación o motivo del atraso.');
+      return;
+    }
+    if (!delayCategory) {
+      alert('Por favor selecciona una categoría de atraso.');
+      return;
+    }
+
+    const { logItem, delayEntry } = editingDelayModal;
+    const baseZonal = getBaseZonalName(logItem.zonal_name);
+
+    setDelaySaveLoading(true);
+    try {
+      const payload: any = {
+        departure_log_id: logItem.id,
+        dispatch_id: logItem.dispatch_id || null,
+        zonal_name: baseZonal,
+        viaje_numero: logItem.viaje_numero || 1,
+        inspection_date: logItem.inspection_date,
+        target_time: logItem.target_time,
+        actual_time: logItem.actual_time,
+        diff_minutes: logItem.diff_minutes || 0,
+        supervisor_name: logItem.supervisor_name || supervisorName,
+        responsible_name: getSignerNameFromLog(logItem, palletUsers) || logItem.signed_by_name || logItem.supervisor_name || 'Sin Especificar',
+        category: delayCategory,
+        justification: delayJustification.trim(),
+        photos: delayPhotos,
+        created_by: user?.email || '',
+        updated_at: new Date().toISOString()
+      };
+
+      if (delayEntry?.id) {
+        payload.id = delayEntry.id;
+      }
+
+      const { error } = await supabase
+        .from('delay_logbook')
+        .upsert([payload], { onConflict: 'id' });
+
+      if (error) throw error;
+
+      setSuccessMsg('¡Justificación de atraso registrada en la Bitácora!');
+      setEditingDelayModal(null);
+      await fetchDelayLogbook();
+    } catch (err: any) {
+      console.error('Error guardando justificación de atraso:', err);
+      alert('Error al guardar: ' + err.message);
+    } finally {
+      setDelaySaveLoading(false);
     }
   };
 
@@ -1292,6 +1444,7 @@ export default function App({ user }: { user: any }) {
     fetchReturns();
     fetchZonalTargetTimes();
     fetchZonalDepartureLogs();
+    fetchDelayLogbook();
   }, []);
 
   useEffect(() => {
@@ -2463,6 +2616,15 @@ export default function App({ user }: { user: any }) {
             <span className="flex items-center justify-center gap-1.5">
               <TrendingUp className="w-4.5 h-4.5 text-amber-600" />
               KPI Salidas
+            </span>
+          </button>
+          <button 
+            onClick={() => { setActiveTab('bitacora_atrasos'); fetchZonalDepartureLogs(); fetchDelayLogbook(); }}
+            className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'bitacora_atrasos' ? 'border-rose-500 text-rose-700 bg-rose-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <AlertTriangle className="w-4.5 h-4.5 text-rose-600" />
+              Bitácora Atrasos
             </span>
           </button>
           {isSuperAdmin && (
@@ -6277,6 +6439,585 @@ export default function App({ user }: { user: any }) {
             )}
           </div>
         );
+        })()}
+
+        {activeTab === 'bitacora_atrasos' && (() => {
+          // Filtrar logs con retraso (is_on_time === false)
+          let lateDepartureLogs = zonalDepartureLogs.filter(l => !l.is_on_time);
+
+          // Filtrar según el período seleccionado
+          if (bitacoraPeriod === 'semana_actual') {
+            const now = new Date();
+            const dayOfWeek = now.getDay() || 7; // 1 = Lunes
+            const monday = new Date(now);
+            monday.setDate(now.getDate() - (dayOfWeek - 1));
+            const mondayStr = getChileDateString(monday);
+            lateDepartureLogs = lateDepartureLogs.filter(l => l.inspection_date >= mondayStr);
+          } else if (bitacoraPeriod === 'semana_pasada') {
+            const now = new Date();
+            const dayOfWeek = now.getDay() || 7;
+            const thisMonday = new Date(now);
+            thisMonday.setDate(now.getDate() - (dayOfWeek - 1));
+            const prevMonday = new Date(thisMonday);
+            prevMonday.setDate(thisMonday.getDate() - 7);
+            const prevSunday = new Date(thisMonday);
+            prevSunday.setDate(thisMonday.getDate() - 1);
+            
+            const prevMondayStr = getChileDateString(prevMonday);
+            const prevSundayStr = getChileDateString(prevSunday);
+            lateDepartureLogs = lateDepartureLogs.filter(l => l.inspection_date >= prevMondayStr && l.inspection_date <= prevSundayStr);
+          } else if (bitacoraPeriod === 'ultimas_4_semanas') {
+            const minDate = new Date();
+            minDate.setDate(minDate.getDate() - 28);
+            const minDateStr = getChileDateString(minDate);
+            lateDepartureLogs = lateDepartureLogs.filter(l => l.inspection_date >= minDateStr);
+          } else if (bitacoraPeriod === 'personalizado') {
+            lateDepartureLogs = lateDepartureLogs.filter(l => l.inspection_date >= bitacoraStartDate && l.inspection_date <= bitacoraEndDate);
+          }
+
+          const totalLateCount = lateDepartureLogs.length;
+
+          // Mapear cada log retrasado con su justificación en delayLogs (si existe)
+          const mappedDelays = lateDepartureLogs.map(log => {
+            const baseZonal = getBaseZonalName(log.zonal_name);
+            const viajeNum = log.viaje_numero || 1;
+            const matchedEntry = delayLogs.find(d => 
+              d.departure_log_id === log.id || 
+              (d.zonal_name === baseZonal && d.viaje_numero === viajeNum && d.inspection_date === log.inspection_date)
+            );
+
+            return {
+              log,
+              entry: matchedEntry
+            };
+          });
+
+          const justifiedCount = mappedDelays.filter(m => !!m.entry).length;
+          const justifiedRate = totalLateCount > 0 ? Math.round((justifiedCount / totalLateCount) * 100) : 100;
+          const avgDelayMinutes = totalLateCount > 0 ? Math.round(lateDepartureLogs.reduce((acc, l) => acc + (l.diff_minutes || 0), 0) / totalLateCount) : 0;
+
+          // Desglose por categoría
+          const categoryCounts: { [key: string]: number } = {
+            'Operación': 0,
+            'Transporte': 0,
+            'Facturación': 0,
+            'Planificación': 0,
+            'Otro': 0
+          };
+
+          mappedDelays.forEach(m => {
+            if (m.entry && m.entry.category) {
+              categoryCounts[m.entry.category] = (categoryCounts[m.entry.category] || 0) + 1;
+            }
+          });
+
+          // Categoría con mayor cantidad de atrasos
+          let topCategory = 'Operación';
+          let maxCatCount = -1;
+          Object.entries(categoryCounts).forEach(([cat, count]) => {
+            if (count > maxCatCount) {
+              maxCatCount = count;
+              topCategory = cat;
+            }
+          });
+
+          // Aplicar filtros de búsqueda, categoría y estado a la lista mostrada en la tabla
+          let filteredRows = mappedDelays.filter(({ log, entry }) => {
+            if (bitacoraCategoryFilter !== 'todos') {
+              if (!entry || entry.category !== bitacoraCategoryFilter) return false;
+            }
+            if (bitacoraStatusFilter === 'pendiente') {
+              if (!!entry) return false;
+            } else if (bitacoraStatusFilter === 'justificado') {
+              if (!entry) return false;
+            }
+
+            if (bitacoraSearchQuery.trim()) {
+              const q = bitacoraSearchQuery.toLowerCase().trim();
+              const baseZonal = getBaseZonalName(log.zonal_name).toLowerCase();
+              const sup = (log.supervisor_name || '').toLowerCase();
+              const resp = (getSignerNameFromLog(log, palletUsers) || '').toLowerCase();
+              const cat = (entry?.category || '').toLowerCase();
+              const just = (entry?.justification || '').toLowerCase();
+              return baseZonal.includes(q) || sup.includes(q) || resp.includes(q) || cat.includes(q) || just.includes(q) || log.inspection_date.includes(q);
+            }
+            return true;
+          });
+
+          return (
+            <div className="space-y-6 animate-fade-in select-none">
+              {/* HEADER PESTAÑA BITÁCORA */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
+                <div>
+                  <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-rose-600" />
+                    Bitácora de Atrasos & Análisis de Causa Raíz
+                  </h2>
+                  <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                    Registro de justificaciones de retraso por categoría, fotos de respaldo e informe semanal
+                  </p>
+                </div>
+
+                {/* FILTROS DE PERÍODO / RANGO DE FECHAS */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-2xs">
+                    {[
+                      { key: 'semana_actual', label: 'Esta Semana' },
+                      { key: 'semana_pasada', label: 'Semana Pasada' },
+                      { key: 'ultimas_4_semanas', label: 'Últimas 4 Semanas' },
+                      { key: 'todo', label: 'Todo' },
+                      { key: 'personalizado', label: 'Rango...' }
+                    ].map(p => (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => setBitacoraPeriod(p.key as any)}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          bitacoraPeriod === p.key ? 'bg-rose-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {bitacoraPeriod === 'personalizado' && (
+                    <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1 text-xs font-bold shadow-2xs">
+                      <input
+                        type="date"
+                        value={bitacoraStartDate}
+                        onChange={(e) => setBitacoraStartDate(e.target.value)}
+                        className="bg-transparent focus:outline-none cursor-pointer"
+                      />
+                      <span className="text-slate-400">a</span>
+                      <input
+                        type="date"
+                        value={bitacoraEndDate}
+                        onChange={(e) => setBitacoraEndDate(e.target.value)}
+                        className="bg-transparent focus:outline-none cursor-pointer"
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => { fetchZonalDepartureLogs(); fetchDelayLogbook(); }}
+                    className="p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 cursor-pointer shadow-sm active:scale-95"
+                    title="Actualizar datos de Bitácora"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* TARJETAS RESUMEN / INFORME SEMANAL */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-rose-50/80 border border-rose-200 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-black uppercase text-rose-700 tracking-wider">Total Atrasos Período</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-3xl font-black text-rose-800 font-mono">{totalLateCount}</span>
+                    <span className="text-xs font-bold text-rose-600">despachos</span>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-50/80 border border-emerald-200 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">% Atrasos Justificados</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-3xl font-black text-emerald-800 font-mono">{justifiedRate}%</span>
+                    <span className="text-xs font-bold text-emerald-600">{justifiedCount} de {totalLateCount}</span>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50/80 border border-amber-200 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider">Categoría Mayoritaria</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-lg font-black text-amber-900 truncate">
+                      {justifiedCount > 0 ? topCategory : 'Sin Datos'}
+                    </span>
+                    <span className="text-xs font-bold text-amber-700 font-mono">
+                      {justifiedCount > 0 ? `${maxCatCount} casos` : ''}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-md text-white flex flex-col justify-between">
+                  <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider">Promedio de Retraso</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-3xl font-black text-amber-400 font-mono">-{avgDelayMinutes}m</span>
+                    <span className="text-[10px] text-slate-400">por salida</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* INFORME DE DISTRIBUCIÓN PORCENTUAL POR CATEGORÍA */}
+              <div className="bg-white p-4.5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                    📊 Informe de Distribución Porcentual por Categoría de Atraso
+                  </h3>
+                  <span className="text-[11px] font-bold text-slate-400">
+                    Base: {justifiedCount} atrasos justificados de {totalLateCount} totales
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                  {[
+                    { key: 'Operación', icon: '🏭', color: 'amber', bg: 'bg-amber-500', text: 'text-amber-700' },
+                    { key: 'Transporte', icon: '🚛', color: 'blue', bg: 'bg-blue-500', text: 'text-blue-700' },
+                    { key: 'Facturación', icon: '📄', color: 'purple', bg: 'bg-purple-500', text: 'text-purple-700' },
+                    { key: 'Planificación', icon: '📅', color: 'emerald', bg: 'bg-emerald-500', text: 'text-emerald-700' },
+                    { key: 'Otro', icon: '⚙️', color: 'slate', bg: 'bg-slate-500', text: 'text-slate-700' }
+                  ].map(cat => {
+                    const count = categoryCounts[cat.key] || 0;
+                    const pct = justifiedCount > 0 ? Math.round((count / justifiedCount) * 100) : 0;
+
+                    return (
+                      <div key={cat.key} className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col justify-between space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1">
+                            <span>{cat.icon}</span>
+                            <span>{cat.key}</span>
+                          </span>
+                          <span className="text-xs font-mono font-black text-slate-700">{pct}%</span>
+                        </div>
+                        <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                          <div className={`h-full ${cat.bg} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400 text-right block">
+                          {count} {count === 1 ? 'atraso' : 'atrasos'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* FILTROS Y BÚSQUEDA TABLA */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex-wrap">
+                <div className="relative flex-1 w-full sm:w-auto">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por zonal, supervisor, responsable o palabra clave..."
+                    value={bitacoraSearchQuery}
+                    onChange={(e) => setBitacoraSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-rose-500 focus:bg-white transition-all"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+                  <select
+                    value={bitacoraCategoryFilter}
+                    onChange={(e) => setBitacoraCategoryFilter(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+                  >
+                    <option value="todos">Todas las Categorías</option>
+                    <option value="Operación">🏭 Operación</option>
+                    <option value="Transporte">🚛 Transporte</option>
+                    <option value="Facturación">📄 Facturación</option>
+                    <option value="Planificación">📅 Planificación</option>
+                    <option value="Otro">⚙️ Otro</option>
+                  </select>
+
+                  <select
+                    value={bitacoraStatusFilter}
+                    onChange={(e) => setBitacoraStatusFilter(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+                  >
+                    <option value="todos">Todos los Estados</option>
+                    <option value="pendiente">🔴 Pendientes Justificación</option>
+                    <option value="justificado">🟢 Justificados</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* TABLA DE SALIDAS RETRASADAS Y GESTIÓN DE BITÁCORA */}
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                {filteredRows.length === 0 ? (
+                  <div className="text-center py-16 px-4 space-y-2">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+                    <h3 className="text-sm font-black text-slate-800">No hay atrasos registrados para los filtros seleccionados</h3>
+                    <p className="text-xs text-slate-400 font-medium">¡Excelente desempeño operacional en este período!</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
+                        <tr>
+                          <th className="p-3.5">Fecha</th>
+                          <th className="p-3.5">Zonal / Viaje</th>
+                          <th className="p-3.5 text-center">Meta vs Real</th>
+                          <th className="p-3.5 text-center">Retraso</th>
+                          <th className="p-3.5">Supervisor & Firmante</th>
+                          <th className="p-3.5 text-center">Categoría</th>
+                          <th className="p-3.5">Justificación & Evidencia</th>
+                          <th className="p-3.5 text-right">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                        {filteredRows.map(({ log, entry }) => {
+                          const baseZonal = getBaseZonalName(log.zonal_name);
+                          const viajeNum = log.viaje_numero || 1;
+                          const signer = getSignerNameFromLog(log, palletUsers);
+
+                          return (
+                            <tr key={log.id || `${log.inspection_date}-${baseZonal}-${viajeNum}`} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="p-3.5 font-mono text-[11px] whitespace-nowrap">
+                                {getFormatDate(log.inspection_date)}
+                              </td>
+
+                              <td className="p-3.5 font-black uppercase text-slate-800 whitespace-nowrap">
+                                {baseZonal} {viajeNum > 1 ? `(${viajeNum})` : ''}
+                              </td>
+
+                              <td className="p-3.5 text-center font-mono whitespace-nowrap">
+                                <span className="text-slate-400 font-normal">{log.target_time}</span>
+                                <span className="text-slate-300 mx-1">➔</span>
+                                <strong className="text-slate-800 font-bold">{log.actual_time}</strong>
+                              </td>
+
+                              <td className="p-3.5 text-center whitespace-nowrap">
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                  🔴 -{log.diff_minutes} min
+                                </span>
+                              </td>
+
+                              <td className="p-3.5">
+                                <div className="text-slate-800 font-bold text-xs">{log.supervisor_name}</div>
+                                <div className="text-[10px] text-emerald-800 font-semibold truncate">
+                                  Resp: {signer || log.supervisor_name}
+                                </div>
+                              </td>
+
+                              <td className="p-3.5 text-center whitespace-nowrap">
+                                {entry ? (
+                                  <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border uppercase tracking-wider ${
+                                    entry.category === 'Operación' ? 'bg-amber-100 text-amber-900 border-amber-300' :
+                                    entry.category === 'Transporte' ? 'bg-blue-100 text-blue-900 border-blue-300' :
+                                    entry.category === 'Facturación' ? 'bg-purple-100 text-purple-900 border-purple-300' :
+                                    entry.category === 'Planificación' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                                    'bg-slate-100 text-slate-800 border-slate-300'
+                                  }`}>
+                                    {entry.category}
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-600 border border-rose-200 animate-pulse">
+                                    ⚠️ Pendiente
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="p-3.5 max-w-[280px]">
+                                {entry ? (
+                                  <div className="space-y-1.5">
+                                    <p className="text-slate-700 text-xs font-medium line-clamp-2 italic">
+                                      "{entry.justification}"
+                                    </p>
+                                    {entry.photos && entry.photos.length > 0 && (
+                                      <div className="flex items-center gap-1.5">
+                                        {entry.photos.map((pUrl, pIdx) => (
+                                          <img
+                                            key={pIdx}
+                                            src={pUrl}
+                                            alt={`Evidencia ${pIdx + 1}`}
+                                            className="w-8 h-8 rounded object-cover border border-slate-200 cursor-pointer hover:scale-110 transition-transform"
+                                            onClick={() => openPhotoGallery(entry.photos || [], pIdx)}
+                                          />
+                                        ))}
+                                        <span className="text-[10px] text-slate-400 font-bold">
+                                          ({entry.photos.length} fotos)
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic">
+                                    Sin justificación ingresada
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="p-3.5 text-right whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => openDelayModal(log)}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95 inline-flex items-center gap-1 ${
+                                    entry
+                                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                                      : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/30'
+                                  }`}
+                                >
+                                  <PenTool className="w-3.5 h-3.5" />
+                                  {entry ? 'Modificar' : '+ Justificar'}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* MODAL PARA REGISTRAR / EDITAR JUSTIFICACIÓN DE ATRASO */}
+              {editingDelayModal && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in select-none">
+                  <div className="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl border border-slate-200">
+                    <div className="flex items-center justify-between border-b pb-3">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-rose-600" />
+                          Justificación de Atraso
+                        </h3>
+                        <p className="text-xs text-slate-500 font-bold mt-0.5">
+                          {getBaseZonalName(editingDelayModal.logItem.zonal_name)} {editingDelayModal.logItem.viaje_numero > 1 ? `(Viaje ${editingDelayModal.logItem.viaje_numero})` : ''} — Retraso: <span className="text-rose-600">-{editingDelayModal.logItem.diff_minutes} min</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingDelayModal(null)}
+                        className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer text-base font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* DATOS DEL RESUMEN DEL DESPACHO */}
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs space-y-1 font-semibold text-slate-700">
+                      <div className="flex justify-between">
+                        <span>Fecha / Meta Cierre:</span>
+                        <strong className="font-mono">{getFormatDate(editingDelayModal.logItem.inspection_date)} ({editingDelayModal.logItem.target_time} hrs)</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Hora Cierre Real:</span>
+                        <strong className="font-mono text-rose-700">{editingDelayModal.logItem.actual_time} hrs</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Supervisor / Responsable:</span>
+                        <strong>{editingDelayModal.logItem.supervisor_name}</strong>
+                      </div>
+                    </div>
+
+                    {/* SELECCIÓN DE CATEGORÍA DEL ATRASO */}
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-bold text-slate-700 uppercase">
+                        Categoría del Atraso <span className="text-rose-600">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {[
+                          { key: 'Operación', icon: '🏭', desc: 'Picking, andén, armado' },
+                          { key: 'Transporte', icon: '🚛', desc: 'Camión, chofer, falla' },
+                          { key: 'Facturación', icon: '📄', desc: 'Guías, sistema ERP' },
+                          { key: 'Planificación', icon: '📅', desc: 'Ruta, stock, horario' },
+                          { key: 'Otro', icon: '⚙️', desc: 'Otras razones' }
+                        ].map(cat => (
+                          <button
+                            key={cat.key}
+                            type="button"
+                            onClick={() => setDelayCategory(cat.key as any)}
+                            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                              delayCategory === cat.key
+                                ? 'bg-rose-50 border-rose-500 text-rose-950 font-black ring-2 ring-rose-400/30'
+                                : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <span className="text-xs font-bold flex items-center gap-1">
+                              <span>{cat.icon}</span>
+                              <span>{cat.key}</span>
+                            </span>
+                            <span className="text-[9px] text-slate-500 font-medium mt-1 block">
+                              {cat.desc}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* DETALLE / JUSTIFICACIÓN DE CAUSA RAÍZ */}
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-bold text-slate-700 uppercase">
+                        Motivo / Justificación del Atraso <span className="text-rose-600">*</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="Describe la causa raíz del retraso y la oportunidad de mejora para prevenirlo..."
+                        value={delayJustification}
+                        onChange={(e) => setDelayJustification(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium focus:outline-none focus:border-rose-500 focus:bg-white transition-all"
+                      />
+                    </div>
+
+                    {/* FOTOS DE EVIDENCIA (OPCIONAL) */}
+                    <div className="space-y-2 border-t pt-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
+                          <Camera className="w-3.5 h-3.5 text-amber-600" />
+                          Fotos de Evidencia / Respaldo (Opcional)
+                        </label>
+                        <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95">
+                          + Adjuntar Foto
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            capture="environment"
+                            onChange={handleDelayPhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+
+                      {delayPhotos.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2">
+                          {delayPhotos.map((pUrl, pIdx) => (
+                            <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100">
+                              <img
+                                src={pUrl}
+                                alt={`Evidencia ${pIdx + 1}`}
+                                className="w-full h-full object-cover cursor-pointer"
+                                onClick={() => openPhotoGallery(delayPhotos, pIdx)}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeDelayPhoto(pIdx)}
+                                className="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-0.5 opacity-90 hover:opacity-100 shadow-sm cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* BOTONES FOOTER */}
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                      <button
+                        type="button"
+                        onClick={() => setEditingDelayModal(null)}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveDelayJustification}
+                        disabled={delaySaveLoading}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/30 flex items-center gap-1.5 active:scale-95"
+                      >
+                        {delaySaveLoading ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <span>💾 Guardar Justificación</span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
         })()}
 
         {activeTab === 'zonales' && (() => {
