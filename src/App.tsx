@@ -279,7 +279,7 @@ const checkIsShiftLeaderOrAdmin = (user: any): boolean => {
 };
 
 export default function App({ user }: { user: any }) {
-  const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'salidas' | 'kpi_salidas' | 'bitacora_atrasos' | 'usuarios'>('nuevo');
+  const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'salidas' | 'kpi_salidas' | 'bitacora_atrasos' | 'usuarios'>('salidas');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -2614,6 +2614,15 @@ export default function App({ user }: { user: any }) {
       <div className="bg-white border-b border-slate-200 sticky top-[68px] z-30 select-none">
         <div className="max-w-4xl mx-auto flex">
           <button 
+            onClick={() => { setActiveTab('salidas'); fetchHistory(); fetchZonalTargetTimes(); }}
+            className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'salidas' ? 'border-brand-primary text-brand-primary bg-emerald-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <Clock className="w-4.5 h-4.5 text-amber-500" />
+              Salidas a Tiempo
+            </span>
+          </button>
+          <button 
             onClick={() => setActiveTab('nuevo')}
             className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'nuevo' ? 'border-brand-primary text-brand-primary bg-emerald-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
           >
@@ -2629,15 +2638,6 @@ export default function App({ user }: { user: any }) {
             <span className="flex items-center justify-center gap-2">
               <FileText className="w-4.5 h-4.5" />
               Historial Cargas
-            </span>
-          </button>
-          <button 
-            onClick={() => { setActiveTab('salidas'); fetchHistory(); fetchZonalTargetTimes(); }}
-            className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'salidas' ? 'border-brand-primary text-brand-primary bg-emerald-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-          >
-            <span className="flex items-center justify-center gap-1.5">
-              <Clock className="w-4.5 h-4.5 text-amber-500" />
-              Salidas a Tiempo
             </span>
           </button>
           <button 
@@ -5431,6 +5431,23 @@ export default function App({ user }: { user: any }) {
             };
           });
 
+          // Ordenar tarjetas: Zonales en proceso / abiertas primero (al inicio de la lista superior), luego zonales cerradas
+          const sortedDepartureCards = [...departureCards].sort((a, b) => {
+            const aActive = !a.isClosed || a.isOpenDraft;
+            const bActive = !b.isClosed || b.isOpenDraft;
+
+            if (aActive && !bActive) return -1;
+            if (!aActive && bActive) return 1;
+
+            if (aActive && bActive) {
+              if (a.status === 'OVERDUE' && b.status !== 'OVERDUE') return -1;
+              if (a.status !== 'OVERDUE' && b.status === 'OVERDUE') return 1;
+              return a.targetTime.localeCompare(b.targetTime);
+            }
+
+            return a.targetTime.localeCompare(b.targetTime);
+          });
+
           const totalScheduled = departureCards.length;
           const onTimeCount = departureCards.filter(c => c.status === 'ON_TIME').length;
           const lateCount = departureCards.filter(c => c.status === 'LATE').length;
@@ -5527,7 +5544,7 @@ export default function App({ user }: { user: any }) {
               </div>
 
               {/* GRID DE ZONALES / TARJETAS DE SALIDA */}
-              {departureCards.length === 0 ? (
+              {sortedDepartureCards.length === 0 ? (
                 <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-8 text-center space-y-3 select-none">
                   <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
                     <Clock className="w-6 h-6" />
@@ -5548,7 +5565,7 @@ export default function App({ user }: { user: any }) {
                 </div>
               ) : (
                 <div className="space-y-3 select-none">
-                  {departureCards.map((card) => {
+                  {sortedDepartureCards.map((card) => {
                     return (
                       <div
                         key={card.id}
