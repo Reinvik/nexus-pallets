@@ -876,6 +876,52 @@ export default function App({ user }: { user: any }) {
     lingas_camion: true
   });
 
+  // Fotos y comentarios para Inspección de Lingas y Colchonetas/Separador Térmico
+  const [lingasPhotos, setLingasPhotos] = useState<string[]>([]);
+  const [lingasComment, setLingasComment] = useState<string>('');
+  const [colchonetasPhotos, setColchonetasPhotos] = useState<string[]>([]);
+  const [colchonetasComment, setColchonetasComment] = useState<string>('');
+
+  const handleLingasPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const newPhotos: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      if (lingasPhotos.length + newPhotos.length >= 6) break;
+      try {
+        const compressed = await compressImage(files[i]);
+        newPhotos.push(compressed);
+      } catch (err) {
+        console.error('Error comprimiendo foto de lingas:', err);
+      }
+    }
+    setLingasPhotos(prev => [...prev, ...newPhotos]);
+  };
+
+  const removeLingasPhoto = (index: number) => {
+    setLingasPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleColchonetasPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const newPhotos: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      if (colchonetasPhotos.length + newPhotos.length >= 6) break;
+      try {
+        const compressed = await compressImage(files[i]);
+        newPhotos.push(compressed);
+      } catch (err) {
+        console.error('Error comprimiendo foto de colchonetas:', err);
+      }
+    }
+    setColchonetasPhotos(prev => [...prev, ...newPhotos]);
+  };
+
+  const removeColchonetasPhoto = (index: number) => {
+    setColchonetasPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
   // Zonales cargados en el camión actual
   const [selectedZonals, setSelectedZonals] = useState<ZonalDetail[]>([]);
 
@@ -1014,6 +1060,10 @@ export default function App({ user }: { user: any }) {
     setCloseTime(draft.closeTime || '');
     setTruckKilos(draft.truckKilos || '');
     setChecklist(draft.checklist || { ...INITIAL_CHECKLIST });
+    setLingasPhotos((draft.checklist as any)?.lingas_photos || []);
+    setLingasComment((draft.checklist as any)?.lingas_comment || '');
+    setColchonetasPhotos((draft.checklist as any)?.colchonetas_photos || []);
+    setColchonetasComment((draft.checklist as any)?.colchonetas_comment || '');
     setSelectedZonals(draft.selectedZonals || []);
     setPhotos(draft.photos || []);
   };
@@ -1128,6 +1178,13 @@ export default function App({ user }: { user: any }) {
     setTruckDrafts(prevDrafts => {
       const updated = prevDrafts.map(d => {
         if (d.id === activeDraftId) {
+          const fullChecklist = {
+            ...checklist,
+            lingas_photos: lingasPhotos,
+            lingas_comment: lingasComment,
+            colchonetas_photos: colchonetasPhotos,
+            colchonetas_comment: colchonetasComment
+          };
           const updatedDraft = {
             ...d,
             truckNumber,
@@ -1140,7 +1197,7 @@ export default function App({ user }: { user: any }) {
             temp3er,
             closeTime,
             truckKilos,
-            checklist,
+            checklist: fullChecklist,
             selectedZonals,
             photos
           };
@@ -1151,7 +1208,7 @@ export default function App({ user }: { user: any }) {
       });
       return updated;
     });
-  }, [activeDraftId, truckNumber, truckPlate, truckAnden, positionsOccupied, observations, temp1er, temp2do, temp3er, closeTime, truckKilos, checklist, selectedZonals, photos]);
+  }, [activeDraftId, truckNumber, truckPlate, truckAnden, positionsOccupied, observations, temp1er, temp2do, temp3er, closeTime, truckKilos, checklist, lingasPhotos, lingasComment, colchonetasPhotos, colchonetasComment, selectedZonals, photos]);
 
   // Cambiar entre borradores de camiones activos
   const switchActiveDraft = (newId: string) => {
@@ -1213,6 +1270,10 @@ export default function App({ user }: { user: any }) {
     setCloseTime('');
     setTruckKilos('');
     setChecklist({ ...INITIAL_CHECKLIST });
+    setLingasPhotos([]);
+    setLingasComment('');
+    setColchonetasPhotos([]);
+    setColchonetasComment('');
     setSelectedZonals([]);
     setPhotos([]);
   };
@@ -2140,6 +2201,10 @@ export default function App({ user }: { user: any }) {
           positions_occupied: positionsOccupied,
           checklist: {
             ...checklist,
+            lingas_photos: lingasPhotos.length > 0 ? lingasPhotos : undefined,
+            lingas_comment: lingasComment ? lingasComment : undefined,
+            colchonetas_photos: colchonetasPhotos.length > 0 ? colchonetasPhotos : undefined,
+            colchonetas_comment: colchonetasComment ? colchonetasComment : undefined,
             photos: photos.length > 0 ? photos : undefined
           },
           zonals_detail: formattedZonals,
@@ -2709,23 +2774,129 @@ export default function App({ user }: { user: any }) {
                 {/* Check list */}
                 <div className="space-y-2">
                   <span className="block text-xs font-bold text-slate-500 uppercase">Check List de Inspección</span>
-                  <div className="space-y-1.5 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                  <div className="space-y-2.5 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                     {[
                       { key: 'postura_anden', label: '1. Horario de postura en el Andén' },
                       { key: 'limpieza_estructura', label: '2. Estado camión (Limpieza, Sin daños)' },
                       { key: 'luces_encendidas', label: '3. Estado de Luces (ENCENDIDAS)' },
-                      { key: 'separador_termico', label: '4. Verificación Separador Térmico' },
+                      { key: 'separador_termico', label: '4. Verificación Separador Térmico / Colchonetas' },
                       { key: 'lingas_camion', label: '5. Verificación Lingas por camión' }
                     ].map((item) => (
-                      <label key={item.key} className="flex items-center justify-between text-xs font-bold text-slate-700 py-1 cursor-pointer select-none">
-                        <span>{item.label}</span>
-                        <input 
-                          type="checkbox"
-                          checked={(checklist as any)[item.key]}
-                          onChange={(e) => setChecklist({ ...checklist, [item.key]: e.target.checked })}
-                          className="w-5 h-5 rounded text-brand-primary focus:ring-brand-primary border-slate-300"
-                        />
-                      </label>
+                      <div key={item.key} className="space-y-2">
+                        <label className="flex items-center justify-between text-xs font-bold text-slate-700 py-1 cursor-pointer select-none">
+                          <span>{item.label}</span>
+                          <input 
+                            type="checkbox"
+                            checked={(checklist as any)[item.key]}
+                            onChange={(e) => setChecklist({ ...checklist, [item.key]: e.target.checked })}
+                            className="w-5 h-5 rounded text-brand-primary focus:ring-brand-primary border-slate-300 cursor-pointer"
+                          />
+                        </label>
+
+                        {/* SUB-SECCIÓN FOTOS & COMENTARIO PARA ITEM 4: SEPARADOR TÉRMICO / COLCHONETAS */}
+                        {item.key === 'separador_termico' && (
+                          <div className="bg-white p-3 rounded-xl border border-slate-200/80 space-y-2.5 ml-2 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-black text-slate-700 uppercase flex items-center gap-1.5">
+                                📸 Fotos Colchonetas ({colchonetasPhotos.length})
+                              </span>
+                              <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95">
+                                <Camera className="w-3.5 h-3.5 text-amber-600" /> + Adjuntar Foto
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  capture="environment"
+                                  onChange={handleColchonetasPhotoUpload}
+                                  className="hidden"
+                                />
+                              </label>
+                            </div>
+
+                            {colchonetasPhotos.length > 0 && (
+                              <div className="grid grid-cols-3 gap-2">
+                                {colchonetasPhotos.map((pUrl, pIdx) => (
+                                  <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100 group">
+                                    <img
+                                      src={pUrl}
+                                      alt={`Colchoneta ${pIdx + 1}`}
+                                      className="w-full h-full object-cover cursor-pointer"
+                                      onClick={() => openPhotoGallery(colchonetasPhotos, pIdx)}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeColchonetasPhoto(pIdx)}
+                                      className="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-0.5 opacity-90 hover:opacity-100 shadow-sm cursor-pointer"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <input
+                              type="text"
+                              placeholder="Comentario sobre estado de colchonetas (ej: 2 colchonetas limpias sin rasgaduras)..."
+                              value={colchonetasComment}
+                              onChange={(e) => setColchonetasComment(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-amber-500 focus:bg-white transition-all"
+                            />
+                          </div>
+                        )}
+
+                        {/* SUB-SECCIÓN FOTOS & COMENTARIO PARA ITEM 5: LINGAS POR CAMIÓN */}
+                        {item.key === 'lingas_camion' && (
+                          <div className="bg-white p-3 rounded-xl border border-slate-200/80 space-y-2.5 ml-2 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-black text-slate-700 uppercase flex items-center gap-1.5">
+                                📸 Fotos Lingas ({lingasPhotos.length})
+                              </span>
+                              <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95">
+                                <Camera className="w-3.5 h-3.5 text-amber-600" /> + Adjuntar Foto
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  capture="environment"
+                                  onChange={handleLingasPhotoUpload}
+                                  className="hidden"
+                                />
+                              </label>
+                            </div>
+
+                            {lingasPhotos.length > 0 && (
+                              <div className="grid grid-cols-3 gap-2">
+                                {lingasPhotos.map((pUrl, pIdx) => (
+                                  <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100 group">
+                                    <img
+                                      src={pUrl}
+                                      alt={`Linga ${pIdx + 1}`}
+                                      className="w-full h-full object-cover cursor-pointer"
+                                      onClick={() => openPhotoGallery(lingasPhotos, pIdx)}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeLingasPhoto(pIdx)}
+                                      className="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-0.5 opacity-90 hover:opacity-100 shadow-sm cursor-pointer"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <input
+                              type="text"
+                              placeholder="Comentario sobre estado de lingas (ej: 6 lingas operativas y sujetas)..."
+                              value={lingasComment}
+                              onChange={(e) => setLingasComment(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-amber-500 focus:bg-white transition-all"
+                            />
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -3819,6 +3990,75 @@ export default function App({ user }: { user: any }) {
                                 })}
                               </div>
                             </div>
+
+                            {/* INSPECCIÓN DE EQUIPAMIENTO DEL CAMIÓN (LINGAS & COLCHONETAS) */}
+                            {((rec.checklist as any)?.colchonetas_photos?.length > 0 ||
+                              (rec.checklist as any)?.colchonetas_comment ||
+                              (rec.checklist as any)?.lingas_photos?.length > 0 ||
+                              (rec.checklist as any)?.lingas_comment) && (
+                              <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-200/70 space-y-2 text-xs select-none">
+                                <div className="font-extrabold text-amber-900 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                                  <span>📦</span> Inspección de Equipamiento (Colchonetas & Lingas)
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                  {/* Colchonetas */}
+                                  {((rec.checklist as any)?.colchonetas_photos?.length > 0 || (rec.checklist as any)?.colchonetas_comment) && (
+                                    <div className="bg-white p-2.5 rounded-lg border border-amber-200/80 space-y-1.5">
+                                      <span className="font-extrabold text-slate-800 block text-[11px]">
+                                        Separador Térmico / Colchonetas
+                                      </span>
+                                      {(rec.checklist as any)?.colchonetas_comment && (
+                                        <p className="text-slate-600 text-[11px] font-medium bg-slate-50 p-1.5 rounded border border-slate-100 italic">
+                                          "{ (rec.checklist as any).colchonetas_comment }"
+                                        </p>
+                                      )}
+                                      {(rec.checklist as any)?.colchonetas_photos?.length > 0 && (
+                                        <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                                          {(rec.checklist as any).colchonetas_photos.map((pUrl: string, pIdx: number) => (
+                                            <div key={pIdx} className="relative rounded overflow-hidden border border-slate-200 aspect-video bg-slate-100">
+                                              <img
+                                                src={pUrl}
+                                                alt={`Colchoneta ${pIdx + 1}`}
+                                                className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                                onClick={() => openPhotoGallery((rec.checklist as any).colchonetas_photos, pIdx)}
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Lingas */}
+                                  {((rec.checklist as any)?.lingas_photos?.length > 0 || (rec.checklist as any)?.lingas_comment) && (
+                                    <div className="bg-white p-2.5 rounded-lg border border-amber-200/80 space-y-1.5">
+                                      <span className="font-extrabold text-slate-800 block text-[11px]">
+                                        Lingas de Seguridad
+                                      </span>
+                                      {(rec.checklist as any)?.lingas_comment && (
+                                        <p className="text-slate-600 text-[11px] font-medium bg-slate-50 p-1.5 rounded border border-slate-100 italic">
+                                          "{ (rec.checklist as any).lingas_comment }"
+                                        </p>
+                                      )}
+                                      {(rec.checklist as any)?.lingas_photos?.length > 0 && (
+                                        <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                                          {(rec.checklist as any).lingas_photos.map((pUrl: string, pIdx: number) => (
+                                            <div key={pIdx} className="relative rounded overflow-hidden border border-slate-200 aspect-video bg-slate-100">
+                                              <img
+                                                src={pUrl}
+                                                alt={`Linga ${pIdx + 1}`}
+                                                className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                                onClick={() => openPhotoGallery((rec.checklist as any).lingas_photos, pIdx)}
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
 
                             {/* Observaciones y Fotos adjuntas */}
                             {(rec.observations || (rec.checklist as any)?.photos?.length > 0) && (
