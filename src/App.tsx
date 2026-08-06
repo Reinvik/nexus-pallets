@@ -6946,17 +6946,16 @@ export default function App({ user }: { user: any }) {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs min-w-[950px]">
+                    <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
                         <tr>
-                          <th className="p-3.5">Fecha</th>
-                          <th className="p-3.5">Zonal / Viaje</th>
-                          <th className="p-3.5 text-center">Meta vs Real</th>
-                          <th className="p-3.5 text-center">Retraso</th>
-                          <th className="p-3.5">Supervisor & Firmante</th>
-                          <th className="p-3.5 text-center">Categoría</th>
-                          <th className="p-3.5">Justificación & Evidencia</th>
-                          <th className="p-3.5 text-right pr-4">Acción</th>
+                          <th className="py-3 px-2.5">Fecha</th>
+                          <th className="py-3 px-2.5">Zonal / Viaje</th>
+                          <th className="py-3 px-2.5 text-center">Meta vs Real</th>
+                          <th className="py-3 px-2.5 text-center">Retraso</th>
+                          <th className="py-3 px-2.5">Supervisor & Resp.</th>
+                          <th className="py-3 px-2.5 text-center">Categoría / Acción</th>
+                          <th className="py-3 px-2.5">Justificación & Evidencia</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
@@ -6967,65 +6966,77 @@ export default function App({ user }: { user: any }) {
 
                           return (
                             <tr key={log.id || `${log.inspection_date}-${baseZonal}-${viajeNum}`} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="p-3.5 font-mono text-[11px] whitespace-nowrap">
+                              <td className="py-3 px-2.5 font-mono text-[11px] whitespace-nowrap">
                                 {getFormatDate(log.inspection_date)}
                               </td>
 
-                              <td className="p-3.5 font-black uppercase text-slate-800 whitespace-nowrap">
+                              <td className="py-3 px-2.5 font-black uppercase text-slate-800 whitespace-nowrap">
                                 {baseZonal} {viajeNum > 1 ? `(${viajeNum})` : ''}
                               </td>
 
-                              <td className="p-3.5 text-center font-mono whitespace-nowrap">
+                              <td className="py-3 px-2.5 text-center font-mono whitespace-nowrap">
                                 <span className="text-slate-400 font-normal">{log.target_time}</span>
                                 <span className="text-slate-300 mx-1">➔</span>
                                 <strong className="text-slate-800 font-bold">{log.actual_time}</strong>
                               </td>
 
-                              <td className="p-3.5 text-center whitespace-nowrap">
-                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                              <td className="py-3 px-2.5 text-center whitespace-nowrap">
+                                <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200">
                                   🔴 -{log.diff_minutes} min
                                 </span>
                               </td>
 
-                              <td className="p-3.5">
+                              <td className="py-3 px-2.5">
                                 <div className="text-slate-800 font-bold text-xs">{log.supervisor_name}</div>
                                 <div className="text-[10px] text-emerald-800 font-semibold truncate">
                                   Resp: {signer || log.supervisor_name}
                                 </div>
                               </td>
 
-                              <td className="p-3.5 text-center whitespace-nowrap">
+                              <td className="py-3 px-2.5 text-center whitespace-nowrap">
                                 {entry ? (
-                                  <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border uppercase tracking-wider ${
-                                    entry.category === 'Operación' ? 'bg-amber-100 text-amber-900 border-amber-300' :
-                                    entry.category === 'Transporte' ? 'bg-blue-100 text-blue-900 border-blue-300' :
-                                    entry.category === 'Facturación' ? 'bg-purple-100 text-purple-900 border-purple-300' :
-                                    entry.category === 'Planificación' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
-                                    'bg-slate-100 text-slate-800 border-slate-300'
-                                  }`}>
-                                    {entry.category}
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => openDelayModal(log)}
+                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border uppercase tracking-wider transition-all cursor-pointer hover:shadow-xs active:scale-95 inline-flex items-center gap-1 ${
+                                      entry.category === 'Operación' ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200' :
+                                      entry.category === 'Transporte' ? 'bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200' :
+                                      entry.category === 'Facturación' ? 'bg-purple-100 text-purple-900 border-purple-300 hover:bg-purple-200' :
+                                      entry.category === 'Planificación' ? 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200' :
+                                      'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200'
+                                    }`}
+                                    title="Hacer clic para editar la justificación"
+                                  >
+                                    <span>{entry.category}</span>
+                                    <PenTool className="w-3 h-3 text-slate-500 ml-0.5" />
+                                  </button>
                                 ) : (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-600 border border-rose-200 animate-pulse">
-                                    ⚠️ Pendiente
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => openDelayModal(log)}
+                                    className="px-3 py-1 rounded-xl text-[11px] font-black bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-all cursor-pointer active:scale-95 inline-flex items-center gap-1.5 animate-pulse"
+                                    title="Hacer clic para justificar este atraso"
+                                  >
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    <span>⚠️ + Justificar</span>
+                                  </button>
                                 )}
                               </td>
 
-                              <td className="p-3.5 min-w-[280px] max-w-[380px]">
+                              <td className="py-3 px-2.5">
                                 {entry ? (
-                                  <div className="space-y-1.5">
+                                  <div className="space-y-1">
                                     <p className="text-slate-700 text-xs font-medium break-words whitespace-pre-wrap bg-slate-50 p-2 rounded-lg border border-slate-100 italic">
                                       "{entry.justification}"
                                     </p>
                                     {entry.photos && entry.photos.length > 0 && (
-                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                      <div className="flex items-center gap-1 flex-wrap">
                                         {entry.photos.map((pUrl, pIdx) => (
                                           <img
                                             key={pIdx}
                                             src={pUrl}
                                             alt={`Evidencia ${pIdx + 1}`}
-                                            className="w-9 h-9 rounded object-cover border border-slate-200 cursor-pointer hover:scale-110 transition-transform shadow-2xs"
+                                            className="w-8 h-8 rounded object-cover border border-slate-200 cursor-pointer hover:scale-110 transition-transform shadow-2xs"
                                             onClick={() => openPhotoGallery(entry.photos || [], pIdx)}
                                           />
                                         ))}
@@ -7040,21 +7051,6 @@ export default function App({ user }: { user: any }) {
                                     Sin justificación ingresada
                                   </span>
                                 )}
-                              </td>
-
-                              <td className="p-3.5 text-right whitespace-nowrap pr-4">
-                                <button
-                                  type="button"
-                                  onClick={() => openDelayModal(log)}
-                                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95 inline-flex items-center gap-1.5 ${
-                                    entry
-                                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
-                                      : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/30'
-                                  }`}
-                                >
-                                  <PenTool className="w-3.5 h-3.5" />
-                                  <span>{entry ? 'Modificar' : '+ Justificar'}</span>
-                                </button>
                               </td>
                             </tr>
                           );
