@@ -303,6 +303,16 @@ export default function App({ user }: { user: any }) {
   const [kpiEndDate, setKpiEndDate] = useState<string>(() => getChileDateString());
   const [kpiActiveSubTab, setKpiActiveSubTab] = useState<'supervisores' | 'responsables' | 'zonales' | 'detalle'>('supervisores');
 
+  // Estado para modal de detalle de KPI (Salidas A Tiempo vs Retrasadas)
+  type KpiDetailModalData = {
+    title: string;
+    subtitle: string;
+    type: 'on_time' | 'late' | 'all';
+    logs: ZonalDepartureLog[];
+  };
+  const [kpiDetailModal, setKpiDetailModal] = useState<KpiDetailModalData | null>(null);
+  const [kpiDetailSearch, setKpiDetailSearch] = useState<string>('');
+
   // Estado para Pestaña "Salidas a Tiempo" (Control Room Dashboard)
   type ZonalTargetTime = {
     id?: string;
@@ -340,6 +350,55 @@ export default function App({ user }: { user: any }) {
   const [temp1er, setTemp1er] = useState<number>(0);
   const [temp2do, setTemp2do] = useState<number>(-18);
   const [temp3er, setTemp3er] = useState<number>(0);
+
+  // Manejo de Temperaturas Termos: Solo 1 congelado (<= -9°C) a la vez. Si uno se activa, los demás pasan a 0°C (Refrigerado).
+  const handleSetTemp1er = (val: number) => {
+    setTemp1er(val);
+    if (val <= -9) {
+      if (temp2do <= -9) setTemp2do(0);
+      if (temp3er <= -9) setTemp3er(0);
+    }
+  };
+
+  const handleSetTemp2do = (val: number) => {
+    setTemp2do(val);
+    if (val <= -9) {
+      if (temp1er <= -9) setTemp1er(0);
+      if (temp3er <= -9) setTemp3er(0);
+    }
+  };
+
+  const handleSetTemp3er = (val: number) => {
+    setTemp3er(val);
+    if (val <= -9) {
+      if (temp1er <= -9) setTemp1er(0);
+      if (temp2do <= -9) setTemp2do(0);
+    }
+  };
+
+  const handleSetEditingTemp1er = (val: number) => {
+    setEditingTemp1er(val);
+    if (val <= -9) {
+      if (editingTemp2do <= -9) setEditingTemp2do(0);
+      if (editingTemp3er <= -9) setEditingTemp3er(0);
+    }
+  };
+
+  const handleSetEditingTemp2do = (val: number) => {
+    setEditingTemp2do(val);
+    if (val <= -9) {
+      if (editingTemp1er <= -9) setEditingTemp1er(0);
+      if (editingTemp3er <= -9) setEditingTemp3er(0);
+    }
+  };
+
+  const handleSetEditingTemp3er = (val: number) => {
+    setEditingTemp3er(val);
+    if (val <= -9) {
+      if (editingTemp1er <= -9) setEditingTemp1er(0);
+      if (editingTemp2do <= -9) setEditingTemp2do(0);
+    }
+  };
   const [closeTime, setCloseTime] = useState<string>('');
   const [truckKilos, setTruckKilos] = useState<string>('');
   const [truckAnden, setTruckAnden] = useState<string>('');
@@ -2499,7 +2558,7 @@ export default function App({ user }: { user: any }) {
                     <span>Temperaturas Termos del Camión (Vista Cenital)</span>
                   </label>
                   <span className="text-[10px] text-slate-400 font-semibold hidden sm:inline">
-                    Haz clic en cada posición para alternar entre 0°C (Verde) y -18°C (Azul)
+                    Haz clic en cada posición para alternar entre 0°C y -18°C (solo 1 congelado activo)
                   </span>
                 </div>
 
@@ -2535,7 +2594,7 @@ export default function App({ user }: { user: any }) {
                       {/* POSICIÓN 1 (Izquierda / 1er Termo) */}
                       <button
                         type="button"
-                        onClick={() => setTemp1er(temp1er <= -9 ? 0 : -18)}
+                        onClick={() => handleSetTemp1er(temp1er <= -9 ? 0 : -18)}
                         className={`flex-1 min-w-0 rounded-lg sm:rounded-xl border-2 transition-all cursor-pointer p-1 sm:p-2 flex flex-col items-center justify-between shadow-sm active:scale-95 ${
                           temp1er <= -9
                             ? 'bg-sky-500 border-sky-400 text-white shadow-sky-500/30'
@@ -2561,7 +2620,7 @@ export default function App({ user }: { user: any }) {
                           <input
                             type="number"
                             value={temp1er}
-                            onChange={(e) => setTemp1er(parseInt(e.target.value) || 0)}
+                            onChange={(e) => handleSetTemp1er(parseInt(e.target.value) || 0)}
                             className="w-7 sm:w-10 bg-white text-slate-900 text-[9px] sm:text-xs font-mono font-black text-center rounded py-0 focus:outline-none"
                           />
                           <span className="text-[7.5px] sm:text-[9px] font-bold">°C</span>
@@ -2571,7 +2630,7 @@ export default function App({ user }: { user: any }) {
                       {/* POSICIÓN 2 (Centro / 2do Termo) */}
                       <button
                         type="button"
-                        onClick={() => setTemp2do(temp2do <= -9 ? 0 : -18)}
+                        onClick={() => handleSetTemp2do(temp2do <= -9 ? 0 : -18)}
                         className={`flex-1 min-w-0 rounded-lg sm:rounded-xl border-2 transition-all cursor-pointer p-1 sm:p-2 flex flex-col items-center justify-between shadow-sm active:scale-95 ${
                           temp2do <= -9
                             ? 'bg-sky-500 border-sky-400 text-white shadow-sky-500/30'
@@ -2597,7 +2656,7 @@ export default function App({ user }: { user: any }) {
                           <input
                             type="number"
                             value={temp2do}
-                            onChange={(e) => setTemp2do(parseInt(e.target.value) || 0)}
+                            onChange={(e) => handleSetTemp2do(parseInt(e.target.value) || 0)}
                             className="w-7 sm:w-10 bg-white text-slate-900 text-[9px] sm:text-xs font-mono font-black text-center rounded py-0 focus:outline-none"
                           />
                           <span className="text-[7.5px] sm:text-[9px] font-bold">°C</span>
@@ -2607,7 +2666,7 @@ export default function App({ user }: { user: any }) {
                       {/* POSICIÓN 3 (Derecha / 3er Termo) */}
                       <button
                         type="button"
-                        onClick={() => setTemp3er(temp3er <= -9 ? 0 : -18)}
+                        onClick={() => handleSetTemp3er(temp3er <= -9 ? 0 : -18)}
                         className={`flex-1 min-w-0 rounded-lg sm:rounded-xl border-2 transition-all cursor-pointer p-1 sm:p-2 flex flex-col items-center justify-between shadow-sm active:scale-95 ${
                           temp3er <= -9
                             ? 'bg-sky-500 border-sky-400 text-white shadow-sky-500/30'
@@ -2633,7 +2692,7 @@ export default function App({ user }: { user: any }) {
                           <input
                             type="number"
                             value={temp3er}
-                            onChange={(e) => setTemp3er(parseInt(e.target.value) || 0)}
+                            onChange={(e) => handleSetTemp3er(parseInt(e.target.value) || 0)}
                             className="w-7 sm:w-10 bg-white text-slate-900 text-[9px] sm:text-xs font-mono font-black text-center rounded py-0 focus:outline-none"
                           />
                           <span className="text-[7.5px] sm:text-[9px] font-bold">°C</span>
@@ -5374,19 +5433,43 @@ export default function App({ user }: { user: any }) {
                   </div>
                 </div>
 
-                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
-                  <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Salidas A Tiempo</span>
+                <div 
+                  onClick={() => setKpiDetailModal({
+                    title: 'Salidas A Tiempo',
+                    subtitle: `${onTimeLogs.length} salidas a tiempo de ${totalLogs} totales en el período`,
+                    type: 'on_time',
+                    logs: onTimeLogs
+                  })}
+                  className="bg-emerald-50 border border-emerald-200 hover:border-emerald-400 p-4 rounded-2xl shadow-sm flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-95 group"
+                  title="Haz clic para ver la lista completa de salidas a tiempo"
+                >
+                  <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider flex items-center justify-between">
+                    Salidas A Tiempo
+                    <Eye className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-600" />
+                  </span>
                   <div className="flex items-baseline justify-between mt-1">
                     <span className="text-3xl font-black text-emerald-800 font-mono">{onTimeLogs.length}</span>
-                    <span className="text-xs text-emerald-600 font-bold">de {totalLogs} salidas</span>
+                    <span className="text-xs text-emerald-600 font-bold underline">ver detalle →</span>
                   </div>
                 </div>
 
-                <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
-                  <span className="text-[10px] font-black uppercase text-rose-700 tracking-wider">Salidas Retrasadas</span>
+                <div 
+                  onClick={() => setKpiDetailModal({
+                    title: 'Salidas Retrasadas',
+                    subtitle: `${lateLogs.length} salidas con retraso de ${totalLogs} totales en el período`,
+                    type: 'late',
+                    logs: lateLogs
+                  })}
+                  className="bg-rose-50 border border-rose-200 hover:border-rose-400 p-4 rounded-2xl shadow-sm flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-95 group"
+                  title="Haz clic para ver la lista completa de salidas retrasadas"
+                >
+                  <span className="text-[10px] font-black uppercase text-rose-700 tracking-wider flex items-center justify-between">
+                    Salidas Retrasadas
+                    <Eye className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-rose-600" />
+                  </span>
                   <div className="flex items-baseline justify-between mt-1">
                     <span className="text-3xl font-black text-rose-800 font-mono">{lateLogs.length}</span>
-                    <span className="text-xs text-rose-600 font-bold">de {totalLogs} salidas</span>
+                    <span className="text-xs text-rose-600 font-bold underline">ver detalle →</span>
                   </div>
                 </div>
 
@@ -5472,16 +5555,50 @@ export default function App({ user }: { user: any }) {
                                   </span>
                                   {sup.name}
                                 </td>
-                                <td className="p-3 text-center font-bold font-mono">{sup.total}</td>
                                 <td className="p-3 text-center">
-                                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                    🟢 {sup.onTime}
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setKpiDetailModal({
+                                      title: `Despachos — Supervisor ${sup.name}`,
+                                      subtitle: `${sup.total} cierres registrados en el período`,
+                                      type: 'all',
+                                      logs: filteredLogs.filter(l => (l.supervisor_name || 'Sin Supervisor') === sup.name)
+                                    })}
+                                    className="font-bold font-mono text-slate-800 hover:text-amber-600 hover:underline cursor-pointer"
+                                    title="Ver todos los despachos de este supervisor"
+                                  >
+                                    {sup.total}
+                                  </button>
                                 </td>
                                 <td className="p-3 text-center">
-                                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => setKpiDetailModal({
+                                      title: `Salidas A Tiempo — Supervisor ${sup.name}`,
+                                      subtitle: `${sup.onTime} de ${sup.total} salidas a tiempo en el período`,
+                                      type: 'on_time',
+                                      logs: filteredLogs.filter(l => (l.supervisor_name || 'Sin Supervisor') === sup.name && l.is_on_time)
+                                    })}
+                                    className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200 hover:scale-105 transition-all cursor-pointer shadow-2xs active:scale-95 inline-flex items-center gap-1"
+                                    title="Haz clic para ver el detalle de salidas a tiempo"
+                                  >
+                                    🟢 {sup.onTime}
+                                  </button>
+                                </td>
+                                <td className="p-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setKpiDetailModal({
+                                      title: `Salidas Retrasadas — Supervisor ${sup.name}`,
+                                      subtitle: `${sup.late} de ${sup.total} salidas con retraso en el período`,
+                                      type: 'late',
+                                      logs: filteredLogs.filter(l => (l.supervisor_name || 'Sin Supervisor') === sup.name && !l.is_on_time)
+                                    })}
+                                    className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200 hover:bg-rose-200 hover:scale-105 transition-all cursor-pointer shadow-2xs active:scale-95 inline-flex items-center gap-1"
+                                    title="Haz clic para ver el detalle de salidas retrasadas"
+                                  >
                                     🔴 {sup.late}
-                                  </span>
+                                  </button>
                                 </td>
                                 <td className="p-3 text-center font-mono text-slate-600">
                                   {sup.avgDiff} min
@@ -5549,16 +5666,50 @@ export default function App({ user }: { user: any }) {
                                     </div>
                                   </div>
                                 </td>
-                                <td className="p-3 text-center font-bold font-mono">{sig.total}</td>
                                 <td className="p-3 text-center">
-                                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                    🟢 {sig.onTime}
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setKpiDetailModal({
+                                      title: `Despachos Firmados — ${sig.name}`,
+                                      subtitle: `${sig.total} cierres firmados en el período`,
+                                      type: 'all',
+                                      logs: filteredLogs.filter(l => (l.signed_by || l.signed_by_name || 'Sin Nombre').toLowerCase() === (sig.email || sig.name).toLowerCase() || l.signed_by_name === sig.name)
+                                    })}
+                                    className="font-bold font-mono text-slate-800 hover:text-amber-600 hover:underline cursor-pointer"
+                                    title="Ver todos los despachos firmados por este responsable"
+                                  >
+                                    {sig.total}
+                                  </button>
                                 </td>
                                 <td className="p-3 text-center">
-                                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => setKpiDetailModal({
+                                      title: `Salidas A Tiempo — Responsable ${sig.name}`,
+                                      subtitle: `${sig.onTime} de ${sig.total} salidas a tiempo en el período`,
+                                      type: 'on_time',
+                                      logs: filteredLogs.filter(l => ((l.signed_by || l.signed_by_name || 'Sin Nombre').toLowerCase() === (sig.email || sig.name).toLowerCase() || l.signed_by_name === sig.name) && l.is_on_time)
+                                    })}
+                                    className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200 hover:scale-105 transition-all cursor-pointer shadow-2xs active:scale-95 inline-flex items-center gap-1"
+                                    title="Haz clic para ver el detalle de salidas a tiempo"
+                                  >
+                                    🟢 {sig.onTime}
+                                  </button>
+                                </td>
+                                <td className="p-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setKpiDetailModal({
+                                      title: `Salidas Retrasadas — Responsable ${sig.name}`,
+                                      subtitle: `${sig.late} de ${sig.total} salidas con retraso en el período`,
+                                      type: 'late',
+                                      logs: filteredLogs.filter(l => ((l.signed_by || l.signed_by_name || 'Sin Nombre').toLowerCase() === (sig.email || sig.name).toLowerCase() || l.signed_by_name === sig.name) && !l.is_on_time)
+                                    })}
+                                    className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200 hover:bg-rose-200 hover:scale-105 transition-all cursor-pointer shadow-2xs active:scale-95 inline-flex items-center gap-1"
+                                    title="Haz clic para ver el detalle de salidas retrasadas"
+                                  >
                                     🔴 {sig.late}
-                                  </span>
+                                  </button>
                                 </td>
                                 <td className="p-3 text-center font-mono text-slate-600">
                                   {sig.avgDiff} min
@@ -5706,8 +5857,144 @@ export default function App({ user }: { user: any }) {
                   </div>
                 )}
               </div>
-            </div>
-          );
+
+            {/* MODAL DE DETALLE DE SALIDAS (A TIEMPO / RETRASADAS) */}
+            {kpiDetailModal && (
+              <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in select-none">
+                <div className="bg-white rounded-2xl max-w-4xl w-full p-5 space-y-4 shadow-2xl border border-slate-200 max-h-[90vh] flex flex-col">
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b pb-3 shrink-0">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                        {kpiDetailModal.type === 'on_time' ? (
+                          <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
+                        ) : kpiDetailModal.type === 'late' ? (
+                          <span className="w-3 h-3 rounded-full bg-rose-500 inline-block shadow-[0_0_8px_rgba(244,63,94,0.6)]"></span>
+                        ) : (
+                          <span className="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+                        )}
+                        {kpiDetailModal.title}
+                      </h3>
+                      <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                        {kpiDetailModal.subtitle}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setKpiDetailModal(null); setKpiDetailSearch(''); }}
+                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all cursor-pointer font-bold text-lg"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Search Filter Bar */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por zonal, fecha, supervisor o responsable..."
+                        value={kpiDetailSearch}
+                        onChange={(e) => setKpiDetailSearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-amber-500 focus:bg-white transition-all"
+                      />
+                    </div>
+                    {kpiDetailSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setKpiDetailSearch('')}
+                        className="text-xs text-slate-500 font-bold px-2 py-1 hover:bg-slate-100 rounded-lg cursor-pointer"
+                      >
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Table Content */}
+                  <div className="overflow-y-auto flex-1 border border-slate-200 rounded-xl">
+                    {(() => {
+                      const q = kpiDetailSearch.toLowerCase().trim();
+                      const filtered = kpiDetailModal.logs.filter(log => {
+                        if (!q) return true;
+                        return (
+                          (log.inspection_date || '').toLowerCase().includes(q) ||
+                          (log.zonal_name || '').toLowerCase().includes(q) ||
+                          (log.supervisor_name || '').toLowerCase().includes(q) ||
+                          (log.signed_by_name || log.signed_by || '').toLowerCase().includes(q) ||
+                          (`viaje ${log.viaje_numero}`).includes(q)
+                        );
+                      });
+
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="p-8 text-center text-slate-400 italic text-xs">
+                            No se encontraron registros que coincidan con la búsqueda.
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-50 text-slate-700 font-black uppercase tracking-wider border-b sticky top-0 z-10 shadow-2xs">
+                            <tr>
+                              <th className="p-3">Fecha</th>
+                              <th className="p-3">Zonal / Viaje</th>
+                              <th className="p-3 text-center">Meta Cierre</th>
+                              <th className="p-3 text-center">Hora Cierre Real</th>
+                              <th className="p-3 text-center">Estado / Margen</th>
+                              <th className="p-3">Supervisor</th>
+                              <th className="p-3">Responsable (Firmante)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                            {filtered.map((log) => (
+                              <tr key={log.id || `${log.dispatch_id}-${log.zonal_name}-${log.viaje_numero}`} className="hover:bg-slate-50/80 transition-all">
+                                <td className="p-3 font-mono font-bold">{log.inspection_date}</td>
+                                <td className="p-3 font-extrabold uppercase">
+                                  {log.zonal_name} {log.viaje_numero > 1 ? `(Viaje ${log.viaje_numero})` : ''}
+                                </td>
+                                <td className="p-3 text-center font-mono">{log.target_time} hrs</td>
+                                <td className="p-3 text-center font-mono font-black">{log.actual_time} hrs</td>
+                                <td className="p-3 text-center">
+                                  {log.is_on_time ? (
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                      🟢 A TIEMPO (+{log.diff_minutes}m)
+                                    </span>
+                                  ) : (
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                      🔴 RETRASADO (-{log.diff_minutes}m)
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3">{log.supervisor_name || '—'}</td>
+                                <td className="p-3 font-semibold text-emerald-800">
+                                  {log.signed_by_name || log.signed_by || 'Pendiente Firma'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="flex items-center justify-between pt-2 border-t text-xs text-slate-500 font-semibold shrink-0">
+                    <span>Mostrando {kpiDetailModal.logs.length} registros en total</span>
+                    <button
+                      type="button"
+                      onClick={() => { setKpiDetailModal(null); setKpiDetailSearch(''); }}
+                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
         })()}
 
         {activeTab === 'zonales' && (() => {
@@ -6362,7 +6649,7 @@ export default function App({ user }: { user: any }) {
                     <input 
                       type="number" 
                       value={editingTemp1er}
-                      onChange={(e) => setEditingTemp1er(Number(e.target.value))}
+                      onChange={(e) => handleSetEditingTemp1er(Number(e.target.value))}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
                     />
                   </div>
@@ -6371,7 +6658,7 @@ export default function App({ user }: { user: any }) {
                     <input 
                       type="number" 
                       value={editingTemp2do}
-                      onChange={(e) => setEditingTemp2do(Number(e.target.value))}
+                      onChange={(e) => handleSetEditingTemp2do(Number(e.target.value))}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
                     />
                   </div>
@@ -6380,7 +6667,7 @@ export default function App({ user }: { user: any }) {
                     <input 
                       type="number" 
                       value={editingTemp3er}
-                      onChange={(e) => setEditingTemp3er(Number(e.target.value))}
+                      onChange={(e) => handleSetEditingTemp3er(Number(e.target.value))}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
                     />
                   </div>
