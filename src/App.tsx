@@ -6953,7 +6953,7 @@ export default function App({ user }: { user: any }) {
                           <th className="py-3 px-2.5">Zonal / Viaje</th>
                           <th className="py-3 px-2.5 text-center">Meta vs Real</th>
                           <th className="py-3 px-2.5 text-center">Retraso</th>
-                          <th className="py-3 px-2.5">Supervisor & Resp.</th>
+                          <th className="py-3 px-2.5">Responsable & Sup.</th>
                           <th className="py-3 px-2.5 text-center">Categoría / Acción</th>
                           <th className="py-3 px-2.5">Justificación & Evidencia</th>
                         </tr>
@@ -6987,9 +6987,9 @@ export default function App({ user }: { user: any }) {
                               </td>
 
                               <td className="py-3 px-2.5">
-                                <div className="text-slate-800 font-bold text-xs">{log.supervisor_name}</div>
-                                <div className="text-[10px] text-emerald-800 font-semibold truncate">
-                                  Resp: {signer || log.supervisor_name}
+                                <div className="text-slate-900 font-extrabold text-xs">{signer || log.supervisor_name}</div>
+                                <div className="text-[10px] text-slate-500 font-semibold truncate">
+                                  Sup: {log.supervisor_name}
                                 </div>
                               </td>
 
