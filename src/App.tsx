@@ -238,6 +238,14 @@ export const compareTimes = (actualTimeStr: string, targetTimeStr: string) => {
   };
 };
 
+/**
+ * Retorna el nombre base del zonal sin números al final (ej: "Puerto Montt 1" o "Puerto Montt 2" -> "Puerto Montt").
+ */
+export const getBaseZonalName = (zonalName: string): string => {
+  if (!zonalName) return '—';
+  return zonalName.replace(/\s+\d+$/i, '').trim();
+};
+
 const ADMIN_EMAILS = [
   'ariel.mella@cial.cl',
   'euro.velasquez@cial.cl',
@@ -635,7 +643,7 @@ export default function App({ user }: { user: any }) {
           { onConflict: 'zonal_name,viaje_numero' }
         );
       if (error) throw error;
-      setSuccessMsg(`Meta de cierre guardada: ${zonalName} (Viaje ${viajeNum}) ➔ ${timeStr} hrs`);
+      setSuccessMsg(`Meta de cierre guardada: ${getBaseZonalName(zonalName)} ${viajeNum > 1 ? viajeNum : ''} ➔ ${timeStr} hrs`);
       await fetchZonalTargetTimes();
     } catch (err: any) {
       alert('Error guardando meta: ' + err.message);
@@ -1372,7 +1380,7 @@ export default function App({ user }: { user: any }) {
     const fileArray = Array.from(files);
     const updated = [...selectedZonals];
     const currentPhotos = [...(updated[zonalIndex].photos || [])];
-    const remaining = 8 - currentPhotos.length;
+    const remaining = 10 - currentPhotos.length;
     const toProcess = fileArray.slice(0, remaining);
 
     for (const f of toProcess) {
@@ -3338,9 +3346,9 @@ export default function App({ user }: { user: any }) {
 
                                 <div>
                                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-                                    Fotos de Respaldo Zonal ({(zonal.photos || []).length}/8)
+                                    Fotos de Respaldo Zonal ({(zonal.photos || []).length}/10)
                                   </label>
-                                  {(!zonal.photos || zonal.photos.length < 8) && (
+                                  {(!zonal.photos || zonal.photos.length < 10) && (
                                     <div className="flex items-center gap-2 select-none">
                                       <label className="flex-1 bg-white hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs active:scale-95" title="Tomar foto directa con la cámara">
                                         <Camera className="w-4 h-4 text-brand-primary shrink-0" />
@@ -4278,7 +4286,7 @@ export default function App({ user }: { user: any }) {
 
                                     <td className="p-3.5">
                                       <div className="font-bold text-slate-800 uppercase text-xs">
-                                        {row.zonalName} {row.viajeNumero > 1 ? `(${row.viajeNumero})` : ''}
+                                        {getBaseZonalName(row.zonalName)}{row.viajeNumero > 1 ? ` ${row.viajeNumero}` : ''}
                                       </div>
                                       <div className="text-[10px] text-slate-400 font-normal">{row.lugarCamion}</div>
                                     </td>
@@ -4360,7 +4368,7 @@ export default function App({ user }: { user: any }) {
                                           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
                                             <div className="flex items-center gap-2">
                                               <span className="text-xs font-black uppercase text-brand-primary">
-                                                📍 Zonal: {row.zonalName} {row.viajeNumero > 1 ? `(Viaje ${row.viajeNumero})` : ''}
+                                                📍 Zonal: {getBaseZonalName(row.zonalName)}{row.viajeNumero > 1 ? ` ${row.viajeNumero}` : ''}
                                               </span>
                                               <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
                                                 Lugar: {row.lugarCamion}
@@ -5548,10 +5556,10 @@ export default function App({ user }: { user: any }) {
             }))
             .sort((a, b) => b.rate - a.rate || b.total - a.total);
 
-          // Agrupación por Zonal
+          // Agrupación por Zonal (Unificando viajes/números como "Puerto Montt 1" y "Puerto Montt 2" en una sola entidad)
           const zonalMap = new Map<string, { name: string; total: number; onTime: number; late: number; totalDiff: number }>();
           filteredLogs.forEach(l => {
-            const zName = l.viaje_numero > 1 ? `${l.zonal_name} ${l.viaje_numero}` : l.zonal_name;
+            const zName = getBaseZonalName(l.zonal_name);
             if (!zonalMap.has(zName)) {
               zonalMap.set(zName, { name: zName, total: 0, onTime: 0, late: 0, totalDiff: 0 });
             }
@@ -6007,16 +6015,50 @@ export default function App({ user }: { user: any }) {
                                 </span>
                                 <span className="uppercase">{zon.name}</span>
                               </td>
-                              <td className="p-3 text-center font-bold font-mono">{zon.total}</td>
                               <td className="p-3 text-center">
-                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                  🟢 {zon.onTime}
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setKpiDetailModal({
+                                    title: `Despachos — Zonal ${zon.name}`,
+                                    subtitle: `${zon.total} camiones/cierres enviados a ${zon.name} en el período`,
+                                    type: 'all',
+                                    logs: filteredLogs.filter(l => getBaseZonalName(l.zonal_name) === zon.name)
+                                  })}
+                                  className="font-bold font-mono text-slate-800 hover:text-amber-600 hover:underline cursor-pointer"
+                                  title="Ver todos los camiones/despachos enviados a este zonal"
+                                >
+                                  {zon.total}
+                                </button>
                               </td>
                               <td className="p-3 text-center">
-                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                <button
+                                  type="button"
+                                  onClick={() => setKpiDetailModal({
+                                    title: `Salidas A Tiempo — Zonal ${zon.name}`,
+                                    subtitle: `${zon.onTime} de ${zon.total} salidas a tiempo a ${zon.name}`,
+                                    type: 'on_time',
+                                    logs: filteredLogs.filter(l => getBaseZonalName(l.zonal_name) === zon.name && l.is_on_time)
+                                  })}
+                                  className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200 hover:scale-105 transition-all cursor-pointer shadow-2xs active:scale-95 inline-flex items-center gap-1"
+                                  title="Haz clic para ver el detalle de salidas a tiempo"
+                                >
+                                  🟢 {zon.onTime}
+                                </button>
+                              </td>
+                              <td className="p-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => setKpiDetailModal({
+                                    title: `Salidas Retrasadas — Zonal ${zon.name}`,
+                                    subtitle: `${zon.late} de ${zon.total} salidas con retraso a ${zon.name}`,
+                                    type: 'late',
+                                    logs: filteredLogs.filter(l => getBaseZonalName(l.zonal_name) === zon.name && !l.is_on_time)
+                                  })}
+                                  className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200 hover:bg-rose-200 hover:scale-105 transition-all cursor-pointer shadow-2xs active:scale-95 inline-flex items-center gap-1"
+                                  title="Haz clic para ver el detalle de salidas retrasadas"
+                                >
                                   🔴 {zon.late}
-                                </span>
+                                </button>
                               </td>
                               <td className="p-3 text-center font-mono text-slate-600">
                                 {zon.avgDiff} min
@@ -6070,7 +6112,7 @@ export default function App({ user }: { user: any }) {
                             <tr key={log.id || `${log.dispatch_id}-${log.zonal_name}-${log.viaje_numero}`} className="hover:bg-slate-50/80 transition-all">
                               <td className="p-3 font-mono font-bold">{log.inspection_date}</td>
                               <td className="p-3 font-extrabold uppercase">
-                                {log.zonal_name} {log.viaje_numero > 1 ? `(Viaje ${log.viaje_numero})` : ''}
+                                {getBaseZonalName(log.zonal_name)}{log.viaje_numero > 1 ? ` ${log.viaje_numero}` : ''}
                               </td>
                               <td className="p-3 text-center font-mono">{log.target_time} hrs</td>
                               <td className="p-3 text-center font-mono font-black">{log.actual_time} hrs</td>
