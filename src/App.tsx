@@ -390,6 +390,7 @@ export default function App({ user }: { user: any }) {
   const [historyZonalFilter, setHistoryZonalFilter] = useState<string>('ALL');
 
   // Datos del Formulario actual de Despacho
+  const [editingDispatchId, setEditingDispatchId] = useState<string | null>(null);
   const [supervisorName, setSupervisorName] = useState(() => formatSupervisorName(user?.email));
   const [truckNumber, setTruckNumber] = useState('');
   const [truckPlate, setTruckPlate] = useState('');
@@ -1419,6 +1420,7 @@ export default function App({ user }: { user: any }) {
     if (!silent) {
       if (!window.confirm('¿Deseas descartar los datos del camión actual y reiniciar su formulario?')) return;
     }
+    setEditingDispatchId(null);
     setTruckNumber('');
     setTruckPlate('');
     setTruckAnden('');
@@ -2132,23 +2134,43 @@ export default function App({ user }: { user: any }) {
     }
   };
 
-    // Abrir modal de edición de despacho para Admin
-  const openEditDispatchModal = (rec: DispatchRecord) => {
-    setEditingDispatchRecord(rec);
-    setEditingDate(rec.inspection_date || '');
-    setEditingTime(rec.inspection_time || '');
-    setEditingCloseTime(rec.close_time || '');
-    setEditingTruckKilos(rec.truck_kilos ? String(rec.truck_kilos) : '');
-    setEditingTruckAnden(rec.anden_number || '');
-    setEditingTruckNumber(rec.truck_number !== 'N/A' ? rec.truck_number : '');
-    setEditingTruckPlate(rec.truck_plate !== 'N/A' ? rec.truck_plate : '');
-    setEditingSupervisorName(rec.supervisor_name || '');
-    setEditingPositions(rec.positions_occupied || 26);
-    setEditingTemp1er(rec.temp_1er ?? 0);
-    setEditingTemp2do(rec.temp_2do ?? -18);
-    setEditingTemp3er(rec.temp_3er ?? 0);
-    setEditingZonalsDetail(JSON.parse(JSON.stringify(rec.zonals_detail || [])));
-    setEditingObservations(rec.observations || '');
+  // Cargar un despacho guardado desde el historial directamente a la pantalla de Despacho Camión para reeditarlo
+  const openEditDispatchInForm = (rec: DispatchRecord) => {
+    setEditingDispatchId(rec.id);
+    setSupervisorName(rec.supervisor_name || formatSupervisorName(user?.email));
+    setTruckNumber(rec.truck_number !== 'N/A' ? rec.truck_number : '');
+    setTruckPlate(rec.truck_plate !== 'N/A' ? rec.truck_plate : '');
+    setTruckAnden(rec.anden_number || '');
+    setPositionsOccupied(rec.positions_occupied || 26);
+    setObservations(rec.observations || '');
+    setTemp1er(rec.temp_1er ?? 0);
+    setTemp2do(rec.temp_2do ?? -18);
+    setTemp3er(rec.temp_3er ?? 0);
+    setCloseTime(rec.close_time || '');
+    setTruckKilos(rec.truck_kilos ? String(rec.truck_kilos) : '');
+
+    const cl = (rec.checklist as any) || {};
+    setChecklist({
+      postura_anden: cl.postura_anden !== false,
+      limpieza_estructura: cl.limpieza_estructura !== false,
+      luces_encendidas: cl.luces_encendidas !== false,
+      separador_termico: cl.separador_termico !== false,
+      lingas_camion: cl.lingas_camion !== false
+    });
+    setLingasPhotos(cl.lingas_photos || []);
+    setLingasComment(cl.lingas_comment || '');
+    setColchonetasPhotos(cl.colchonetas_photos || []);
+    setColchonetasComment(cl.colchonetas_comment || '');
+    setPhotos(cl.photos || []);
+
+    setSelectedZonals(JSON.parse(JSON.stringify(rec.zonals_detail || [])));
+
+    setActiveTab('nuevo');
+  };
+
+  const cancelEditDispatch = () => {
+    setEditingDispatchId(null);
+    clearDraft();
   };
 
   // Guardar edición completa de despacho
@@ -2381,41 +2403,80 @@ export default function App({ user }: { user: any }) {
         };
       });
 
-      const { data: insertedData, error } = await supabase
-        .from('pallet_dispatches')
-        .insert([{
-          truck_number: truckNumber || 'N/A',
-          truck_plate: truckPlate || 'N/A',
-          supervisor_name: supervisorName,
-          inspection_date: dateStr,
-          inspection_time: timeStr,
-          positions_occupied: positionsOccupied,
-          checklist: {
-            ...checklist,
-            lingas_photos: lingasPhotos.length > 0 ? lingasPhotos : undefined,
-            lingas_comment: lingasComment ? lingasComment : undefined,
-            colchonetas_photos: colchonetasPhotos.length > 0 ? colchonetasPhotos : undefined,
-            colchonetas_comment: colchonetasComment ? colchonetasComment : undefined,
-            photos: photos.length > 0 ? photos : undefined
-          },
-          zonals_detail: formattedZonals,
-          observations: observations,
-          completed_at: now.toISOString(),
-          temp_1er: temp1er,
-          temp_2do: temp2do,
-          temp_3er: temp3er,
-          close_time: closeTime || null,
-          truck_kilos: truckKilos || null,
-          anden_number: truckAnden || null
-        }])
-        .select();
+      let insertedDispatch: any = null;
 
-      if (error) throw error;
+      if (editingDispatchId) {
+        // MODO EDICIÓN DE DESPACHO EXISTENTE
+        const { data: updatedData, error } = await supabase
+          .from('pallet_dispatches')
+          .update({
+            truck_number: truckNumber || 'N/A',
+            truck_plate: truckPlate || 'N/A',
+            supervisor_name: supervisorName,
+            positions_occupied: positionsOccupied,
+            checklist: {
+              ...checklist,
+              lingas_photos: lingasPhotos.length > 0 ? lingasPhotos : undefined,
+              lingas_comment: lingasComment ? lingasComment : undefined,
+              colchonetas_photos: colchonetasPhotos.length > 0 ? colchonetasPhotos : undefined,
+              colchonetas_comment: colchonetasComment ? colchonetasComment : undefined,
+              photos: photos.length > 0 ? photos : undefined
+            },
+            zonals_detail: formattedZonals,
+            observations: observations,
+            temp_1er: temp1er,
+            temp_2do: temp2do,
+            temp_3er: temp3er,
+            close_time: closeTime || null,
+            truck_kilos: truckKilos || null,
+            anden_number: truckAnden || null
+          })
+          .eq('id', editingDispatchId)
+          .select();
+
+        if (error) throw error;
+        insertedDispatch = updatedData ? updatedData[0] : null;
+        setSuccessMsg(`¡Despacho #${truckNumber || ''} actualizado correctamente!`);
+      } else {
+        // MODO NUEVO DESPACHO
+        const { data: insertedData, error } = await supabase
+          .from('pallet_dispatches')
+          .insert([{
+            truck_number: truckNumber || 'N/A',
+            truck_plate: truckPlate || 'N/A',
+            supervisor_name: supervisorName,
+            inspection_date: dateStr,
+            inspection_time: timeStr,
+            positions_occupied: positionsOccupied,
+            checklist: {
+              ...checklist,
+              lingas_photos: lingasPhotos.length > 0 ? lingasPhotos : undefined,
+              lingas_comment: lingasComment ? lingasComment : undefined,
+              colchonetas_photos: colchonetasPhotos.length > 0 ? colchonetasPhotos : undefined,
+              colchonetas_comment: colchonetasComment ? colchonetasComment : undefined,
+              photos: photos.length > 0 ? photos : undefined
+            },
+            zonals_detail: formattedZonals,
+            observations: observations,
+            completed_at: now.toISOString(),
+            temp_1er: temp1er,
+            temp_2do: temp2do,
+            temp_3er: temp3er,
+            close_time: closeTime || null,
+            truck_kilos: truckKilos || null,
+            anden_number: truckAnden || null
+          }])
+          .select();
+
+        if (error) throw error;
+        insertedDispatch = insertedData ? insertedData[0] : null;
+        setSuccessMsg("¡Despacho registrado correctamente!");
+      }
 
       // Upsert logs de salida por zonal en zonal_departure_logs
-      if (insertedData && insertedData[0]) {
-        const insertedDispatch = insertedData[0];
+      if (insertedDispatch) {
         const signerDisplayName = userDisplayName || supervisorName;
+        const targetDate = insertedDispatch.inspection_date || dateStr;
 
         for (const sz of selectedZonals) {
           const baseName = getBaseZonalName(sz.zonal_name);
@@ -2431,7 +2492,7 @@ export default function App({ user }: { user: any }) {
 
           await supabase.from('zonal_departure_logs').upsert([{
             dispatch_id: insertedDispatch.id,
-            inspection_date: dateStr,
+            inspection_date: targetDate,
             zonal_name: baseName,
             viaje_numero: viajeNum,
             target_time: targetTime,
@@ -2446,7 +2507,7 @@ export default function App({ user }: { user: any }) {
         fetchZonalDepartureLogs();
       }
 
-      setSuccessMsg("¡Despacho registrado correctamente!");
+      setEditingDispatchId(null);
       
       // Borrar el borrador de Supabase para que desaparezca en todos los dispositivos
       await deleteDraftFromSupabase(activeDraftId);
@@ -2698,6 +2759,30 @@ export default function App({ user }: { user: any }) {
 
         {activeTab === 'nuevo' && (
           <form onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* BANNER MODO EDICIÓN DE DESPACHO */}
+            {editingDispatchId && (
+              <div className="bg-amber-500 text-white p-4 rounded-2xl shadow-lg flex items-center justify-between animate-fade-in select-none border-2 border-amber-400">
+                <div className="flex items-center gap-3">
+                  <Edit2 className="w-6 h-6 shrink-0" />
+                  <div>
+                    <span className="font-black uppercase text-xs tracking-wider block">
+                      ✏️ MODO EDICIÓN — MODIFICANDO DESPACHO GUARDADO #{truckNumber || 'S/N'} {truckPlate ? `(${truckPlate})` : ''}
+                    </span>
+                    <span className="text-[11px] opacity-90 font-medium">
+                      Modifica los datos necesarios en este formulario y presiona "GUARDAR CAMBIOS DE DESPACHO" al final para actualizar.
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={cancelEditDispatch}
+                  className="bg-white/20 hover:bg-white/30 text-white px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 active:scale-95 border border-white/30"
+                >
+                  ✕ Cancelar Edición
+                </button>
+              </div>
+            )}
             
             {/* BARRA MULTI-CAMIÓN: PESTAÑAS DE CAMIONES EN PROCESO EN PARALELO */}
             <div className="bg-slate-900 rounded-2xl p-4 shadow-md text-white space-y-3 select-none">
@@ -3740,15 +3825,24 @@ export default function App({ user }: { user: any }) {
 
               <div className="flex flex-col sm:flex-row items-center gap-4 pt-2">
                 <div className="flex-1 text-xs text-slate-400 font-semibold">
-                  Al presionar <span className="text-emerald-400 font-bold">"Confirmar Despacho"</span>, se registrarán las firmas, las temperaturas de los termos y la sumatoria oficial en la base de datos.
+                  Al presionar <span className="text-emerald-400 font-bold">{editingDispatchId ? '"Guardar Cambios de Despacho"' : '"Confirmar Despacho"'}</span>, se actualizarán las firmas, las temperaturas de los termos y la sumatoria oficial en la base de datos.
                 </div>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full sm:w-auto bg-brand-emerald hover:bg-emerald-600 text-white px-8 py-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg disabled:opacity-50 cursor-pointer"
+                  className={`w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg disabled:opacity-50 cursor-pointer ${
+                    editingDispatchId
+                      ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                      : 'bg-brand-emerald hover:bg-emerald-600 text-white'
+                  }`}
                 >
                   {loading ? (
                     <RefreshCw className="w-5 h-5 animate-spin" />
+                  ) : editingDispatchId ? (
+                    <>
+                      <Edit2 className="w-5 h-5" />
+                      GUARDAR CAMBIOS DE DESPACHO
+                    </>
                   ) : (
                     <>
                       <Check className="w-5 h-5" />
@@ -4058,7 +4152,7 @@ export default function App({ user }: { user: any }) {
                                 <>
                                   <button
                                     type="button"
-                                    onClick={() => openEditDispatchModal(rec)}
+                                    onClick={() => openEditDispatchInForm(rec)}
                                     className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1"
                                     title={isAdmin ? 'Editar Despacho (Admin)' : isShiftLeader ? 'Editar Despacho (Jefe de Turno)' : 'Editar mi despacho de hoy'}
                                   >
