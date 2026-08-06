@@ -716,7 +716,7 @@ export default function App({ user }: { user: any }) {
     if (!files || files.length === 0) return;
     const newPhotos: string[] = [];
     for (let i = 0; i < files.length; i++) {
-      if (delayPhotos.length + newPhotos.length >= 4) break;
+      if (delayPhotos.length + newPhotos.length >= 6) break;
       try {
         const compressed = await compressImage(files[i]);
         newPhotos.push(compressed);
@@ -725,6 +725,31 @@ export default function App({ user }: { user: any }) {
       }
     }
     setDelayPhotos(prev => [...prev, ...newPhotos]);
+  };
+
+  const handlePasteDelayPhotos = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          if (delayPhotos.length >= 6) {
+            alert('Máximo 6 fotos de evidencia por atraso.');
+            break;
+          }
+          try {
+            const compressed = await compressImage(file);
+            setDelayPhotos(prev => [...prev, compressed]);
+          } catch (err) {
+            console.error('Error comprimiendo foto pegada:', err);
+          }
+        }
+      }
+    }
   };
 
   const removeDelayPhoto = (index: number) => {
@@ -6888,7 +6913,7 @@ export default function App({ user }: { user: any }) {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+                    <table className="w-full text-left text-xs min-w-[950px]">
                       <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
                         <tr>
                           <th className="p-3.5">Fecha</th>
@@ -6898,7 +6923,7 @@ export default function App({ user }: { user: any }) {
                           <th className="p-3.5">Supervisor & Firmante</th>
                           <th className="p-3.5 text-center">Categoría</th>
                           <th className="p-3.5">Justificación & Evidencia</th>
-                          <th className="p-3.5 text-right">Acción</th>
+                          <th className="p-3.5 text-right pr-4">Acción</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
@@ -6954,20 +6979,20 @@ export default function App({ user }: { user: any }) {
                                 )}
                               </td>
 
-                              <td className="p-3.5 max-w-[280px]">
+                              <td className="p-3.5 min-w-[280px] max-w-[380px]">
                                 {entry ? (
                                   <div className="space-y-1.5">
-                                    <p className="text-slate-700 text-xs font-medium line-clamp-2 italic">
+                                    <p className="text-slate-700 text-xs font-medium break-words whitespace-pre-wrap bg-slate-50 p-2 rounded-lg border border-slate-100 italic">
                                       "{entry.justification}"
                                     </p>
                                     {entry.photos && entry.photos.length > 0 && (
-                                      <div className="flex items-center gap-1.5">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
                                         {entry.photos.map((pUrl, pIdx) => (
                                           <img
                                             key={pIdx}
                                             src={pUrl}
                                             alt={`Evidencia ${pIdx + 1}`}
-                                            className="w-8 h-8 rounded object-cover border border-slate-200 cursor-pointer hover:scale-110 transition-transform"
+                                            className="w-9 h-9 rounded object-cover border border-slate-200 cursor-pointer hover:scale-110 transition-transform shadow-2xs"
                                             onClick={() => openPhotoGallery(entry.photos || [], pIdx)}
                                           />
                                         ))}
@@ -6984,18 +7009,18 @@ export default function App({ user }: { user: any }) {
                                 )}
                               </td>
 
-                              <td className="p-3.5 text-right whitespace-nowrap">
+                              <td className="p-3.5 text-right whitespace-nowrap pr-4">
                                 <button
                                   type="button"
                                   onClick={() => openDelayModal(log)}
-                                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95 inline-flex items-center gap-1 ${
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95 inline-flex items-center gap-1.5 ${
                                     entry
                                       ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
                                       : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/30'
                                   }`}
                                 >
                                   <PenTool className="w-3.5 h-3.5" />
-                                  {entry ? 'Modificar' : '+ Justificar'}
+                                  <span>{entry ? 'Modificar' : '+ Justificar'}</span>
                                 </button>
                               </td>
                             </tr>
@@ -7009,7 +7034,10 @@ export default function App({ user }: { user: any }) {
 
               {/* MODAL PARA REGISTRAR / EDITAR JUSTIFICACIÓN DE ATRASO */}
               {editingDelayModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in select-none">
+                <div 
+                  onPaste={handlePasteDelayPhotos}
+                  className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in select-none"
+                >
                   <div className="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl border border-slate-200">
                     <div className="flex items-center justify-between border-b pb-3">
                       <div>
@@ -7083,14 +7111,20 @@ export default function App({ user }: { user: any }) {
 
                     {/* DETALLE / JUSTIFICACIÓN DE CAUSA RAÍZ */}
                     <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-slate-700 uppercase">
-                        Motivo / Justificación del Atraso <span className="text-rose-600">*</span>
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-slate-700 uppercase">
+                          Motivo / Justificación del Atraso <span className="text-rose-600">*</span>
+                        </label>
+                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          📋 Ctrl + V para pegar fotos
+                        </span>
+                      </div>
                       <textarea
                         rows={3}
-                        placeholder="Describe la causa raíz del retraso y la oportunidad de mejora para prevenirlo..."
+                        placeholder="Describe la causa raíz del retraso. Si tomaste una captura de pantalla o copiaste una foto, puedes pegarla directamente aquí con Ctrl + V..."
                         value={delayJustification}
                         onChange={(e) => setDelayJustification(e.target.value)}
+                        onPaste={handlePasteDelayPhotos}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium focus:outline-none focus:border-rose-500 focus:bg-white transition-all"
                       />
                     </div>
@@ -7100,19 +7134,24 @@ export default function App({ user }: { user: any }) {
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
                           <Camera className="w-3.5 h-3.5 text-amber-600" />
-                          Fotos de Evidencia / Respaldo (Opcional)
+                          Fotos de Evidencia ({delayPhotos.length}/6)
                         </label>
-                        <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95">
-                          + Adjuntar Foto
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            capture="environment"
-                            onChange={handleDelayPhotoUpload}
-                            className="hidden"
-                          />
-                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-semibold hidden sm:inline">
+                            (O pega con Ctrl + V)
+                          </span>
+                          <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95">
+                            + Adjuntar Foto
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              capture="environment"
+                              onChange={handleDelayPhotoUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
                       </div>
 
                       {delayPhotos.length > 0 && (
