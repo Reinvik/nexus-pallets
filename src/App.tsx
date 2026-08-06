@@ -959,63 +959,108 @@ export default function App({ user }: { user: any }) {
     setPhotos(draft.photos || []);
   };
 
-  // Restaurar borradores de localStorage al montar
-  useEffect(() => {
+  // Cargar y Sincronizar Borradores de Camiones desde Supabase (Multidispositivo Realtime)
+  const fetchActiveDraftsFromSupabase = async () => {
     try {
-      const savedV2 = localStorage.getItem('NEXUS_CONTROL_DESPACHOS_OPEN_DRAFTS_V2');
-      if (savedV2) {
-        const parsed = JSON.parse(savedV2);
-        if (Array.isArray(parsed.drafts) && parsed.drafts.length > 0) {
-          setTruckDrafts(parsed.drafts);
-          const activeId = parsed.activeDraftId && parsed.drafts.some((d: TruckDraft) => d.id === parsed.activeDraftId)
-            ? parsed.activeDraftId
-            : parsed.drafts[0].id;
-          setActiveDraftId(activeId);
-          const target = parsed.drafts.find((d: TruckDraft) => d.id === activeId) || parsed.drafts[0];
-          loadDraftIntoState(target);
-          return;
-        }
-      }
+      const { data, error } = await supabase
+        .from('active_truck_drafts')
+        .select('*')
+        .order('created_at', { ascending: true });
 
-      // Migración desde V1 (borrador único previo)
-      const v1Draft = localStorage.getItem('NEXUS_CONTROL_DESPACHO_DRAFT_V1');
-      if (v1Draft) {
-        const d = JSON.parse(v1Draft);
-        const migratedDraft: TruckDraft = {
-          id: `draft_${Date.now()}`,
-          truckNumber: d.truckNumber || '',
-          truckPlate: d.truckPlate || '',
-          truckAnden: d.truckAnden || '',
-          positionsOccupied: d.positionsOccupied ?? 26,
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const remoteDrafts: TruckDraft[] = data.map(d => ({
+          id: d.id,
+          truckNumber: d.truck_number || '',
+          truckPlate: d.truck_plate || '',
+          truckAnden: d.truck_anden || '',
+          positionsOccupied: d.positions_occupied ?? 26,
           observations: d.observations || '',
-          temp1er: d.temp1er ?? 0,
-          temp2do: d.temp2do ?? -18,
-          temp3er: d.temp3er ?? 0,
-          closeTime: d.closeTime || '',
-          truckKilos: d.truckKilos || '',
+          temp1er: Number(d.temp_1er) || 0,
+          temp2do: Number(d.temp_2do) || -18,
+          temp3er: Number(d.temp_3er) || 0,
+          closeTime: d.close_time || '',
+          truckKilos: d.truck_kilos || '',
           checklist: d.checklist || { ...INITIAL_CHECKLIST },
-          selectedZonals: d.selectedZonals || [],
+          selectedZonals: d.selected_zonals || [],
           photos: d.photos || [],
-          createdAt: new Date().toISOString()
-        };
-        setTruckDrafts([migratedDraft]);
-        setActiveDraftId(migratedDraft.id);
-        loadDraftIntoState(migratedDraft);
-        return;
-      }
+          createdAt: d.created_at
+        }));
 
-      // Borrador por defecto si está vacío
-      const initial = createEmptyDraft();
-      setTruckDrafts([initial]);
-      setActiveDraftId(initial.id);
-      loadDraftIntoState(initial);
-    } catch (e) {
-      console.error('Error restaurando borradores:', e);
-      const initial = createEmptyDraft();
-      setTruckDrafts([initial]);
-      setActiveDraftId(initial.id);
-      loadDraftIntoState(initial);
+        setTruckDrafts(remoteDrafts);
+        
+        setActiveDraftId(prevId => {
+          const validId = prevId && remoteDrafts.some(rd => rd.id === prevId) ? prevId : remoteDrafts[0].id;
+          const target = remoteDrafts.find(rd => rd.id === validId) || remoteDrafts[0];
+          loadDraftIntoState(target);
+          return validId;
+        });
+      } else {
+        const initial = createEmptyDraft();
+        setTruckDrafts([initial]);
+        setActiveDraftId(initial.id);
+        loadDraftIntoState(initial);
+        syncDraftToSupabase(initial);
+      }
+    } catch (err) {
+      console.error('Error cargando borradores de Supabase:', err);
     }
+  };
+
+  const syncDraftToSupabase = async (draft: TruckDraft) => {
+    if (!draft || !draft.id) return;
+    try {
+      await supabase.from('active_truck_drafts').upsert([{
+        id: draft.id,
+        truck_number: draft.truckNumber || '',
+        truck_plate: draft.truckPlate || '',
+        truck_anden: draft.truckAnden || '',
+        positions_occupied: draft.positionsOccupied ?? 26,
+        observations: draft.observations || '',
+        temp_1er: draft.temp1er ?? 0,
+        temp_2do: draft.temp2do ?? -18,
+        temp_3er: draft.temp3er ?? 0,
+        close_time: draft.closeTime || '',
+        truck_kilos: draft.truckKilos || '',
+        checklist: draft.checklist || {},
+        selected_zonals: draft.selectedZonals || [],
+        photos: draft.photos || [],
+        supervisor_name: supervisorName || '',
+        created_by: user?.email || '',
+        updated_at: new Date().toISOString()
+      }], { onConflict: 'id' });
+    } catch (e) {
+      console.error('Error sincronizando borrador en Supabase:', e);
+    }
+  };
+
+  const deleteDraftFromSupabase = async (draftId: string) => {
+    try {
+      await supabase.from('active_truck_drafts').delete().eq('id', draftId);
+    } catch (e) {
+      console.error('Error borrando borrador en Supabase:', e);
+    }
+  };
+
+  // Suscripción Realtime para sincronizar camiones en proceso entre todos los dispositivos
+  useEffect(() => {
+    fetchActiveDraftsFromSupabase();
+
+    const channel = supabase
+      .channel('public:active_truck_drafts')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'active_truck_drafts' },
+        () => {
+          fetchActiveDraftsFromSupabase();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Sincronizar cambios de estado al borrador activo en tiempo real
@@ -1024,7 +1069,7 @@ export default function App({ user }: { user: any }) {
     setTruckDrafts(prevDrafts => {
       const updated = prevDrafts.map(d => {
         if (d.id === activeDraftId) {
-          return {
+          const updatedDraft = {
             ...d,
             truckNumber,
             truckPlate,
@@ -1040,18 +1085,11 @@ export default function App({ user }: { user: any }) {
             selectedZonals,
             photos
           };
+          syncDraftToSupabase(updatedDraft);
+          return updatedDraft;
         }
         return d;
       });
-
-      try {
-        localStorage.setItem('NEXUS_CONTROL_DESPACHOS_OPEN_DRAFTS_V2', JSON.stringify({
-          drafts: updated,
-          activeDraftId
-        }));
-      } catch (e) {
-        console.error('Error guardando borradores:', e);
-      }
       return updated;
     });
   }, [activeDraftId, truckNumber, truckPlate, truckAnden, positionsOccupied, observations, temp1er, temp2do, temp3er, closeTime, truckKilos, checklist, selectedZonals, photos]);
@@ -1073,17 +1111,22 @@ export default function App({ user }: { user: any }) {
     setTruckDrafts(updated);
     setActiveDraftId(newDraft.id);
     loadDraftIntoState(newDraft);
+    syncDraftToSupabase(newDraft);
   };
 
   // Eliminar o reiniciar un borrador de camión específico
   const deleteTruckDraft = (draftId: string) => {
+    deleteDraftFromSupabase(draftId);
     if (truckDrafts.length <= 1) {
       clearDraft(false);
       return;
     }
 
     const target = truckDrafts.find(d => d.id === draftId);
-    const label = target?.truckNumber ? `Camión ${target.truckNumber}` : 'este camión';
+    const label = target?.selectedZonals?.length 
+      ? target.selectedZonals.map(z => z.zonal_name).join(' - ')
+      : (target?.truckNumber ? `Camión ${target.truckNumber}` : 'este camión');
+
     if (!window.confirm(`¿Deseas descartar el borrador para ${label}?`)) return;
 
     const updated = truckDrafts.filter(d => d.id !== draftId);
@@ -2089,6 +2132,9 @@ export default function App({ user }: { user: any }) {
 
       setSuccessMsg("¡Despacho registrado correctamente!");
       
+      // Borrar el borrador de Supabase para que desaparezca en todos los dispositivos
+      await deleteDraftFromSupabase(activeDraftId);
+
       // Remover el camión completado de la lista de borradores abiertos
       const remainingDrafts = truckDrafts.filter(d => d.id !== activeDraftId);
       if (remainingDrafts.length > 0) {
@@ -2100,6 +2146,7 @@ export default function App({ user }: { user: any }) {
         setTruckDrafts([fresh]);
         setActiveDraftId(fresh.id);
         loadDraftIntoState(fresh);
+        syncDraftToSupabase(fresh);
       }
       
       setExpandedZonalIndex(null);
@@ -2353,7 +2400,9 @@ export default function App({ user }: { user: any }) {
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
                 {truckDrafts.map((d, idx) => {
                   const isActive = d.id === activeDraftId;
-                  const truckLabel = d.truckNumber ? `Camión ${d.truckNumber}` : `Camión #${idx + 1}`;
+                  const zonalNames = (d.selectedZonals || []).map(z => (z.viaje_numero || 1) > 1 ? `${z.zonal_name} ${z.viaje_numero}` : z.zonal_name);
+                  const displayZonalNames = zonalNames.length > 0 ? zonalNames.join(' - ') : null;
+                  const truckLabel = displayZonalNames || (d.truckNumber ? `Camión #${d.truckNumber}` : `Camión #${idx + 1}`);
                   const plateLabel = d.truckPlate ? ` (${d.truckPlate})` : '';
                   const zonalCount = (d.selectedZonals || []).length;
 
@@ -4782,8 +4831,18 @@ export default function App({ user }: { user: any }) {
           const dayDispatches = records.filter(r => r.inspection_date === departuresDate);
 
           // Extraer únicamente las zonales agregadas a camiones de despacho para el día seleccionado
-          const activeZonalEntries = new Map<string, { zonalName: string; viajeNumero: number; matchedDispatch: DispatchRecord; matchedZonalDetail: any }>();
+          const activeZonalEntries = new Map<string, {
+            zonalName: string;
+            viajeNumero: number;
+            matchedDispatch: DispatchRecord | null;
+            matchedZonalDetail: any;
+            isOpenDraft?: boolean;
+            draftTruckNumber?: string;
+            draftTruckPlate?: string;
+            draftSupervisor?: string;
+          }>();
 
+          // 1. Zonas ya despachadas y confirmadas definitivamente
           dayDispatches.forEach(rec => {
             (rec.zonals_detail || []).forEach(z => {
               const baseName = getBaseZonalName(z.zonal_name);
@@ -4800,7 +4859,32 @@ export default function App({ user }: { user: any }) {
             });
           });
 
-          const departureCards = Array.from(activeZonalEntries.values()).map(({ zonalName, viajeNumero, matchedDispatch, matchedZonalDetail }) => {
+          // 2. Zonas agregadas en camiones en carga activos (Borradores Abiertos) para el día de hoy
+          if (departuresDate === getChileDateString()) {
+            truckDrafts.forEach(draft => {
+              (draft.selectedZonals || []).forEach(sz => {
+                const baseName = getBaseZonalName(sz.zonal_name);
+                const viajeNum = sz.viaje_numero || 1;
+                const key = `${baseName}-${viajeNum}`;
+                
+                // Si la zonal de este borrador no ha sido cerrada en un despacho definitivo:
+                if (!activeZonalEntries.has(key)) {
+                  activeZonalEntries.set(key, {
+                    zonalName: baseName,
+                    viajeNumero: viajeNum,
+                    matchedDispatch: null,
+                    matchedZonalDetail: sz,
+                    isOpenDraft: true,
+                    draftTruckNumber: draft.truckNumber,
+                    draftTruckPlate: draft.truckPlate,
+                    draftSupervisor: supervisorName
+                  });
+                }
+              });
+            });
+          }
+
+          const departureCards = Array.from(activeZonalEntries.values()).map(({ zonalName, viajeNumero, matchedDispatch, matchedZonalDetail, isOpenDraft, draftTruckNumber, draftTruckPlate, draftSupervisor }) => {
             const targetConfig = zonalTargetTimes.find(t => t.zonal_name === zonalName && t.viaje_numero === viajeNumero)
               || zonalTargetTimes.find(t => t.zonal_name === zonalName)
               || { target_time: '18:00' };
@@ -4834,7 +4918,11 @@ export default function App({ user }: { user: any }) {
               diffMinutes,
               countdownText,
               dispatch: matchedDispatch,
-              zonalDetail: matchedZonalDetail
+              zonalDetail: matchedZonalDetail,
+              isOpenDraft: !!isOpenDraft,
+              draftTruckNumber,
+              draftTruckPlate,
+              draftSupervisor
             };
           });
 
@@ -5054,6 +5142,26 @@ export default function App({ user }: { user: any }) {
                                   Responsable: <strong className="text-emerald-700">{getSignerName(card.dispatch, palletUsers) || card.dispatch.supervisor_name}</strong>
                                 </div>
                               )}
+                            </div>
+                          ) : card.isOpenDraft ? (
+                            <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200/90 text-xs text-slate-700 space-y-0.5 shadow-2xs">
+                              <div className="flex items-center justify-between font-extrabold text-amber-950">
+                                <span className="flex items-center gap-1">
+                                  <span>🚚</span>
+                                  <span>Camión #{card.draftTruckNumber || 'En Carga'}</span>
+                                </span>
+                                {card.draftTruckPlate && (
+                                  <span className="font-mono text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 text-[10px]">
+                                    {card.draftTruckPlate}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-amber-900 font-bold truncate flex items-center justify-between pt-0.5">
+                                <span>Supervisor: <strong>{card.draftSupervisor}</strong></span>
+                                <span className="text-[9px] font-black uppercase text-amber-800 bg-amber-200/80 px-2 py-0.5 rounded-full border border-amber-300 animate-pulse">
+                                  🟡 EN CARGA (ABIERTO)
+                                </span>
+                              </div>
                             </div>
                           ) : (
                             <div className="bg-slate-50/60 p-2.5 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 italic">
