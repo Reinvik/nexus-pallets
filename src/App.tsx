@@ -165,6 +165,12 @@ const formatSupervisorName = (email: string | undefined): string => {
     .join(' ');
 };
 
+const getSignerName = (rec: DispatchRecord, palletUsers: any[]): string | null => {
+  if (!rec.signed_by) return null;
+  const signerUser = (palletUsers || []).find(u => u.email.toLowerCase() === (rec.signed_by || '').toLowerCase());
+  return signerUser?.display_name || formatSupervisorName(rec.signed_by);
+};
+
 const ADMIN_EMAILS = [
   'ariel.mella@cial.cl',
   'euro.velasquez@cial.cl',
@@ -4736,6 +4742,11 @@ export default function App({ user }: { user: any }) {
                               <div className="text-[11px] text-slate-500 font-semibold truncate">
                                 Supervisor: <strong className="text-slate-700">{card.dispatch.supervisor_name}</strong>
                               </div>
+                              {card.dispatch.signed_by && (
+                                <div className="text-[11px] text-slate-500 font-semibold truncate">
+                                  Responsable: <strong className="text-emerald-700">{getSignerName(card.dispatch, palletUsers) || card.dispatch.supervisor_name}</strong>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div className="bg-slate-50/60 p-2.5 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 italic">
@@ -6284,6 +6295,11 @@ export default function App({ user }: { user: any }) {
                         <div className="text-[11px] text-slate-400 truncate">
                           Sup: {card.dispatch.supervisor_name}
                         </div>
+                        {card.dispatch.signed_by && (
+                          <div className="text-[11px] text-emerald-400 font-bold truncate">
+                            Responsable: {getSignerName(card.dispatch, palletUsers) || card.dispatch.supervisor_name}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="bg-black/20 p-3 rounded-xl border border-dashed border-white/10 text-xs text-center text-slate-500 italic">
