@@ -32,7 +32,8 @@ import {
   PenTool,
   Eye,
   Search,
-  CheckCircle2
+  CheckCircle2,
+  TrendingUp
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -225,6 +226,18 @@ export const getChileTimeString = (dateObj: Date = new Date()): string => {
   return formatter.format(dateObj);
 };
 
+export const compareTimes = (actualTimeStr: string, targetTimeStr: string) => {
+  const [aH, aM] = actualTimeStr.slice(0, 5).split(':').map(Number);
+  const [tH, tM] = targetTimeStr.slice(0, 5).split(':').map(Number);
+  const actualMin = aH * 60 + aM;
+  const targetMin = tH * 60 + tM;
+  const diff = targetMin - actualMin;
+  return {
+    isOnTime: actualMin <= targetMin,
+    diffMinutes: Math.abs(diff)
+  };
+};
+
 const ADMIN_EMAILS = [
   'ariel.mella@cial.cl',
   'euro.velasquez@cial.cl',
@@ -258,10 +271,37 @@ const checkIsShiftLeaderOrAdmin = (user: any): boolean => {
 };
 
 export default function App({ user }: { user: any }) {
-  const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'salidas' | 'usuarios'>('nuevo');
+  const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'salidas' | 'kpi_salidas' | 'usuarios'>('nuevo');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Estado para Pestaña "KPI Salidas"
+  type ZonalDepartureLog = {
+    id?: string;
+    dispatch_id?: string;
+    inspection_date: string;
+    zonal_name: string;
+    viaje_numero: number;
+    target_time: string;
+    actual_time: string;
+    is_on_time: boolean;
+    diff_minutes: number;
+    supervisor_name: string;
+    signed_by?: string;
+    signed_by_name?: string;
+    created_at?: string;
+  };
+
+  const [zonalDepartureLogs, setZonalDepartureLogs] = useState<ZonalDepartureLog[]>([]);
+  const [kpiFilterPeriod, setKpiFilterPeriod] = useState<'7days' | '30days' | 'month' | 'all' | 'custom'>('7days');
+  const [kpiStartDate, setKpiStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return getChileDateString(d);
+  });
+  const [kpiEndDate, setKpiEndDate] = useState<string>(() => getChileDateString());
+  const [kpiActiveSubTab, setKpiActiveSubTab] = useState<'supervisores' | 'responsables' | 'zonales' | 'detalle'>('supervisores');
 
   // Estado para Pestaña "Salidas a Tiempo" (Control Room Dashboard)
   type ZonalTargetTime = {
@@ -510,6 +550,22 @@ export default function App({ user }: { user: any }) {
     }
   };
 
+  const fetchZonalDepartureLogs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('zonal_departure_logs')
+        .select('*')
+        .order('inspection_date', { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        setZonalDepartureLogs(data);
+      }
+    } catch (err) {
+      console.error('Error cargando logs históricos de salidas:', err);
+    }
+  };
+
   const handleSaveZonalTargetTime = async (zonalName: string, viajeNum: number, timeStr: string) => {
     setSavingTargetTime(true);
     try {
@@ -626,6 +682,16 @@ export default function App({ user }: { user: any }) {
         })
         .eq('id', signPreviewRecord.id);
       if (error) throw error;
+      // Actualizar información del firmante en logs de salidas
+      const signerDisplayName = userDisplayName || formatSupervisorName(user?.email);
+      await supabase.from('zonal_departure_logs')
+        .update({
+          signed_by: user?.email || '',
+          signed_by_name: signerDisplayName
+        })
+        .eq('dispatch_id', signPreviewRecord.id);
+      fetchZonalDepartureLogs();
+
       // Actualizar en estado local
       setRecords(prev => prev.map(r =>
         r.id === signPreviewRecord.id
@@ -1053,6 +1119,8 @@ export default function App({ user }: { user: any }) {
   useEffect(() => {
     fetchHistory();
     fetchReturns();
+    fetchZonalTargetTimes();
+    fetchZonalDepartureLogs();
   }, []);
 
   useEffect(() => {
@@ -1959,7 +2027,7 @@ export default function App({ user }: { user: any }) {
         };
       });
 
-      const { error } = await supabase
+      const { data: insertedData, error } = await supabase
         .from('pallet_dispatches')
         .insert([{
           truck_number: truckNumber || 'N/A',
@@ -1981,9 +2049,43 @@ export default function App({ user }: { user: any }) {
           close_time: closeTime || null,
           truck_kilos: truckKilos || null,
           anden_number: truckAnden || null
-        }]);
+        }])
+        .select();
 
       if (error) throw error;
+
+      // Upsert logs de salida por zonal en zonal_departure_logs
+      if (insertedData && insertedData[0]) {
+        const insertedDispatch = insertedData[0];
+        const signerDisplayName = userDisplayName || supervisorName;
+
+        for (const sz of selectedZonals) {
+          const baseName = getBaseZonalName(sz.zonal_name);
+          const viajeNum = sz.viaje_numero || 1;
+          const targetConfig = zonalTargetTimes.find(t => t.zonal_name === baseName && t.viaje_numero === viajeNum)
+            || zonalTargetTimes.find(t => t.zonal_name === baseName)
+            || { target_time: '18:00' };
+
+          const targetTime = targetConfig.target_time;
+          const actualTime = timeStr.slice(0, 5);
+          const comp = compareTimes(actualTime, targetTime);
+
+          await supabase.from('zonal_departure_logs').upsert([{
+            dispatch_id: insertedDispatch.id,
+            inspection_date: dateStr,
+            zonal_name: baseName,
+            viaje_numero: viajeNum,
+            target_time: targetTime,
+            actual_time: actualTime,
+            is_on_time: comp.isOnTime,
+            diff_minutes: comp.diffMinutes,
+            supervisor_name: supervisorName,
+            signed_by: user?.email || null,
+            signed_by_name: signerDisplayName
+          }], { onConflict: 'dispatch_id,zonal_name,viaje_numero' });
+        }
+        fetchZonalDepartureLogs();
+      }
 
       setSuccessMsg("¡Despacho registrado correctamente!");
       
@@ -2182,6 +2284,15 @@ export default function App({ user }: { user: any }) {
             <span className="flex items-center justify-center gap-1.5">
               <Clock className="w-4.5 h-4.5 text-amber-500" />
               Salidas a Tiempo
+            </span>
+          </button>
+          <button 
+            onClick={() => { setActiveTab('kpi_salidas'); fetchZonalDepartureLogs(); }}
+            className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'kpi_salidas' ? 'border-amber-500 text-amber-700 bg-amber-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <TrendingUp className="w-4.5 h-4.5 text-amber-600" />
+              KPI Salidas
             </span>
           </button>
           {isSuperAdmin && (
@@ -4811,6 +4922,538 @@ export default function App({ user }: { user: any }) {
                 </div>
             )}
           </div>
+          );
+        })()}
+
+        {activeTab === 'kpi_salidas' && (() => {
+          // Filtrar logs según el rango de fechas seleccionado
+          let filteredLogs = [...zonalDepartureLogs];
+
+          if (kpiFilterPeriod === '7days') {
+            const minDate = new Date();
+            minDate.setDate(minDate.getDate() - 7);
+            const minDateStr = getChileDateString(minDate);
+            filteredLogs = filteredLogs.filter(l => l.inspection_date >= minDateStr);
+          } else if (kpiFilterPeriod === '30days') {
+            const minDate = new Date();
+            minDate.setDate(minDate.getDate() - 30);
+            const minDateStr = getChileDateString(minDate);
+            filteredLogs = filteredLogs.filter(l => l.inspection_date >= minDateStr);
+          } else if (kpiFilterPeriod === 'month') {
+            const currentMonthStr = getChileDateString().slice(0, 7); // YYYY-MM
+            filteredLogs = filteredLogs.filter(l => l.inspection_date.startsWith(currentMonthStr));
+          } else if (kpiFilterPeriod === 'custom') {
+            filteredLogs = filteredLogs.filter(l => l.inspection_date >= kpiStartDate && l.inspection_date <= kpiEndDate);
+          }
+
+          // Métricas Generales KPI
+          const totalLogs = filteredLogs.length;
+          const onTimeLogs = filteredLogs.filter(l => l.is_on_time);
+          const lateLogs = filteredLogs.filter(l => !l.is_on_time);
+          const globalComplianceRate = totalLogs > 0 ? Math.round((onTimeLogs.length / totalLogs) * 100) : 0;
+          const avgDiffMinutes = totalLogs > 0 ? Math.round(filteredLogs.reduce((acc, l) => acc + (l.diff_minutes || 0), 0) / totalLogs) : 0;
+
+          // Agrupación por Supervisor
+          const supervisorMap = new Map<string, { name: string; total: number; onTime: number; late: number; totalDiff: number }>();
+          filteredLogs.forEach(l => {
+            const supName = l.supervisor_name || 'Sin Supervisor';
+            if (!supervisorMap.has(supName)) {
+              supervisorMap.set(supName, { name: supName, total: 0, onTime: 0, late: 0, totalDiff: 0 });
+            }
+            const item = supervisorMap.get(supName)!;
+            item.total += 1;
+            if (l.is_on_time) item.onTime += 1;
+            else item.late += 1;
+            item.totalDiff += (l.diff_minutes || 0);
+          });
+          const supervisorStats = Array.from(supervisorMap.values())
+            .map(s => ({
+              ...s,
+              rate: s.total > 0 ? Math.round((s.onTime / s.total) * 100) : 0,
+              avgDiff: s.total > 0 ? Math.round(s.totalDiff / s.total) : 0
+            }))
+            .sort((a, b) => b.rate - a.rate || b.total - a.total);
+
+          // Agrupación por Responsable (Firmante)
+          const signerMap = new Map<string, { email: string; name: string; total: number; onTime: number; late: number; totalDiff: number }>();
+          filteredLogs.filter(l => l.signed_by || l.signed_by_name).forEach(l => {
+            const key = (l.signed_by || l.signed_by_name || 'Sin Nombre').toLowerCase();
+            const name = l.signed_by_name || l.signed_by || 'Sin Nombre';
+            if (!signerMap.has(key)) {
+              signerMap.set(key, { email: l.signed_by || '', name, total: 0, onTime: 0, late: 0, totalDiff: 0 });
+            }
+            const item = signerMap.get(key)!;
+            item.total += 1;
+            if (l.is_on_time) item.onTime += 1;
+            else item.late += 1;
+            item.totalDiff += (l.diff_minutes || 0);
+          });
+          const signerStats = Array.from(signerMap.values())
+            .map(s => ({
+              ...s,
+              rate: s.total > 0 ? Math.round((s.onTime / s.total) * 100) : 0,
+              avgDiff: s.total > 0 ? Math.round(s.totalDiff / s.total) : 0
+            }))
+            .sort((a, b) => b.rate - a.rate || b.total - a.total);
+
+          // Agrupación por Zonal
+          const zonalMap = new Map<string, { name: string; total: number; onTime: number; late: number; totalDiff: number }>();
+          filteredLogs.forEach(l => {
+            const zName = l.viaje_numero > 1 ? `${l.zonal_name} ${l.viaje_numero}` : l.zonal_name;
+            if (!zonalMap.has(zName)) {
+              zonalMap.set(zName, { name: zName, total: 0, onTime: 0, late: 0, totalDiff: 0 });
+            }
+            const item = zonalMap.get(zName)!;
+            item.total += 1;
+            if (l.is_on_time) item.onTime += 1;
+            else item.late += 1;
+            item.totalDiff += (l.diff_minutes || 0);
+          });
+          const zonalStats = Array.from(zonalMap.values())
+            .map(z => ({
+              ...z,
+              rate: z.total > 0 ? Math.round((z.onTime / z.total) * 100) : 0,
+              avgDiff: z.total > 0 ? Math.round(z.totalDiff / z.total) : 0
+            }))
+            .sort((a, b) => b.rate - a.rate || b.total - a.total);
+
+          return (
+            <div className="space-y-6 select-none">
+              {/* ENCABEZADO Y FILTROS DE PERÍODO */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-amber-600" />
+                      Indicadores de Cumplimiento de Salidas (KPIs)
+                    </h2>
+                    <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                      Historial guardado en Supabase: Análisis de desempeño por Supervisor, Responsables (Firmantes) y Zonales.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => fetchZonalDepartureLogs()}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-all active:scale-95 text-slate-700 cursor-pointer shadow-2xs flex items-center gap-1.5 text-xs font-bold shrink-0"
+                    title="Actualizar KPIs desde Supabase"
+                  >
+                    <RefreshCw className="w-4 h-4" /> Actualizar Datos
+                  </button>
+                </div>
+
+                {/* BOTONES DE FILTRO DE PERÍODO */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Filtrar Período:</span>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setKpiFilterPeriod('7days')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      kpiFilterPeriod === '7days' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Últimos 7 Días
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKpiFilterPeriod('30days')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      kpiFilterPeriod === '30days' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Últimos 30 Días
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKpiFilterPeriod('month')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      kpiFilterPeriod === 'month' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Este Mes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKpiFilterPeriod('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      kpiFilterPeriod === 'all' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Todo el Historial
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKpiFilterPeriod('custom')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      kpiFilterPeriod === 'custom' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Personalizado
+                  </button>
+
+                  {kpiFilterPeriod === 'custom' && (
+                    <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
+                      <input
+                        type="date"
+                        value={kpiStartDate}
+                        onChange={(e) => setKpiStartDate(e.target.value)}
+                        className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700"
+                      />
+                      <span className="text-xs text-slate-400 font-bold">hasta</span>
+                      <input
+                        type="date"
+                        value={kpiEndDate}
+                        onChange={(e) => setKpiEndDate(e.target.value)}
+                        className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* TARJETAS RESUMEN KPI PRINCIPALES */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-slate-900 border border-slate-800 text-white p-4 rounded-2xl shadow-md flex flex-col justify-between">
+                  <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider">% Cumplimiento Global</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-3xl font-black text-amber-400 font-mono">{globalComplianceRate}%</span>
+                    <span className="text-xs text-slate-400 font-bold">Meta 95%</span>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Salidas A Tiempo</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-3xl font-black text-emerald-800 font-mono">{onTimeLogs.length}</span>
+                    <span className="text-xs text-emerald-600 font-bold">de {totalLogs} salidas</span>
+                  </div>
+                </div>
+
+                <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-black uppercase text-rose-700 tracking-wider">Salidas Retrasadas</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-3xl font-black text-rose-800 font-mono">{lateLogs.length}</span>
+                    <span className="text-xs text-rose-600 font-bold">de {totalLogs} salidas</span>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider">Promedios de Margen</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-3xl font-black text-amber-800 font-mono">{avgDiffMinutes} <span className="text-xs font-normal">min</span></span>
+                    <span className="text-xs text-amber-600 font-bold">diferencia</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* NAVEGACIÓN SECUNDARIA DE TABLAS DE ANÁLISIS */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-5">
+                <div className="flex flex-wrap border-b border-slate-200 pb-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setKpiActiveSubTab('supervisores')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 ${
+                      kpiActiveSubTab === 'supervisores' ? 'bg-slate-900 text-amber-400 shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <User className="w-4 h-4" /> % Cumplimiento por Supervisor ({supervisorStats.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKpiActiveSubTab('responsables')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 ${
+                      kpiActiveSubTab === 'responsables' ? 'bg-slate-900 text-amber-400 shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <PenTool className="w-4 h-4" /> % Cumplimiento por Responsables / Firmantes ({signerStats.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKpiActiveSubTab('zonales')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 ${
+                      kpiActiveSubTab === 'zonales' ? 'bg-slate-900 text-amber-400 shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Package className="w-4 h-4" /> Cumplimiento por Zonal ({zonalStats.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKpiActiveSubTab('detalle')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 ${
+                      kpiActiveSubTab === 'detalle' ? 'bg-slate-900 text-amber-400 shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <FileText className="w-4 h-4" /> Detalle de Registros ({filteredLogs.length})
+                  </button>
+                </div>
+
+                {/* SUBTAB 1: SUPERVISORES */}
+                {kpiActiveSubTab === 'supervisores' && (
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                      Desempeño de Cierre a Tiempo por Supervisor
+                    </h3>
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-700 font-black uppercase tracking-wider border-b">
+                          <tr>
+                            <th className="p-3">Supervisor</th>
+                            <th className="p-3 text-center">Total Cierres</th>
+                            <th className="p-3 text-center">A Tiempo</th>
+                            <th className="p-3 text-center">Retrasados</th>
+                            <th className="p-3 text-center">Margen Promedio</th>
+                            <th className="p-3 text-right">% Cumplimiento</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                          {supervisorStats.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="p-6 text-center text-slate-400 italic">No hay registros de supervisores para este período.</td>
+                            </tr>
+                          ) : (
+                            supervisorStats.map((sup, idx) => (
+                              <tr key={sup.name} className="hover:bg-slate-50/80 transition-all">
+                                <td className="p-3 font-extrabold flex items-center gap-2">
+                                  <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-[10px] font-black flex items-center justify-center">
+                                    #{idx + 1}
+                                  </span>
+                                  {sup.name}
+                                </td>
+                                <td className="p-3 text-center font-bold font-mono">{sup.total}</td>
+                                <td className="p-3 text-center">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    🟢 {sup.onTime}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-center">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                    🔴 {sup.late}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-center font-mono text-slate-600">
+                                  {sup.avgDiff} min
+                                </td>
+                                <td className="p-3 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <div className="w-24 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200 hidden sm:block">
+                                      <div
+                                        className={`h-full rounded-full ${
+                                          sup.rate >= 95 ? 'bg-emerald-500' : sup.rate >= 85 ? 'bg-amber-500' : 'bg-rose-500'
+                                        }`}
+                                        style={{ width: `${sup.rate}%` }}
+                                      />
+                                    </div>
+                                    <span className={`px-3 py-1 rounded-full text-xs font-black font-mono ${
+                                      sup.rate >= 95 ? 'bg-emerald-500 text-white' : sup.rate >= 85 ? 'bg-amber-500 text-white' : 'bg-rose-600 text-white'
+                                    }`}>
+                                      {sup.rate}%
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* SUBTAB 2: RESPONSABLES (FIRMANTES) */}
+                {kpiActiveSubTab === 'responsables' && (
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                      Desempeño de Cierre a Tiempo por Responsable (Usuario Firmante)
+                    </h3>
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-700 font-black uppercase tracking-wider border-b">
+                          <tr>
+                            <th className="p-3">Responsable (Firmante)</th>
+                            <th className="p-3 text-center">Despachos Firmados</th>
+                            <th className="p-3 text-center">A Tiempo</th>
+                            <th className="p-3 text-center">Retrasados</th>
+                            <th className="p-3 text-center">Margen Promedio</th>
+                            <th className="p-3 text-right">% Cumplimiento</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                          {signerStats.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="p-6 text-center text-slate-400 italic">No hay cierres firmados registrados en este período.</td>
+                            </tr>
+                          ) : (
+                            signerStats.map((sig, idx) => (
+                              <tr key={sig.name} className="hover:bg-slate-50/80 transition-all">
+                                <td className="p-3 font-extrabold">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black flex items-center justify-center border border-emerald-300">
+                                      #{idx + 1}
+                                    </span>
+                                    <div>
+                                      <span className="block font-black text-slate-900">{sig.name}</span>
+                                      {sig.email && <span className="text-[10px] text-slate-400 font-normal">{sig.email}</span>}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-center font-bold font-mono">{sig.total}</td>
+                                <td className="p-3 text-center">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    🟢 {sig.onTime}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-center">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                    🔴 {sig.late}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-center font-mono text-slate-600">
+                                  {sig.avgDiff} min
+                                </td>
+                                <td className="p-3 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <div className="w-24 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200 hidden sm:block">
+                                      <div
+                                        className={`h-full rounded-full ${
+                                          sig.rate >= 95 ? 'bg-emerald-500' : sig.rate >= 85 ? 'bg-amber-500' : 'bg-rose-500'
+                                        }`}
+                                        style={{ width: `${sig.rate}%` }}
+                                      />
+                                    </div>
+                                    <span className={`px-3 py-1 rounded-full text-xs font-black font-mono ${
+                                      sig.rate >= 95 ? 'bg-emerald-500 text-white' : sig.rate >= 85 ? 'bg-amber-500 text-white' : 'bg-rose-600 text-white'
+                                    }`}>
+                                      {sig.rate}%
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* SUBTAB 3: ZONALES */}
+                {kpiActiveSubTab === 'zonales' && (
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                      Desempeño de Cierre a Tiempo por Zonal Destino
+                    </h3>
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-700 font-black uppercase tracking-wider border-b">
+                          <tr>
+                            <th className="p-3">Zonal</th>
+                            <th className="p-3 text-center">Total Camiones</th>
+                            <th className="p-3 text-center">A Tiempo</th>
+                            <th className="p-3 text-center">Retrasados</th>
+                            <th className="p-3 text-center">Margen Promedio</th>
+                            <th className="p-3 text-right">% Cumplimiento</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                          {zonalStats.map((zon, idx) => (
+                            <tr key={zon.name} className="hover:bg-slate-50/80 transition-all">
+                              <td className="p-3 font-extrabold flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-[10px] font-black flex items-center justify-center">
+                                  #{idx + 1}
+                                </span>
+                                <span className="uppercase">{zon.name}</span>
+                              </td>
+                              <td className="p-3 text-center font-bold font-mono">{zon.total}</td>
+                              <td className="p-3 text-center">
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  🟢 {zon.onTime}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                  🔴 {zon.late}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center font-mono text-slate-600">
+                                {zon.avgDiff} min
+                              </td>
+                              <td className="p-3 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <div className="w-24 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200 hidden sm:block">
+                                    <div
+                                      className={`h-full rounded-full ${
+                                        zon.rate >= 95 ? 'bg-emerald-500' : zon.rate >= 85 ? 'bg-amber-500' : 'bg-rose-500'
+                                      }`}
+                                      style={{ width: `${zon.rate}%` }}
+                                    />
+                                  </div>
+                                  <span className={`px-3 py-1 rounded-full text-xs font-black font-mono ${
+                                    zon.rate >= 95 ? 'bg-emerald-500 text-white' : zon.rate >= 85 ? 'bg-amber-500 text-white' : 'bg-rose-600 text-white'
+                                  }`}>
+                                    {zon.rate}%
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* SUBTAB 4: DETALLE DE REGISTROS HISTÓRICOS */}
+                {kpiActiveSubTab === 'detalle' && (
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                      Listado Completo de Salidas Registradas en Supabase ({filteredLogs.length})
+                    </h3>
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-700 font-black uppercase tracking-wider border-b">
+                          <tr>
+                            <th className="p-3">Fecha</th>
+                            <th className="p-3">Zonal</th>
+                            <th className="p-3 text-center">Meta Cierre</th>
+                            <th className="p-3 text-center">Hora Cierre Real</th>
+                            <th className="p-3 text-center">Estado</th>
+                            <th className="p-3">Supervisor</th>
+                            <th className="p-3">Responsable (Firmante)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                          {filteredLogs.slice(0, 100).map((log) => (
+                            <tr key={log.id || `${log.dispatch_id}-${log.zonal_name}-${log.viaje_numero}`} className="hover:bg-slate-50/80 transition-all">
+                              <td className="p-3 font-mono font-bold">{log.inspection_date}</td>
+                              <td className="p-3 font-extrabold uppercase">
+                                {log.zonal_name} {log.viaje_numero > 1 ? `(Viaje ${log.viaje_numero})` : ''}
+                              </td>
+                              <td className="p-3 text-center font-mono">{log.target_time} hrs</td>
+                              <td className="p-3 text-center font-mono font-black">{log.actual_time} hrs</td>
+                              <td className="p-3 text-center">
+                                {log.is_on_time ? (
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    🟢 A TIEMPO (+{log.diff_minutes}m)
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                    🔴 RETRASADO (-{log.diff_minutes}m)
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3">{log.supervisor_name || '—'}</td>
+                              <td className="p-3 font-semibold text-emerald-800">
+                                {log.signed_by_name || log.signed_by || 'Pendiente Firma'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           );
         })()}
 
