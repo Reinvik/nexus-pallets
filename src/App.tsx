@@ -2928,7 +2928,7 @@ export default function App({ user }: { user: any }) {
                     title="Guarda tu avance en la nube sin salir del formulario"
                   >
                     {saveProgressLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    <span>💾 GUARDAR AVANCE</span>
+                    <span>GUARDAR AVANCE</span>
                   </button>
 
                   <button
@@ -3984,7 +3984,7 @@ export default function App({ user }: { user: any }) {
                     ) : (
                       <>
                         <Save className="w-5 h-5" />
-                        <span>💾 GUARDAR AVANCE</span>
+                        <span>GUARDAR AVANCE</span>
                       </>
                     )}
                   </button>
