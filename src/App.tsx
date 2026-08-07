@@ -8504,12 +8504,61 @@ export default function App({ user }: { user: any }) {
         </div>
       )}
 
-      {/* OVERLAY MODAL: MODO MONITOR TV (PANTALLA COMPLETA PARA CONTROL ROOM) */}
+      {/* OVERLAY MODAL: MODO MONITOR TV (PANTALLA COMPLETA EN TONOS CLAROS PARA CONTROL ROOM) */}
       {isTvMonitorMode && (() => {
+        const compareTimes = (actualTimeStr: string, targetTimeStr: string) => {
+          if (!actualTimeStr || !targetTimeStr) return { isOnTime: true, diffMinutes: 0 };
+          const [aH, aM] = actualTimeStr.slice(0, 5).split(':').map(Number);
+          const [tH, tM] = targetTimeStr.slice(0, 5).split(':').map(Number);
+          const actualMin = aH * 60 + aM;
+          const targetMin = tH * 60 + tM;
+          const diff = targetMin - actualMin;
+          return {
+            isOnTime: actualMin <= targetMin,
+            diffMinutes: Math.abs(diff)
+          };
+        };
+
+        const formatCountdown = (targetTimeStr: string, targetDateStr: string, now: Date) => {
+          if (!targetTimeStr) return { status: 'IN_PROGRESS', text: '--:--:--', isOverdue: false };
+          const [h, m] = targetTimeStr.split(':').map(Number);
+          const targetDate = new Date(targetDateStr + 'T00:00:00');
+          targetDate.setHours(h, m, 0, 0);
+
+          const diffMs = targetDate.getTime() - now.getTime();
+          const diffSec = Math.floor(Math.abs(diffMs) / 1000);
+
+          const hours = Math.floor(diffSec / 3600);
+          const minutes = Math.floor((diffSec % 3600) / 60);
+          const seconds = diffSec % 60;
+
+          const formatted = [
+            hours.toString().padStart(2, '0'),
+            minutes.toString().padStart(2, '0'),
+            seconds.toString().padStart(2, '0')
+          ].join(':');
+
+          if (diffMs < 0) {
+            return { status: 'OVERDUE', text: `+${formatted}`, isOverdue: true };
+          } else {
+            return { status: 'IN_PROGRESS', text: formatted, isOverdue: false };
+          }
+        };
+
         const dayDispatches = records.filter(r => r.inspection_date === departuresDate);
         
-        const activeZonalEntries = new Map<string, { zonalName: string; viajeNumero: number; matchedDispatch: DispatchRecord; matchedZonalDetail: any }>();
+        const activeZonalEntries = new Map<string, { 
+          zonalName: string; 
+          viajeNumero: number; 
+          matchedDispatch: DispatchRecord | null; 
+          matchedZonalDetail: any;
+          isOpenDraft?: boolean;
+          draftTruckNumber?: string;
+          draftTruckPlate?: string;
+          draftSupervisor?: string;
+        }>();
 
+        // 1. Zonas de despachos cerrados en Supabase
         dayDispatches.forEach(rec => {
           (rec.zonals_detail || []).forEach(z => {
             const baseName = getBaseZonalName(z.zonal_name);
@@ -8526,45 +8575,55 @@ export default function App({ user }: { user: any }) {
           });
         });
 
-        const departureCards = Array.from(activeZonalEntries.values()).map(({ zonalName, viajeNumero, matchedDispatch }) => {
+        // 2. Zonas agregadas en camiones en carga activos (Borradores Abiertos) para el día de hoy
+        if (departuresDate === getChileDateString()) {
+          truckDrafts.forEach(draft => {
+            (draft.selectedZonals || []).forEach(sz => {
+              const baseName = getBaseZonalName(sz.zonal_name);
+              const viajeNum = sz.viaje_numero || 1;
+              const key = `${baseName}-${viajeNum}`;
+              
+              if (!activeZonalEntries.has(key)) {
+                activeZonalEntries.set(key, {
+                  zonalName: baseName,
+                  viajeNumero: viajeNum,
+                  matchedDispatch: null,
+                  matchedZonalDetail: sz,
+                  isOpenDraft: true,
+                  draftTruckNumber: draft.truckNumber,
+                  draftTruckPlate: draft.truckPlate,
+                  draftSupervisor: supervisorName
+                });
+              }
+            });
+          });
+        }
+
+        const departureCards = Array.from(activeZonalEntries.values()).map(({ zonalName, viajeNumero, matchedDispatch, matchedZonalDetail, isOpenDraft, draftTruckNumber, draftTruckPlate, draftSupervisor }) => {
           const targetConfig = zonalTargetTimes.find(t => t.zonal_name === zonalName && t.viaje_numero === viajeNumero)
             || zonalTargetTimes.find(t => t.zonal_name === zonalName)
             || { target_time: '18:00' };
 
           const targetTime = targetConfig.target_time;
           const isClosed = !!matchedDispatch;
-          const actualTime = matchedDispatch ? (matchedDispatch.inspection_time || matchedDispatch.created_at.slice(11, 16)) : null;
+          const actualTime = matchedDispatch 
+            ? ((matchedDispatch.close_time && matchedDispatch.close_time.trim()) 
+                ? matchedDispatch.close_time.trim().slice(0, 5) 
+                : (matchedDispatch.inspection_time || matchedDispatch.created_at.slice(11, 16))) 
+            : null;
 
           let status: 'ON_TIME' | 'LATE' | 'IN_PROGRESS' | 'OVERDUE' = 'IN_PROGRESS';
           let diffMinutes = 0;
           let countdownText = '';
 
           if (isClosed && actualTime) {
-            const [aH, aM] = actualTime.slice(0, 5).split(':').map(Number);
-            const [tH, tM] = targetTime.slice(0, 5).split(':').map(Number);
-            const actualMin = aH * 60 + aM;
-            const targetMin = tH * 60 + tM;
-            const diff = targetMin - actualMin;
-            status = actualMin <= targetMin ? 'ON_TIME' : 'LATE';
-            diffMinutes = Math.abs(diff);
+            const comp = compareTimes(actualTime, targetTime);
+            status = comp.isOnTime ? 'ON_TIME' : 'LATE';
+            diffMinutes = comp.diffMinutes;
           } else {
-            const [h, m] = targetTime.split(':').map(Number);
-            const targetDate = new Date(departuresDate + 'T00:00:00');
-            targetDate.setHours(h, m, 0, 0);
-
-            const diffMs = targetDate.getTime() - nowTime.getTime();
-            const diffSec = Math.floor(Math.abs(diffMs) / 1000);
-            const hours = Math.floor(diffSec / 3600);
-            const minutes = Math.floor((diffSec % 3600) / 60);
-            const seconds = diffSec % 60;
-            const formatted = [
-              hours.toString().padStart(2, '0'),
-              minutes.toString().padStart(2, '0'),
-              seconds.toString().padStart(2, '0')
-            ].join(':');
-
-            status = diffMs < 0 ? 'OVERDUE' : 'IN_PROGRESS';
-            countdownText = diffMs < 0 ? `+${formatted}` : formatted;
+            const cd = formatCountdown(targetTime, departuresDate, nowTime);
+            status = cd.status as any;
+            countdownText = cd.text;
           }
 
           return {
@@ -8577,30 +8636,53 @@ export default function App({ user }: { user: any }) {
             status,
             diffMinutes,
             countdownText,
-            dispatch: matchedDispatch
+            dispatch: matchedDispatch,
+            zonalDetail: matchedZonalDetail,
+            isOpenDraft: !!isOpenDraft,
+            draftTruckNumber,
+            draftTruckPlate,
+            draftSupervisor
           };
         });
 
+        // Ordenar tarjetas: Zonales en proceso / abiertas primero (al inicio de la lista superior), luego zonales cerradas
+        const sortedTvCards = [...departureCards].sort((a, b) => {
+          const aActive = !a.isClosed || a.isOpenDraft;
+          const bActive = !b.isClosed || b.isOpenDraft;
+
+          if (aActive && !bActive) return -1;
+          if (!aActive && bActive) return 1;
+
+          if (aActive && bActive) {
+            if (a.status === 'OVERDUE' && b.status !== 'OVERDUE') return -1;
+            if (a.status !== 'OVERDUE' && b.status === 'OVERDUE') return 1;
+            return a.targetTime.localeCompare(b.targetTime);
+          }
+
+          return a.targetTime.localeCompare(b.targetTime);
+        });
+
+        const totalScheduled = departureCards.length;
         const onTimeCount = departureCards.filter(c => c.status === 'ON_TIME').length;
         const lateCount = departureCards.filter(c => c.status === 'LATE').length;
         const inProgressCount = departureCards.filter(c => c.status === 'IN_PROGRESS').length;
         const overdueCount = departureCards.filter(c => c.status === 'OVERDUE').length;
 
         const closedTotal = onTimeCount + lateCount;
-        const complianceRate = closedTotal > 0 ? Math.round((onTimeCount / closedTotal) * 100) : 100;
+        const complianceRate = closedTotal > 0 ? Math.round((onTimeCount / closedTotal) * 100) : (totalScheduled > 0 ? 100 : 0);
 
         return (
-          <div className="fixed inset-0 z-[999999] bg-slate-950 text-white p-6 overflow-y-auto flex flex-col justify-between animate-fade-in select-none">
-            {/* CABECERA MONITOR TV */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+          <div className="fixed inset-0 z-[999999] bg-slate-100 text-slate-800 p-6 overflow-y-auto flex flex-col justify-between animate-fade-in select-none">
+            {/* CABECERA MONITOR TV (TONOS CLAROS) */}
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6 bg-white p-4 rounded-2xl shadow-sm">
               <div className="flex items-center gap-3">
-                <img src={cialLogo} alt="CIAL Logo" className="h-10 object-contain brightness-125" />
+                <img src={cialLogo} alt="CIAL Logo" className="h-10 object-contain" />
                 <div>
-                  <h1 className="text-xl font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
-                    <Clock className="w-6 h-6 text-amber-400" />
-                    MONITOR CONTROL ROOM - SALIDAS A TIEMPO
+                  <h1 className="text-xl font-black text-brand-primary uppercase tracking-widest flex items-center gap-2">
+                    <Clock className="w-6 h-6 text-amber-500" />
+                    MONITOR CONTROL ROOM — SALIDAS A TIEMPO
                   </h1>
-                  <span className="text-xs text-slate-400 font-mono">
+                  <span className="text-xs text-slate-500 font-mono font-bold">
                     Fecha: {departuresDate} | Actualización en Vivo
                   </span>
                 </div>
@@ -8608,8 +8690,8 @@ export default function App({ user }: { user: any }) {
 
               <div className="flex items-center gap-6">
                 <div className="text-right font-mono">
-                  <div className="text-xs text-slate-400 font-bold uppercase">Hora Actual</div>
-                  <div className="text-3xl font-black text-emerald-400 tracking-wider">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">Hora Actual</div>
+                  <div className="text-3xl font-black text-emerald-600 tracking-wider">
                     {nowTime.toLocaleTimeString('es-CL')}
                   </div>
                 </div>
@@ -8617,140 +8699,165 @@ export default function App({ user }: { user: any }) {
                 <button
                   type="button"
                   onClick={() => setIsTvMonitorMode(false)}
-                  className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-black cursor-pointer shadow-lg active:scale-95 flex items-center gap-1.5"
+                  className="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded-xl text-xs font-black cursor-pointer shadow-md active:scale-95 flex items-center gap-1.5 transition-all"
                 >
-                  <X className="w-4 h-4" /> Salir del Modo TV
+                  <X className="w-4.5 h-4.5" /> Salir del Modo TV
                 </button>
               </div>
             </div>
 
-            {/* BARRA SUPERIOR DE METRICAS CONTROL ROOM */}
+            {/* METRICAS KPI CLARAS (EXACTAMENTE IGUALES A LA VISTA NORMAL) */}
             <div className="grid grid-cols-4 gap-4 mb-6">
-              <div className="bg-emerald-950/60 border-2 border-emerald-500/60 p-4 rounded-2xl text-center shadow-lg">
-                <span className="text-xs font-black text-emerald-400 uppercase block">A Tiempo</span>
-                <span className="text-4xl font-mono font-black text-emerald-300 mt-1 block">{onTimeCount}</span>
+              <div className="bg-emerald-50 border-2 border-emerald-300 p-4 rounded-2xl text-center shadow-sm">
+                <span className="text-xs font-black text-emerald-800 uppercase block tracking-wider">A Tiempo</span>
+                <span className="text-4xl font-mono font-black text-emerald-600 mt-1 block">{onTimeCount}</span>
               </div>
-              <div className="bg-rose-950/60 border-2 border-rose-500/60 p-4 rounded-2xl text-center shadow-lg">
-                <span className="text-xs font-black text-rose-400 uppercase block">Retrasados / Expirados</span>
-                <span className="text-4xl font-mono font-black text-rose-300 mt-1 block">{lateCount + overdueCount}</span>
+
+              <div className="bg-rose-50 border-2 border-rose-300 p-4 rounded-2xl text-center shadow-sm">
+                <span className="text-xs font-black text-rose-800 uppercase block tracking-wider">Retrasados / Expirados</span>
+                <span className="text-4xl font-mono font-black text-rose-600 mt-1 block">{lateCount + overdueCount}</span>
               </div>
-              <div className="bg-amber-950/60 border-2 border-amber-500/60 p-4 rounded-2xl text-center shadow-lg">
-                <span className="text-xs font-black text-amber-400 uppercase block">En Proceso</span>
-                <span className="text-4xl font-mono font-black text-amber-300 mt-1 block">{inProgressCount}</span>
+
+              <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl text-center shadow-sm">
+                <span className="text-xs font-black text-amber-800 uppercase block tracking-wider">En Proceso</span>
+                <span className="text-4xl font-mono font-black text-amber-600 mt-1 block">{inProgressCount}</span>
               </div>
-              <div className="bg-slate-900 border-2 border-amber-400/80 p-4 rounded-2xl text-center shadow-lg">
-                <span className="text-xs font-black text-amber-400 uppercase block">% Cumplimiento Metas</span>
+
+              <div className="bg-slate-900 border-2 border-amber-400 p-4 rounded-2xl text-center shadow-md text-white">
+                <span className="text-xs font-black text-amber-400 uppercase block tracking-wider">% Cumplimiento Metas</span>
                 <span className="text-4xl font-mono font-black text-amber-400 mt-1 block">{complianceRate}%</span>
               </div>
             </div>
 
-            {/* VISTA DE REGLONES LATERALES PARA MONITOR TV */}
-            <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-              {departureCards.map((card) => (
-                <div
-                  key={card.id}
-                  className={`p-4 rounded-2xl border-2 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl transition-all ${
-                    card.status === 'ON_TIME'
-                      ? 'bg-emerald-950/40 border-emerald-500 text-emerald-100'
-                      : card.status === 'LATE'
-                      ? 'bg-rose-950/40 border-rose-500 text-rose-100'
-                      : card.status === 'OVERDUE'
-                      ? 'bg-rose-900/60 border-rose-500 animate-pulse text-white'
-                      : 'bg-slate-900 border-amber-500/60 text-slate-100'
-                  }`}
-                >
-                  {/* COL 1: ZONAL Y META */}
-                  <div className="flex items-center gap-4 min-w-[240px]">
-                    <div className={`w-3 h-12 rounded-full shrink-0 ${
-                      card.status === 'ON_TIME' ? 'bg-emerald-400' : card.status === 'LATE' ? 'bg-rose-500' : card.status === 'OVERDUE' ? 'bg-rose-500 animate-pulse' : 'bg-amber-400'
-                    }`} />
-                    <div>
-                      <h2 className="text-xl font-black uppercase tracking-wider text-white">
-                        {card.zonalName} {card.viajeNumero > 1 ? card.viajeNumero : ''}
-                      </h2>
-                      <span className="text-xs text-slate-400 font-mono font-bold">
-                        Meta Cierre: <strong className="text-amber-400">{card.targetTime} hrs</strong>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* COL 2: BADGE ESTADO */}
-                  <div className="min-w-[150px]">
-                    {card.status === 'ON_TIME' && (
-                      <span className="px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 inline-flex items-center gap-1.5">
-                        🟢 A TIEMPO
-                      </span>
-                    )}
-                    {card.status === 'LATE' && (
-                      <span className="px-3.5 py-1.5 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 inline-flex items-center gap-1.5">
-                        🔴 RETRASADO
-                      </span>
-                    )}
-                    {card.status === 'OVERDUE' && (
-                      <span className="px-3.5 py-1.5 rounded-full text-xs font-black bg-rose-600 text-white animate-bounce inline-flex items-center gap-1.5 shadow-lg">
-                        🚨 FUERA DE TIEMPO
-                      </span>
-                    )}
-                    {card.status === 'IN_PROGRESS' && (
-                      <span className="px-3.5 py-1.5 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 inline-flex items-center gap-1.5">
-                        🟡 EN PROCESO
-                      </span>
-                    )}
-                  </div>
-
-                  {/* COL 3: HORA CIERRE REAL O CUENTA REGRESIVA GIGANTE */}
-                  <div className="min-w-[240px] text-left md:text-center font-mono">
-                    {card.isClosed ? (
+            {/* LISTADO DE TARJETAS ZONALES (TONOS CLAROS CON CAMIONES EN CARGA / PROCESO) */}
+            <div className="space-y-3.5 flex-1 overflow-y-auto pr-1">
+              {sortedTvCards.length === 0 ? (
+                <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center space-y-3">
+                  <Clock className="w-12 h-12 text-slate-300 mx-auto" />
+                  <h3 className="text-lg font-black text-slate-700">No hay salidas ni camiones registrados para el día {departuresDate}</h3>
+                </div>
+              ) : (
+                sortedTvCards.map((card) => (
+                  <div
+                    key={card.id}
+                    className={`bg-white border-2 rounded-2xl p-4 shadow-sm transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                      card.status === 'ON_TIME'
+                        ? 'border-emerald-300 bg-emerald-50/20'
+                        : card.status === 'LATE'
+                        ? 'border-rose-300 bg-rose-50/20'
+                        : card.status === 'OVERDUE'
+                        ? 'border-rose-500 animate-pulse bg-rose-50/50'
+                        : 'border-amber-300 bg-amber-50/20'
+                    }`}
+                  >
+                    {/* COL 1: ZONAL Y META CIERRE */}
+                    <div className="flex items-center gap-4 min-w-[260px]">
+                      <div className={`w-3.5 h-12 rounded-full shrink-0 ${
+                        card.status === 'ON_TIME' ? 'bg-emerald-500' : card.status === 'LATE' ? 'bg-rose-500' : card.status === 'OVERDUE' ? 'bg-rose-600 animate-pulse' : 'bg-amber-400'
+                      }`} />
                       <div>
-                        <span className="text-[11px] text-slate-400 font-bold uppercase block">Hora Cierre Real</span>
-                        <div className="flex items-baseline justify-start md:justify-center gap-2 mt-0.5">
-                          <span className="text-3xl font-black text-white">{card.actualTime?.slice(0, 5)} <span className="text-sm font-normal text-slate-400">hrs</span></span>
-                          <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                            card.status === 'ON_TIME' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                        <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">
+                          {card.zonalName} {card.viajeNumero > 1 ? card.viajeNumero : ''}
+                        </h2>
+                        <span className="text-xs text-slate-500 font-bold block">
+                          Meta Cierre: <strong className="text-slate-800 font-mono">{card.targetTime} hrs</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* COL 2: BADGE DE ESTADO */}
+                    <div className="min-w-[150px]">
+                      {card.status === 'ON_TIME' && (
+                        <span className="px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-2xs">
+                          🟢 A TIEMPO
+                        </span>
+                      )}
+                      {card.status === 'LATE' && (
+                        <span className="px-3.5 py-1.5 rounded-full text-xs font-black bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1.5 shadow-2xs">
+                          🔴 RETRASADO
+                        </span>
+                      )}
+                      {card.status === 'OVERDUE' && (
+                        <span className="px-3.5 py-1.5 rounded-full text-xs font-black bg-rose-600 text-white animate-bounce flex items-center gap-1.5 shadow-md">
+                          🚨 FUERA DE TIEMPO
+                        </span>
+                      )}
+                      {card.status === 'IN_PROGRESS' && (
+                        <span className="px-3.5 py-1.5 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 shadow-2xs">
+                          🟡 EN PROCESO
+                        </span>
+                      )}
+                    </div>
+
+                    {/* COL 3: CUENTA REGRESIVA O HORA REAL DE CIERRE */}
+                    <div className="min-w-[240px] text-left md:text-center font-mono">
+                      {card.isClosed ? (
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Hora Cierre Camión</span>
+                          <div className="flex items-baseline justify-start md:justify-center gap-2 mt-0.5">
+                            <span className="text-3xl font-black text-slate-900">{card.actualTime?.slice(0, 5)} <span className="text-sm font-normal text-slate-400">hrs</span></span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                              card.status === 'ON_TIME' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                            }`}>
+                              {card.status === 'ON_TIME' ? `+${card.diffMinutes}m a favor` : `-${card.diffMinutes}m retraso`}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-extrabold uppercase block">
+                            {card.status === 'OVERDUE' ? 'Atrasado Hace' : 'Cuenta Regresiva'}
+                          </span>
+                          <span className={`text-3xl font-black block tracking-wider mt-0.5 ${
+                            card.status === 'OVERDUE' ? 'text-rose-600 animate-pulse' : 'text-amber-600'
                           }`}>
-                            {card.status === 'ON_TIME' ? `+${card.diffMinutes}m a favor` : `-${card.diffMinutes}m retraso`}
+                            {card.countdownText}
                           </span>
                         </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <span className="text-[11px] text-slate-400 font-bold uppercase block">
-                          {card.status === 'OVERDUE' ? 'Atrasado Hace' : 'Tiempo Restante'}
-                        </span>
-                        <span className={`text-3xl font-black block tracking-wider mt-0.5 ${
-                          card.status === 'OVERDUE' ? 'text-rose-400 animate-pulse' : 'text-amber-400'
-                        }`}>
-                          {card.countdownText}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
 
-                  {/* COL 4: CAMION Y SUPERVISOR */}
-                  <div className="min-w-[220px]">
-                    {card.dispatch ? (
-                      <div className="bg-black/40 p-3 rounded-xl border border-white/10 text-xs font-mono text-slate-300 space-y-1">
-                        <div className="flex justify-between font-bold text-white">
-                          <span>🚛 Camión #{card.dispatch.truck_number}</span>
-                          <span className="bg-white/10 px-2 py-0.5 rounded text-amber-300">{card.dispatch.truck_plate}</span>
-                        </div>
-                        <div className="text-[11px] text-slate-400 truncate">
-                          Sup: {card.dispatch.supervisor_name}
-                        </div>
-                        {card.dispatch.signed_by && (
-                          <div className="text-[11px] text-emerald-400 font-bold truncate">
-                            Responsable: {getSignerName(card.dispatch, palletUsers) || card.dispatch.supervisor_name}
+                    {/* COL 4: DETALLE DEL CAMIÓN (IGUAL A IMAGEN 1 DE LA VISTA NORMAL) */}
+                    <div className="min-w-[280px]">
+                      {card.isOpenDraft ? (
+                        <div className="bg-amber-50/80 p-3 rounded-xl border border-amber-200 text-xs font-mono space-y-1">
+                          <div className="flex items-center justify-between font-extrabold text-slate-900">
+                            <span>🚚 Camión #{card.draftTruckNumber || 'En Carga'}</span>
+                            <span className="bg-white px-2 py-0.5 rounded border border-amber-300 font-mono text-amber-900 font-black text-[10px]">
+                              {card.draftTruckPlate || 'S/P'}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="bg-black/20 p-3 rounded-xl border border-dashed border-white/10 text-xs text-center text-slate-500 italic">
-                        Esperando camión...
-                      </div>
-                    )}
+                          <div className="text-[11px] text-amber-900 font-bold truncate">
+                            Supervisor: {card.draftSupervisor || 'Asignado'}
+                          </div>
+                          <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-200/80 text-amber-950 uppercase border border-amber-300">
+                            🟡 EN CARGA (ABIERTO)
+                          </span>
+                        </div>
+                      ) : card.dispatch ? (
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs font-mono space-y-1">
+                          <div className="flex items-center justify-between font-extrabold text-slate-900">
+                            <span>🚚 Camión #{card.dispatch.truck_number || 'S/N'}</span>
+                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 font-mono text-slate-800 font-black text-[10px]">
+                              {card.dispatch.truck_plate || 'S/P'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-600 font-bold truncate">
+                            Supervisor: {card.dispatch.supervisor_name}
+                          </div>
+                          <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 uppercase border border-emerald-300">
+                            🟢 DESPACHADO (CERRADO)
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-50 p-3 rounded-xl border border-dashed border-slate-300 text-xs text-center text-slate-400 font-bold italic">
+                          Esperando postura de camión...
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         );
