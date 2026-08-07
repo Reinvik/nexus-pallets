@@ -33,7 +33,8 @@ import {
   Eye,
   Search,
   CheckCircle2,
-  TrendingUp
+  TrendingUp,
+  Save
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -399,6 +400,10 @@ export default function App({ user }: { user: any }) {
   const [temp1er, setTemp1er] = useState<number>(0);
   const [temp2do, setTemp2do] = useState<number>(0);
   const [temp3er, setTemp3er] = useState<number>(0);
+
+  // Estado para botón y notificación "Guardar Avance"
+  const [saveProgressToast, setSaveProgressToast] = useState<string | null>(null);
+  const [saveProgressLoading, setSaveProgressLoading] = useState(false);
 
   // Manejo de Temperaturas Termos: Solo 1 congelado (<= -9°C) a la vez. Si uno se activa, los demás pasan a 0°C (Refrigerado).
   const handleSetTemp1er = (val: number) => {
@@ -1488,6 +1493,54 @@ export default function App({ user }: { user: any }) {
     setColchonetasComment('');
     setSelectedZonals([]);
     setPhotos([]);
+  };
+
+  // Función para guardar avance explícitamente sin cerrar el formulario ni despachar
+  const handleSaveProgress = async () => {
+    if (!activeDraftId) return;
+
+    setSaveProgressLoading(true);
+    try {
+      const fullChecklist = {
+        ...checklist,
+        lingas_photos: lingasPhotos,
+        lingas_comment: lingasComment,
+        colchonetas_photos: colchonetasPhotos,
+        colchonetas_comment: colchonetasComment
+      };
+
+      const currentDraft: TruckDraft = {
+        id: activeDraftId,
+        truckNumber,
+        truckPlate,
+        truckAnden,
+        positionsOccupied,
+        observations,
+        temp1er,
+        temp2do,
+        temp3er,
+        closeTime,
+        truckKilos,
+        checklist: fullChecklist,
+        selectedZonals,
+        photos,
+        createdAt: new Date().toISOString()
+      };
+
+      await syncDraftToSupabase(currentDraft);
+
+      const timeStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setSaveProgressToast(`Borrador guardado a las ${timeStr} hrs. Puedes continuar completando los datos sin riesgo.`);
+
+      setTimeout(() => {
+        setSaveProgressToast(null);
+      }, 4500);
+    } catch (err) {
+      console.error('Error al guardar avance:', err);
+      alert('Ocurrió un error al guardar el avance.');
+    } finally {
+      setSaveProgressLoading(false);
+    }
   };
 
   // Cargar historial y retornos
@@ -2807,6 +2860,26 @@ export default function App({ user }: { user: any }) {
           </div>
         )}
 
+        {/* TOAST DE CONFIRMACIÓN DE GUARDAR AVANCE */}
+        {saveProgressToast && (
+          <div className="mb-4 p-4 bg-emerald-600 text-white rounded-2xl shadow-xl flex items-center justify-between gap-3 animate-fade-in border border-emerald-400">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-6 h-6 text-emerald-200 shrink-0" />
+              <div>
+                <p className="font-extrabold text-sm">¡Avance Guardado con Éxito!</p>
+                <p className="text-xs text-emerald-100 font-medium">{saveProgressToast}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSaveProgressToast(null)}
+              className="text-emerald-200 hover:text-white text-xs font-bold px-2 py-1 rounded-lg hover:bg-emerald-700/50 transition-all cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {activeTab === 'nuevo' && (
           <form onSubmit={handleSubmit} className="space-y-6">
             
@@ -2846,14 +2919,27 @@ export default function App({ user }: { user: any }) {
                     Carga Múltiple en Paralelo
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={addNewTruckDraft}
-                  className="bg-brand-emerald hover:bg-emerald-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  + Nuevo Camión en Proceso
-                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleSaveProgress}
+                    disabled={saveProgressLoading}
+                    className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
+                    title="Guarda tu avance en la nube sin salir del formulario"
+                  >
+                    {saveProgressLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>💾 GUARDAR AVANCE</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={addNewTruckDraft}
+                    className="bg-brand-emerald hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Nuevo Camión</span>
+                  </button>
+                </div>
               </div>
 
               {/* Pestañas / Píldoras de Camiones Abiertos */}
@@ -3881,33 +3967,52 @@ export default function App({ user }: { user: any }) {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center gap-4 pt-2">
+              <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
                 <div className="flex-1 text-xs text-slate-400 font-semibold">
-                  Al presionar <span className="text-emerald-400 font-bold">{editingDispatchId ? '"Guardar Cambios de Despacho"' : '"Confirmar Despacho"'}</span>, se actualizarán las firmas, las temperaturas de los termos y la sumatoria oficial en la base de datos.
+                  Al presionar <span className="text-emerald-400 font-bold">{editingDispatchId ? '"Guardar Cambios de Despacho"' : '"Confirmar Despacho"'}</span>, se confirmará la salida del camión. Para guardar sin despachar, usa <span className="text-amber-400 font-bold">"Guardar Avance"</span>.
                 </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className={`w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg disabled:opacity-50 cursor-pointer ${
-                    editingDispatchId
-                      ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                      : 'bg-brand-emerald hover:bg-emerald-600 text-white'
-                  }`}
-                >
-                  {loading ? (
-                    <RefreshCw className="w-5 h-5 animate-spin" />
-                  ) : editingDispatchId ? (
-                    <>
-                      <Edit2 className="w-5 h-5" />
-                      GUARDAR CAMBIOS DE DESPACHO
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-5 h-5" />
-                      CONFIRMAR DESPACHO
-                    </>
-                  )}
-                </button>
+                <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleSaveProgress}
+                    disabled={saveProgressLoading}
+                    className="w-full sm:w-auto px-6 py-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md bg-amber-500 hover:bg-amber-600 text-white cursor-pointer"
+                    title="Guarda tu avance actual sin confirmar el despacho"
+                  >
+                    {saveProgressLoading ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Save className="w-5 h-5" />
+                        <span>💾 GUARDAR AVANCE</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className={`w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg disabled:opacity-50 cursor-pointer ${
+                      editingDispatchId
+                        ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                        : 'bg-brand-emerald hover:bg-emerald-600 text-white'
+                    }`}
+                  >
+                    {loading ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : editingDispatchId ? (
+                      <>
+                        <Edit2 className="w-5 h-5" />
+                        GUARDAR CAMBIOS DE DESPACHO
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-5 h-5" />
+                        CONFIRMAR DESPACHO
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </section>
 
