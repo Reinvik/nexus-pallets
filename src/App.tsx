@@ -3235,7 +3235,6 @@ export default function App({ user }: { user: any }) {
                             type="file"
                             accept="image/*"
                             multiple
-                            capture="environment"
                             onChange={handleColchonetasPhotoUpload}
                             className="hidden"
                           />
@@ -3335,7 +3334,6 @@ export default function App({ user }: { user: any }) {
                             type="file"
                             accept="image/*"
                             multiple
-                            capture="environment"
                             onChange={handleLingasPhotoUpload}
                             className="hidden"
                           />
@@ -3778,7 +3776,6 @@ export default function App({ user }: { user: any }) {
                                         <input
                                           type="file"
                                           accept="image/*"
-                                          capture="environment"
                                           className="hidden"
                                           onChange={(e) => handleAddZonalPhoto(zonalIndex, e.target.files)}
                                         />
@@ -7280,7 +7277,6 @@ export default function App({ user }: { user: any }) {
                               type="file"
                               accept="image/*"
                               multiple
-                              capture="environment"
                               onChange={handleDelayPhotoUpload}
                               className="hidden"
                             />
