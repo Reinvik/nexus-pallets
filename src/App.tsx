@@ -1284,8 +1284,30 @@ export default function App({ user }: { user: any }) {
     setPhotos(draft.photos || []);
   };
 
-  // Cargar y Sincronizar Borradores de Camiones desde Supabase (Multidispositivo Realtime)
-  const fetchActiveDraftsFromSupabase = async () => {
+  // Persistencia de Respaldo Local en LocalStorage para prevenir pérdida de datos
+  const saveBackupDraftsToLocalStorage = (drafts: TruckDraft[]) => {
+    try {
+      localStorage.setItem('nexus_truck_drafts_backup_v2', JSON.stringify(drafts));
+    } catch (e) {
+      console.error('Error guardando backup de borradores en localStorage:', e);
+    }
+  };
+
+  const getBackupDraftsFromLocalStorage = (): TruckDraft[] => {
+    try {
+      const stored = localStorage.getItem('nexus_truck_drafts_backup_v2');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Error leyendo backup de borradores:', e);
+    }
+    return [];
+  };
+
+  // Cargar y Sincronizar Borradores de Camiones desde Supabase (Multidispositivo Realtime sin sobrescritura forzada)
+  const fetchActiveDraftsFromSupabase = async (isInitialLoad = false) => {
     try {
       const { data, error } = await supabase
         .from('active_truck_drafts')
@@ -1314,22 +1336,51 @@ export default function App({ user }: { user: any }) {
         }));
 
         setTruckDrafts(remoteDrafts);
-        
+        saveBackupDraftsToLocalStorage(remoteDrafts);
+
+        // NUNCA sobrescribir el formulario activo mientras el usuario escribe, salvo en la carga inicial o si el borrador activo se borró legítimamente
         setActiveDraftId(prevId => {
-          const validId = prevId && remoteDrafts.some(rd => rd.id === prevId) ? prevId : remoteDrafts[0].id;
-          const target = remoteDrafts.find(rd => rd.id === validId) || remoteDrafts[0];
-          loadDraftIntoState(target);
-          return validId;
+          const exists = prevId && remoteDrafts.some(rd => rd.id === prevId);
+          if (isInitialLoad || !exists) {
+            const nextId = exists ? prevId : remoteDrafts[0].id;
+            const target = remoteDrafts.find(rd => rd.id === nextId) || remoteDrafts[0];
+            loadDraftIntoState(target);
+            return nextId;
+          }
+          return prevId;
         });
       } else {
-        const initial = createEmptyDraft();
-        setTruckDrafts([initial]);
-        setActiveDraftId(initial.id);
-        loadDraftIntoState(initial);
-        syncDraftToSupabase(initial);
+        // Si Supabase no entrega datos pero hay un backup local válido, restaurarlo sin perder información
+        const backup = getBackupDraftsFromLocalStorage();
+        if (backup.length > 0 && backup.some(b => b.truckNumber || (b.selectedZonals && b.selectedZonals.length > 0))) {
+          console.warn('Restaurando borradores de camiones activos desde backup local...');
+          setTruckDrafts(backup);
+          if (isInitialLoad || !activeDraftId) {
+            setActiveDraftId(backup[0].id);
+            loadDraftIntoState(backup[0]);
+          }
+          backup.forEach(d => syncDraftToSupabase(d));
+        } else {
+          const initial = createEmptyDraft();
+          setTruckDrafts([initial]);
+          if (isInitialLoad || !activeDraftId) {
+            setActiveDraftId(initial.id);
+            loadDraftIntoState(initial);
+          }
+          syncDraftToSupabase(initial);
+          saveBackupDraftsToLocalStorage([initial]);
+        }
       }
     } catch (err) {
-      console.error('Error cargando borradores de Supabase:', err);
+      console.error('Error cargando borradores de Supabase, activando fallback local:', err);
+      const backup = getBackupDraftsFromLocalStorage();
+      if (backup.length > 0) {
+        setTruckDrafts(backup);
+        if (isInitialLoad || !activeDraftId) {
+          setActiveDraftId(backup[0].id);
+          loadDraftIntoState(backup[0]);
+        }
+      }
     }
   };
 
@@ -1368,9 +1419,9 @@ export default function App({ user }: { user: any }) {
     }
   };
 
-  // Suscripción Realtime para sincronizar camiones en proceso entre todos los dispositivos
+  // Suscripción Realtime para sincronizar camiones en proceso (sin reinicios forzados de formulario)
   useEffect(() => {
-    fetchActiveDraftsFromSupabase();
+    fetchActiveDraftsFromSupabase(true);
 
     const channel = supabase
       .channel('public:active_truck_drafts')
@@ -1378,7 +1429,7 @@ export default function App({ user }: { user: any }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'active_truck_drafts' },
         () => {
-          fetchActiveDraftsFromSupabase();
+          fetchActiveDraftsFromSupabase(false);
         }
       )
       .subscribe();
@@ -1422,6 +1473,7 @@ export default function App({ user }: { user: any }) {
         }
         return d;
       });
+      saveBackupDraftsToLocalStorage(updated);
       return updated;
     });
   }, [activeDraftId, truckNumber, truckPlate, truckAnden, positionsOccupied, observations, temp1er, temp2do, temp3er, closeTime, truckKilos, checklist, lingasPhotos, lingasComment, colchonetasPhotos, colchonetasComment, selectedZonals, photos]);
@@ -1444,30 +1496,37 @@ export default function App({ user }: { user: any }) {
     setActiveDraftId(newDraft.id);
     loadDraftIntoState(newDraft);
     syncDraftToSupabase(newDraft);
+    saveBackupDraftsToLocalStorage(updated);
   };
 
-  // Eliminar o reiniciar un borrador de camión específico
-  const deleteTruckDraft = (draftId: string) => {
-    deleteDraftFromSupabase(draftId);
-    if (truckDrafts.length <= 1) {
-      clearDraft(false);
-      return;
-    }
-
+  // Eliminar o descartar un borrador de camión específico SOLO TRAS CONFIRMACIÓN DEL USUARIO
+  const deleteTruckDraft = async (draftId: string) => {
     const target = truckDrafts.find(d => d.id === draftId);
     const label = target?.selectedZonals?.length 
       ? target.selectedZonals.map(z => z.zonal_name).join(' - ')
-      : (target?.truckNumber ? `Camión ${target.truckNumber}` : 'este camión');
+      : (target?.truckNumber ? `Camión #${target.truckNumber}` : 'este camión en proceso');
 
-    if (!window.confirm(`¿Deseas descartar el borrador para ${label}?`)) return;
+    if (!window.confirm(`¿Deseas descartar el borrador para ${label}? Se eliminarán los datos de este camión.`)) return;
+
+    // Ejecutar eliminación en Supabase SOLO si el usuario confirmó explícitamente
+    await deleteDraftFromSupabase(draftId);
 
     const updated = truckDrafts.filter(d => d.id !== draftId);
-    setTruckDrafts(updated);
-
-    if (activeDraftId === draftId) {
-      const nextDraft = updated[0];
-      setActiveDraftId(nextDraft.id);
-      loadDraftIntoState(nextDraft);
+    if (updated.length > 0) {
+      setTruckDrafts(updated);
+      saveBackupDraftsToLocalStorage(updated);
+      if (activeDraftId === draftId) {
+        const nextDraft = updated[0];
+        setActiveDraftId(nextDraft.id);
+        loadDraftIntoState(nextDraft);
+      }
+    } else {
+      const fresh = createEmptyDraft();
+      setTruckDrafts([fresh]);
+      setActiveDraftId(fresh.id);
+      loadDraftIntoState(fresh);
+      syncDraftToSupabase(fresh);
+      saveBackupDraftsToLocalStorage([fresh]);
     }
   };
 
