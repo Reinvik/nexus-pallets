@@ -148,6 +148,8 @@ interface TruckDraft {
   selectedZonals: ZonalDetail[];
   photos: string[];
   createdAt: string;
+  supervisorName?: string;
+  createdBy?: string;
 }
 
 const INITIAL_CHECKLIST = {
@@ -1331,7 +1333,9 @@ export default function App({ user }: { user: any }) {
     checklist: { ...INITIAL_CHECKLIST },
     selectedZonals: [],
     photos: [],
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    supervisorName: supervisorName || '',
+    createdBy: user?.email || ''
   });
 
   const loadDraftIntoState = (draft: TruckDraft) => {
@@ -1402,7 +1406,9 @@ export default function App({ user }: { user: any }) {
           checklist: d.checklist || { ...INITIAL_CHECKLIST },
           selectedZonals: d.selected_zonals || [],
           photos: d.photos || [],
-          createdAt: d.created_at
+          createdAt: d.created_at,
+          supervisorName: d.supervisor_name || '',
+          createdBy: d.created_by || ''
         }));
 
         setTruckDrafts(remoteDrafts);
@@ -1536,7 +1542,8 @@ export default function App({ user }: { user: any }) {
             truckKilos,
             checklist: fullChecklist,
             selectedZonals,
-            photos
+            photos,
+            supervisorName: d.supervisorName || supervisorName || ''
           };
           syncDraftToSupabase(updatedDraft);
           return updatedDraft;
@@ -5756,7 +5763,7 @@ export default function App({ user }: { user: any }) {
                     isOpenDraft: true,
                     draftTruckNumber: draft.truckNumber,
                     draftTruckPlate: draft.truckPlate,
-                    draftSupervisor: supervisorName
+                    draftSupervisor: draft.supervisorName || supervisorName
                   });
                 }
               });
@@ -8711,7 +8718,7 @@ export default function App({ user }: { user: any }) {
                   isOpenDraft: true,
                   draftTruckNumber: draft.truckNumber,
                   draftTruckPlate: draft.truckPlate,
-                  draftSupervisor: supervisorName
+                  draftSupervisor: draft.supervisorName || supervisorName
                 });
               }
             });
