@@ -3362,8 +3362,21 @@ export default function App({ user }: { user: any }) {
                       </span>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[9px] text-slate-400 font-semibold hidden sm:inline">(o Ctrl+V)</span>
-                        <label className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95 shadow-2xs">
-                          <Camera className="w-3.5 h-3.5 text-amber-600" /> + Adjuntar Foto
+                        <label className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95 shadow-2xs" title="Tomar foto directa con la cámara">
+                          <Camera className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Tomar Foto</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            multiple
+                            onChange={handleColchonetasPhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        <label className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95 shadow-2xs" title="Elegir fotos guardadas desde la galería">
+                          <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Galería</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -3461,8 +3474,21 @@ export default function App({ user }: { user: any }) {
                       </span>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[9px] text-slate-400 font-semibold hidden sm:inline">(o Ctrl+V)</span>
-                        <label className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95 shadow-2xs">
-                          <Camera className="w-3.5 h-3.5 text-amber-600" /> + Adjuntar Foto
+                        <label className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95 shadow-2xs" title="Tomar foto directa con la cámara">
+                          <Camera className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Tomar Foto</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            multiple
+                            onChange={handleLingasPhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        <label className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95 shadow-2xs" title="Elegir fotos guardadas desde la galería">
+                          <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Galería</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -7398,12 +7424,22 @@ export default function App({ user }: { user: any }) {
                           <Camera className="w-3.5 h-3.5 text-amber-600" />
                           Fotos de Evidencia ({delayPhotos.length}/6)
                         </label>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-400 font-semibold hidden sm:inline">
-                            (O pega con Ctrl + V)
-                          </span>
-                          <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95">
-                            + Adjuntar Foto
+                        <div className="flex items-center gap-1.5">
+                          <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95" title="Tomar foto directa con la cámara">
+                            <Camera className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Tomar Foto</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              multiple
+                              onChange={handleDelayPhotoUpload}
+                              className="hidden"
+                            />
+                          </label>
+                          <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95" title="Elegir fotos guardadas desde la galería">
+                            <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Galería</span>
                             <input
                               type="file"
                               accept="image/*"
