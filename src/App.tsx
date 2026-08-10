@@ -676,6 +676,48 @@ export default function App({ user }: { user: any }) {
     }
   };
 
+  const getZonalTargetConfig = (zonalName: string, viajeNum: number = 1): { target_time: string } => {
+    const cleanSearch = getBaseZonalName(zonalName).toUpperCase();
+
+    // 1. Buscar case-insensitively en las metas cargadas desde Supabase DB
+    const match = zonalTargetTimes.find(t => 
+      getBaseZonalName(t.zonal_name).toUpperCase() === cleanSearch && (t.viaje_numero || 1) === viajeNum
+    ) || zonalTargetTimes.find(t => 
+      getBaseZonalName(t.zonal_name).toUpperCase() === cleanSearch
+    );
+
+    if (match && match.target_time) return match;
+
+    // 2. Fallback con Horarios Oficiales CIAL Alimentos (evita asignar 18:00 por defecto a Puerto Montt/Osorno)
+    const HARDCODED_OFFICIAL_TARGETS: { [key: string]: string } = {
+      'PUERTO MONTT': '09:00',
+      'OSORNO': '10:00',
+      'TEMUCO': viajeNum === 2 ? '19:30' : '12:00',
+      'CONCEPCIÓN': '13:00',
+      'CHILLÁN': '15:00',
+      'LOS ÁNGELES': '14:30',
+      'TALCA': '18:00',
+      'SAN FERNANDO': '21:30',
+      'RANCAGUA': '21:30',
+      'VIÑA DEL MAR': '23:30',
+      'VALPARAÍSO': '23:30',
+      'SAN FELIPE': '20:00',
+      'LA SERENA': '16:00',
+      'COQUIMBO': '16:00',
+      'LOS VILOS': '19:30',
+      'ARICA': '17:30',
+      'IQUIQUE': '17:30',
+      'ANTOFAGASTA': '23:30',
+      'CALAMA': '21:30',
+      'COPIAPÓ': '23:30',
+      'VALDIVIA': '18:00',
+      'COYHAIQUE': '13:30',
+      'PUNTA ARENAS': '15:30'
+    };
+
+    return { target_time: HARDCODED_OFFICIAL_TARGETS[cleanSearch] || '18:00' };
+  };
+
   const fetchZonalDepartureLogs = async () => {
     try {
       const { data, error } = await supabase
@@ -2483,9 +2525,7 @@ export default function App({ user }: { user: any }) {
         for (const sz of (targetRecord.zonals_detail || [])) {
           const baseName = getBaseZonalName(sz.zonal_name);
           const viajeNum = sz.viaje_numero || 1;
-          const targetConfig = zonalTargetTimes.find(t => t.zonal_name === baseName && t.viaje_numero === viajeNum)
-            || zonalTargetTimes.find(t => t.zonal_name === baseName)
-            || { target_time: '18:00' };
+          const targetConfig = getZonalTargetConfig(baseName, viajeNum);
 
           const targetTime = targetConfig.target_time;
           const comp = compareTimes(actualTime, targetTime);
@@ -2671,9 +2711,7 @@ export default function App({ user }: { user: any }) {
         for (const sz of selectedZonals) {
           const baseName = getBaseZonalName(sz.zonal_name);
           const viajeNum = sz.viaje_numero || 1;
-          const targetConfig = zonalTargetTimes.find(t => t.zonal_name === baseName && t.viaje_numero === viajeNum)
-            || zonalTargetTimes.find(t => t.zonal_name === baseName)
-            || { target_time: '18:00' };
+          const targetConfig = getZonalTargetConfig(baseName, viajeNum);
 
           const targetTime = targetConfig.target_time;
           // Hora de Cierre Camión manda por sobre la hora de confirmación de despacho
@@ -5726,9 +5764,7 @@ export default function App({ user }: { user: any }) {
           }
 
           const departureCards = Array.from(activeZonalEntries.values()).map(({ zonalName, viajeNumero, matchedDispatch, matchedZonalDetail, isOpenDraft, draftTruckNumber, draftTruckPlate, draftSupervisor }) => {
-            const targetConfig = zonalTargetTimes.find(t => t.zonal_name === zonalName && t.viaje_numero === viajeNumero)
-              || zonalTargetTimes.find(t => t.zonal_name === zonalName)
-              || { target_time: '18:00' };
+            const targetConfig = getZonalTargetConfig(zonalName, viajeNumero);
 
             const targetTime = targetConfig.target_time;
             const isClosed = !!matchedDispatch;
@@ -8683,9 +8719,7 @@ export default function App({ user }: { user: any }) {
         }
 
         const departureCards = Array.from(activeZonalEntries.values()).map(({ zonalName, viajeNumero, matchedDispatch, matchedZonalDetail, isOpenDraft, draftTruckNumber, draftTruckPlate, draftSupervisor }) => {
-          const targetConfig = zonalTargetTimes.find(t => t.zonal_name === zonalName && t.viaje_numero === viajeNumero)
-            || zonalTargetTimes.find(t => t.zonal_name === zonalName)
-            || { target_time: '18:00' };
+          const targetConfig = getZonalTargetConfig(zonalName, viajeNumero);
 
           const targetTime = targetConfig.target_time;
           const isClosed = !!matchedDispatch;
