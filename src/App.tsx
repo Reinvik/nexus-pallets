@@ -1478,8 +1478,8 @@ export default function App({ user }: { user: any }) {
         checklist: draft.checklist || {},
         selected_zonals: draft.selectedZonals || [],
         photos: draft.photos || [],
-        supervisor_name: supervisorName || '',
-        created_by: user?.email || '',
+        supervisor_name: draft.supervisorName ? draft.supervisorName : (supervisorName || ''),
+        created_by: draft.createdBy ? draft.createdBy : (user?.email || ''),
         updated_at: new Date().toISOString()
       }], { onConflict: 'id' });
     } catch (e) {
@@ -1543,7 +1543,8 @@ export default function App({ user }: { user: any }) {
             checklist: fullChecklist,
             selectedZonals,
             photos,
-            supervisorName: d.supervisorName || supervisorName || ''
+            supervisorName: d.supervisorName ? d.supervisorName : (supervisorName || ''),
+            createdBy: d.createdBy ? d.createdBy : (user?.email || '')
           };
           syncDraftToSupabase(updatedDraft);
           return updatedDraft;
@@ -5997,7 +5998,7 @@ export default function App({ user }: { user: any }) {
                           )}
                           {card.status === 'IN_PROGRESS' && (
                             <span className="px-3 py-1.5 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1.5 shadow-2xs">
-                              🟡 EN PROCESO
+                              🟡 EN CARGA
                             </span>
                           )}
                         </div>
@@ -6065,7 +6066,7 @@ export default function App({ user }: { user: any }) {
                               <div className="text-[11px] text-amber-900 font-bold truncate flex items-center justify-between pt-0.5">
                                 <span>Supervisor: <strong>{card.draftSupervisor}</strong></span>
                                 <span className="text-[9px] font-black uppercase text-amber-800 bg-amber-200/80 px-2 py-0.5 rounded-full border border-amber-300 animate-pulse">
-                                  🟡 EN CARGA (ABIERTO)
+                                  🟡 EN CARGA
                                 </span>
                               </div>
                             </div>
@@ -8908,7 +8909,7 @@ export default function App({ user }: { user: any }) {
                       )}
                       {card.status === 'IN_PROGRESS' && (
                         <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
-                          🟡 EN PROCESO
+                          🟡 EN CARGA
                         </span>
                       )}
                     </div>
