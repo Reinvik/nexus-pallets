@@ -656,7 +656,20 @@ export default function App({ user }: { user: any }) {
         .order('viaje_numero');
       if (error) throw error;
       if (data && data.length > 0) {
-        setZonalTargetTimes(data);
+        const seen = new Set<string>();
+        const clean: ZonalTargetTime[] = [];
+        data.forEach(item => {
+          const baseName = getBaseZonalName(item.zonal_name).toUpperCase();
+          const key = `${baseName}-${item.viaje_numero || 1}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            clean.push({
+              ...item,
+              zonal_name: baseName
+            });
+          }
+        });
+        setZonalTargetTimes(clean);
       }
     } catch (err) {
       console.error('Error cargando metas de salidas:', err);
@@ -672,7 +685,21 @@ export default function App({ user }: { user: any }) {
 
       if (error) throw error;
       if (data) {
-        setZonalDepartureLogs(data);
+        const seen = new Set<string>();
+        const clean: ZonalDepartureLog[] = [];
+        data.forEach(item => {
+          const dateStr = String(item.inspection_date).slice(0, 10);
+          const baseZonal = getBaseZonalName(item.zonal_name).toUpperCase();
+          const key = `${dateStr}-${baseZonal}-${item.viaje_numero || 1}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            clean.push({
+              ...item,
+              zonal_name: baseZonal
+            });
+          }
+        });
+        setZonalDepartureLogs(clean);
       }
     } catch (err) {
       console.error('Error cargando logs históricos de salidas:', err);
@@ -844,14 +871,15 @@ export default function App({ user }: { user: any }) {
   const handleSaveZonalTargetTime = async (zonalName: string, viajeNum: number, timeStr: string) => {
     setSavingTargetTime(true);
     try {
+      const cleanZonal = getBaseZonalName(zonalName).toUpperCase();
       const { error } = await supabase
         .from('zonal_target_times')
         .upsert(
-          { zonal_name: zonalName, viaje_numero: viajeNum, target_time: timeStr, updated_at: new Date().toISOString() },
+          { zonal_name: cleanZonal, viaje_numero: viajeNum, target_time: timeStr, updated_at: new Date().toISOString() },
           { onConflict: 'zonal_name,viaje_numero' }
         );
       if (error) throw error;
-      setSuccessMsg(`Meta de cierre guardada: ${getBaseZonalName(zonalName)} ${viajeNum > 1 ? viajeNum : ''} ➔ ${timeStr} hrs`);
+      setSuccessMsg(`Meta de cierre guardada: ${cleanZonal} ${viajeNum > 1 ? viajeNum : ''} ➔ ${timeStr} hrs`);
       await fetchZonalTargetTimes();
     } catch (err: any) {
       alert('Error guardando meta: ' + err.message);
