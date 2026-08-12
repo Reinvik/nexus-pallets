@@ -3935,6 +3935,7 @@ export default function App({ user }: { user: any }) {
                                         <input
                                           type="file"
                                           accept="image/*"
+                                          capture="environment"
                                           className="hidden"
                                           onChange={(e) => handleAddZonalPhoto(zonalIndex, e.target.files)}
                                         />
