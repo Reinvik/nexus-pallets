@@ -1646,11 +1646,26 @@ export default function App({ user }: { user: any }) {
         colchonetas_comment: colchonetasComment
       };
 
+      const cleanPlate = (truckPlate || '').trim().toUpperCase();
+      let targetId = activeDraftId;
+
+      // Deduplicar de forma inteligente: si ya existe otro borrador con la misma patente, sobreescribir ese borrador
+      if (cleanPlate) {
+        const duplicateDraft = truckDrafts.find(d => 
+          d.id !== activeDraftId && (d.truckPlate || '').trim().toUpperCase() === cleanPlate
+        );
+        if (duplicateDraft) {
+          targetId = duplicateDraft.id;
+          await deleteDraftFromSupabase(activeDraftId);
+          setActiveDraftId(targetId);
+        }
+      }
+
       const currentDraft: TruckDraft = {
-        id: activeDraftId,
-        truckNumber,
-        truckPlate,
-        truckAnden,
+        id: targetId,
+        truckNumber: truckNumber || '',
+        truckPlate: cleanPlate || truckPlate || '',
+        truckAnden: truckAnden || '',
         positionsOccupied,
         observations,
         temp1er,
@@ -1661,17 +1676,20 @@ export default function App({ user }: { user: any }) {
         checklist: fullChecklist,
         selectedZonals,
         photos,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        supervisorName: supervisorName || '',
+        createdBy: user?.email || ''
       };
 
       await syncDraftToSupabase(currentDraft);
+      await fetchActiveDraftsFromSupabase(false);
 
       const timeStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      setSaveProgressToast(`Borrador guardado a las ${timeStr} hrs. Puedes continuar completando los datos sin riesgo.`);
+      setSaveProgressToast(`Avance guardado a las ${timeStr} hrs. Disponible en el Historial como "EN CARGA".`);
 
       setTimeout(() => {
         setSaveProgressToast(null);
-      }, 4500);
+      }, 5000);
     } catch (err) {
       console.error('Error al guardar avance:', err);
       alert('Ocurrió un error al guardar el avance.');
@@ -4280,14 +4298,78 @@ export default function App({ user }: { user: any }) {
 
             {/* VISTA 1: POR CAMIONES (Tarjeta tradicional) */}
             {historySubTab === 'camiones' && (
-              records.length === 0 ? (
-                <div className="text-center py-20 bg-white border border-slate-200 rounded-2xl">
-                  <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-sm font-bold text-slate-400">Aún no se han registrado despachos en este día.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {records.map((rec) => {
+              <div className="space-y-4">
+                {/* SECCIÓN DE AVANCES GUARDADOS (BORRADORES EN CARGA) */}
+                {truckDrafts.filter(d => d.truckNumber || d.truckPlate || (d.selectedZonals && d.selectedZonals.length > 0) || (d.photos && d.photos.length > 0)).length > 0 && (
+                  <div className="space-y-3 bg-amber-50/60 p-4 rounded-2xl border-2 border-amber-300 shadow-2xs">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <h3 className="text-xs font-black uppercase text-amber-950 tracking-wider flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping inline-block" />
+                        🟡 Avances Guardados — Camiones en Carga (Abiertos)
+                      </h3>
+                      <span className="text-[10px] font-black text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+                        {truckDrafts.filter(d => d.truckNumber || d.truckPlate || (d.selectedZonals && d.selectedZonals.length > 0) || (d.photos && d.photos.length > 0)).length} avance(s) en proceso
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {truckDrafts
+                        .filter(d => d.truckNumber || d.truckPlate || (d.selectedZonals && d.selectedZonals.length > 0) || (d.photos && d.photos.length > 0))
+                        .map(draft => (
+                          <div key={draft.id} className="bg-white border border-amber-300 rounded-xl p-3.5 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[9px] font-black bg-amber-100 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-md uppercase">
+                                  🟡 EN CARGA (AVANCE GUARDADO)
+                                </span>
+                                <span className="text-xs font-black text-slate-900">
+                                  🚚 Camión #{draft.truckNumber || 'S/N'} {draft.truckPlate ? `| Patente: ${draft.truckPlate}` : ''} {draft.truckAnden ? `| Andén ${draft.truckAnden}` : ''}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-600 font-bold flex items-center gap-3 flex-wrap pt-0.5">
+                                <span>Supervisor: <strong className="text-slate-800">{draft.supervisorName || 'S/I'}</strong></span>
+                                <span>Zonales: <strong className="text-amber-900">{(draft.selectedZonals || []).map(z => z.zonal_name).join(', ') || 'Sin Zonales'}</strong></span>
+                                {draft.photos && draft.photos.length > 0 && (
+                                  <span className="text-emerald-700 font-mono">📷 {draft.photos.length} fotos</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveTab('nuevo');
+                                  switchActiveDraft(draft.id);
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                                className="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 flex items-center gap-1.5"
+                              >
+                                <span>✏️ Recuperar / Editar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteTruckDraft(draft.id)}
+                                className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-200"
+                                title="Descartar borrador de avance"
+                              >
+                                <span>✕ Descartar</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {records.length === 0 ? (
+                  <div className="text-center py-20 bg-white border border-slate-200 rounded-2xl">
+                    <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                    <p className="text-sm font-bold text-slate-400">Aún no se han registrado despachos cerrados en este día.</p>
+                  </div>
+                ) : (
+                  <>
+                    {records.map((rec) => {
                     const zTotals = rec.zonals_detail.reduce(
                       (acc, z) => {
                         const w = 
@@ -4711,6 +4793,8 @@ export default function App({ user }: { user: any }) {
                       </div>
                     );
                   })}
+                </>
+              )}
 
                   {historyPeriod !== 'todo' && (
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-2 mt-6">
@@ -4740,8 +4824,7 @@ export default function App({ user }: { user: any }) {
                     </div>
                   )}
                 </div>
-              )
-            )}
+              )}
 
             {/* VISTA 2: REPORTE POR ZONAL (Desglose directo por Zonal) */}
             {historySubTab === 'zonales' && (() => {
