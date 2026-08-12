@@ -94,14 +94,7 @@ interface DispatchRecord {
   inspection_date: string;
   inspection_time: string;
   positions_occupied: number;
-  checklist: {
-    postura_anden: boolean;
-    limpieza_estructura: boolean;
-    luces_encendidas: boolean;
-    separador_termico: boolean;
-    lingas_camion: boolean;
-    photos?: string[];
-  };
+  checklist: Record<string, any>;
   zonals_detail: ZonalDetail[];
   observations: string;
   created_at: string;
@@ -138,13 +131,7 @@ interface TruckDraft {
   temp3er: number;
   closeTime: string;
   truckKilos: string;
-  checklist: {
-    postura_anden: boolean;
-    limpieza_estructura: boolean;
-    luces_encendidas: boolean;
-    separador_termico: boolean;
-    lingas_camion: boolean;
-  };
+  checklist: Record<string, any>;
   selectedZonals: ZonalDetail[];
   photos: string[];
   createdAt: string;
@@ -153,11 +140,23 @@ interface TruckDraft {
 }
 
 const INITIAL_CHECKLIST = {
-  postura_anden: true,
-  limpieza_estructura: true,
-  luces_encendidas: true,
-  separador_termico: true,
-  lingas_camion: true
+  postura_anden: 'GRIS',
+  limpieza_estructura: 'GRIS',
+  luces_encendidas: 'GRIS',
+  separador_termico: 'GRIS',
+  lingas_camion: 'GRIS'
+};
+
+export const getChecklistStatus = (val: any): 'GRIS' | 'VERDE' | 'AMARILLO' | 'ROJO' => {
+  if (val === 'VERDE' || val === 'AMARILLO' || val === 'ROJO') return val;
+  return 'GRIS';
+};
+
+export const toggleChecklistStatus = (currentStatus: 'GRIS' | 'VERDE' | 'AMARILLO' | 'ROJO'): 'GRIS' | 'VERDE' | 'AMARILLO' | 'ROJO' => {
+  if (currentStatus === 'GRIS') return 'VERDE';
+  if (currentStatus === 'VERDE') return 'AMARILLO';
+  if (currentStatus === 'AMARILLO') return 'ROJO';
+  return 'GRIS';
 };
 
 const formatSupervisorName = (email: string | undefined): string => {
@@ -282,7 +281,9 @@ const checkIsShiftLeaderOrAdmin = (user: any): boolean => {
 };
 
 export default function App({ user }: { user: any }) {
-  const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'salidas' | 'kpi_salidas' | 'bitacora_atrasos' | 'usuarios'>('salidas');
+  const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'salidas' | 'kpi_salidas' | 'bitacora_atrasos' | 'inspeccion_reporte' | 'usuarios'>('salidas');
+  const [inspectionPeriod, setInspectionPeriod] = useState<'hoy' | 'semana' | 'todo'>('semana');
+  const [inspectionSearch, setInspectionSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -1155,14 +1156,8 @@ export default function App({ user }: { user: any }) {
   const [editingObservations, setEditingObservations] = useState('');
   const [editingSaveLoading, setEditingSaveLoading] = useState(false);
 
-  // Checklist de 5 items
-  const [checklist, setChecklist] = useState({
-    postura_anden: true,
-    limpieza_estructura: true,
-    luces_encendidas: true,
-    separador_termico: true,
-    lingas_camion: true
-  });
+  // Checklist de 5 items con Semáforo
+  const [checklist, setChecklist] = useState<Record<string, any>>({ ...INITIAL_CHECKLIST });
 
   // Fotos y comentarios para Inspección de Lingas y Colchonetas/Separador Térmico
   const [lingasPhotos, setLingasPhotos] = useState<string[]>([]);
@@ -2630,6 +2625,20 @@ export default function App({ user }: { user: any }) {
       return;
     }
 
+    // Validar que NINGÚN ítem del checklist esté en GRIS (Sin revisar)
+    const unreviewedChecklistItems = [
+      { key: 'postura_anden', label: '1. Horario de postura en Andén' },
+      { key: 'limpieza_estructura', label: '2. Estado camión (Limpieza, Sin daños)' },
+      { key: 'luces_encendidas', label: '3. Estado de Luces (ENCENDIDAS)' },
+      { key: 'separador_termico', label: '4. Verificación Separador Térmico' },
+      { key: 'lingas_camion', label: '5. Verificación Lingas por camión' }
+    ].filter(item => getChecklistStatus((checklist as any)[item.key]) === 'GRIS');
+
+    if (unreviewedChecklistItems.length > 0) {
+      alert(`⚠️ NO ES POSIBLE CONFIRMAR EL DESPACHO:\n\nHay ítems del Check List de Inspección sin evaluar (en estado GRIS):\n- ${unreviewedChecklistItems.map(i => i.label).join('\n- ')}\n\nDebes asignar a cada ítem: Verde (Aprobado), Amarillo (Problema Menor) o Rojo (Rechazado).`);
+      return;
+    }
+
     // Poka-Yoke: Advertencia por datos faltantes del camión
     if (!forceConfirm) {
       const missing = getMissingDispatchData();
@@ -2971,6 +2980,15 @@ export default function App({ user }: { user: any }) {
             <span className="flex items-center justify-center gap-1.5">
               <AlertTriangle className="w-4.5 h-4.5 text-rose-600" />
               Bitácora Atrasos
+            </span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('inspeccion_reporte')}
+            className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'inspeccion_reporte' ? 'border-amber-500 text-amber-700 bg-amber-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <span className="text-base">🚥</span>
+              Reporte Inspección
             </span>
           </button>
           {isSuperAdmin && (
@@ -3346,29 +3364,49 @@ export default function App({ user }: { user: any }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
                 {/* Columna Izquierda: Check list + Fotos Colchonetas */}
                 <div className="space-y-4">
-                  {/* Check List de Inspección */}
+                  {/* Check List de Inspección con Semáforo Compacto (4 Estados) */}
                   <div className="space-y-2">
-                    <span className="block text-xs font-bold text-slate-500 uppercase">Check List de Inspección</span>
-                    <div className="space-y-2.5 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <span className="block text-xs font-bold text-slate-500 uppercase">Check List de Inspección (Semáforo)</span>
+                      <span className="text-[10px] text-slate-500 font-semibold italic">
+                        Haz clic en el estado para cambiar
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
                       {[
                         { key: 'postura_anden', label: '1. Horario de postura en el Andén' },
                         { key: 'limpieza_estructura', label: '2. Estado camión (Limpieza, Sin daños)' },
                         { key: 'luces_encendidas', label: '3. Estado de Luces (ENCENDIDAS)' },
-                        { key: 'separador_termico', label: '4. Verificación Separador Térmico / Colchonetas' },
+                        { key: 'separador_termico', label: '4. Verificación Separador Térmico' },
                         { key: 'lingas_camion', label: '5. Verificación Lingas por camión' }
-                      ].map((item) => (
-                        <div key={item.key} className="space-y-2">
-                          <label className="flex items-center justify-between text-xs font-bold text-slate-700 py-1.5 cursor-pointer select-none border-b border-slate-200/50 last:border-0">
-                            <span>{item.label}</span>
-                            <input 
-                              type="checkbox"
-                              checked={(checklist as any)[item.key]}
-                              onChange={(e) => setChecklist({ ...checklist, [item.key]: e.target.checked })}
-                              className="w-5 h-5 rounded text-brand-primary focus:ring-brand-primary border-slate-300 cursor-pointer"
-                            />
-                          </label>
-                        </div>
-                      ))}
+                      ].map((item) => {
+                        const currentStatus = getChecklistStatus((checklist as any)[item.key]);
+                        return (
+                          <div key={item.key} className="flex items-center justify-between text-xs font-extrabold text-slate-800 py-1.5 border-b border-slate-200/60 last:border-0 select-none gap-2">
+                            <span className="truncate">{item.label}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextStatus = toggleChecklistStatus(currentStatus);
+                                setChecklist({ ...checklist, [item.key]: nextStatus });
+                              }}
+                              className={`px-3 py-1 rounded-full text-[10.5px] font-black border transition-all cursor-pointer shadow-2xs active:scale-95 flex items-center gap-1.5 shrink-0 ${
+                                currentStatus === 'GRIS' ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300' :
+                                currentStatus === 'VERDE' ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-600 shadow-emerald-500/30' :
+                                currentStatus === 'AMARILLO' ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border-amber-500 shadow-amber-500/30' :
+                                'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 shadow-rose-600/30 animate-pulse'
+                              }`}
+                              title="Haz clic para alternar: Sin revisar ➔ Aprobado ➔ Problema ➔ Rechazado"
+                            >
+                              {currentStatus === 'GRIS' && <span>⚪ SIN REVISAR</span>}
+                              {currentStatus === 'VERDE' && <span>🟢 APROBADO</span>}
+                              {currentStatus === 'AMARILLO' && <span>🟡 PROBLEMA</span>}
+                              {currentStatus === 'ROJO' && <span>🔴 RECHAZADO</span>}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -3379,7 +3417,6 @@ export default function App({ user }: { user: any }) {
                         📸 Fotos Colchonetas ({colchonetasPhotos.length})
                       </span>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] text-slate-400 font-semibold hidden sm:inline">(o Ctrl+V)</span>
                         <label className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95 shadow-2xs" title="Tomar foto directa con la cámara">
                           <Camera className="w-3.5 h-3.5 text-amber-600" />
                           <span>Tomar Foto</span>
@@ -3491,7 +3528,6 @@ export default function App({ user }: { user: any }) {
                         📸 Fotos Lingas ({lingasPhotos.length})
                       </span>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] text-slate-400 font-semibold hidden sm:inline">(o Ctrl+V)</span>
                         <label className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 active:scale-95 shadow-2xs" title="Tomar foto directa con la cámara">
                           <Camera className="w-3.5 h-3.5 text-amber-600" />
                           <span>Tomar Foto</span>
@@ -7586,6 +7622,343 @@ export default function App({ user }: { user: any }) {
             </div>
           );
         })()}
+
+        {/* VISTA: REPORTE DE INSPECCIÓN & SEMÁFORO POR PATENTE */}
+        {activeTab === 'inspeccion_reporte' && (
+          <div className="space-y-6">
+            {/* CABECERA Y RESUMEN KPI DE INSPECCIÓN */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <span className="text-xl">🚥</span>
+                    <span>REPORTE DE INSPECCIÓN & SEMÁFORO POR PATENTE</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                    Monitoreo del estado físico/mecánico de camiones y acumulación de observaciones para transportistas externos.
+                  </p>
+                </div>
+
+                {/* PERIODO DE FILTRADO */}
+                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setInspectionPeriod('hoy')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      inspectionPeriod === 'hoy' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    ⚡ Hoy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectionPeriod('semana')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      inspectionPeriod === 'semana' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    🗓️ Esta Semana
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectionPeriod('todo')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      inspectionPeriod === 'todo' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    🗂️ Ver Todo
+                  </button>
+                </div>
+              </div>
+
+              {/* BUSCADOR */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  placeholder="Buscar por Patente de camión, N° de camión, supervisor o zonal..."
+                  value={inspectionSearch}
+                  onChange={(e) => setInspectionSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-brand-primary focus:bg-white transition-all"
+                />
+              </div>
+
+              {/* CÁLCULO DE MÉTRICAS GLOBALES */}
+              {(() => {
+                const filteredRecords = records.filter(rec => {
+                  if (inspectionPeriod === 'hoy') {
+                    const dateStr = String(rec.created_at || rec.inspection_date).slice(0, 10);
+                    return dateStr === getChileDateString();
+                  } else if (inspectionPeriod === 'semana') {
+                    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+                    return String(rec.created_at || rec.inspection_date).slice(0, 10) >= sevenDaysAgo;
+                  }
+                  return true;
+                }).filter(rec => {
+                  if (!inspectionSearch.trim()) return true;
+                  const q = inspectionSearch.toLowerCase().trim();
+                  return (
+                    (rec.truck_plate || '').toLowerCase().includes(q) ||
+                    (rec.truck_number || '').toLowerCase().includes(q) ||
+                    (rec.supervisor_name || '').toLowerCase().includes(q) ||
+                    (rec.zonals_detail || []).some(z => z.zonal_name.toLowerCase().includes(q))
+                  );
+                });
+
+                const plateGroups: { [key: string]: {
+                  plate: string;
+                  truckNumbers: Set<string>;
+                  supervisors: Set<string>;
+                  records: DispatchRecord[];
+                  verdeCount: number;
+                  amarilloCount: number;
+                  rojoCount: number;
+                  itemCounts: { [itemKey: string]: { verde: number; amarillo: number; rojo: number } };
+                } } = {};
+
+                let totalVerdes = 0;
+                let totalAmarillos = 0;
+                let totalRojos = 0;
+
+                filteredRecords.forEach(rec => {
+                  const plate = (rec.truck_plate && rec.truck_plate !== 'N/A') ? rec.truck_plate.trim().toUpperCase() : `CAMIÓN #${rec.truck_number || 'S/A'}`;
+                  
+                  if (!plateGroups[plate]) {
+                    plateGroups[plate] = {
+                      plate,
+                      truckNumbers: new Set(),
+                      supervisors: new Set(),
+                      records: [],
+                      verdeCount: 0,
+                      amarilloCount: 0,
+                      rojoCount: 0,
+                      itemCounts: {
+                        postura_anden: { verde: 0, amarillo: 0, rojo: 0 },
+                        limpieza_estructura: { verde: 0, amarillo: 0, rojo: 0 },
+                        luces_encendidas: { verde: 0, amarillo: 0, rojo: 0 },
+                        separador_termico: { verde: 0, amarillo: 0, rojo: 0 },
+                        lingas_camion: { verde: 0, amarillo: 0, rojo: 0 }
+                      }
+                    };
+                  }
+
+                  const group = plateGroups[plate];
+                  if (rec.truck_number && rec.truck_number !== 'N/A') group.truckNumbers.add(rec.truck_number);
+                  if (rec.supervisor_name) group.supervisors.add(rec.supervisor_name);
+                  group.records.push(rec);
+
+                  const chk = rec.checklist || {};
+                  const items = ['postura_anden', 'limpieza_estructura', 'luces_encendidas', 'separador_termico', 'lingas_camion'];
+
+                  items.forEach(key => {
+                    const st = getChecklistStatus(chk[key]);
+                    if (st === 'VERDE') {
+                      group.verdeCount++;
+                      totalVerdes++;
+                      if (group.itemCounts[key]) group.itemCounts[key].verde++;
+                    } else if (st === 'AMARILLO') {
+                      group.amarilloCount++;
+                      totalAmarillos++;
+                      if (group.itemCounts[key]) group.itemCounts[key].amarillo++;
+                    } else if (st === 'ROJO') {
+                      group.rojoCount++;
+                      totalRojos++;
+                      if (group.itemCounts[key]) group.itemCounts[key].rojo++;
+                    }
+                  });
+                });
+
+                const sortedPlates = Object.values(plateGroups).sort((a, b) => {
+                  const weightA = a.rojoCount * 3 + a.amarilloCount;
+                  const weightB = b.rojoCount * 3 + b.amarilloCount;
+                  return weightB - weightA;
+                });
+
+                return (
+                  <div className="space-y-6">
+                    {/* CARDS DE KPIS */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-center shadow-2xs">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Camiones Evaluados</span>
+                        <span className="text-2xl font-black text-slate-800 font-mono">{sortedPlates.length}</span>
+                        <span className="text-[10px] text-slate-400 font-semibold block">patentes distintas</span>
+                      </div>
+                      <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl text-center shadow-2xs">
+                        <span className="text-[10px] font-bold text-emerald-800 uppercase block">🟢 Conformes (Verde)</span>
+                        <span className="text-2xl font-black text-emerald-700 font-mono">{totalVerdes}</span>
+                        <span className="text-[10px] text-emerald-600 font-semibold block">puntos aprobados</span>
+                      </div>
+                      <div className="bg-amber-50 border border-amber-300 p-3.5 rounded-xl text-center shadow-2xs">
+                        <span className="text-[10px] font-bold text-amber-900 uppercase block">🟡 Problemas (Amarillo)</span>
+                        <span className="text-2xl font-black text-amber-700 font-mono">{totalAmarillos}</span>
+                        <span className="text-[10px] text-amber-800 font-semibold block">observaciones menores</span>
+                      </div>
+                      <div className="bg-rose-50 border border-rose-300 p-3.5 rounded-xl text-center shadow-2xs">
+                        <span className="text-[10px] font-bold text-rose-900 uppercase block">🔴 Rechazados (Rojo)</span>
+                        <span className="text-2xl font-black text-rose-700 font-mono">{totalRojos}</span>
+                        <span className="text-[10px] text-rose-800 font-semibold block">fallas críticas</span>
+                      </div>
+                    </div>
+
+                    {/* LISTADO DE PATENTES CON ACUMULACIÓN DE SEMÁFOROS */}
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center justify-between border-b pb-2">
+                        <span>🚛 Estado Consolidado por Patente ({sortedPlates.length})</span>
+                        <span className="text-[10px] text-slate-400 font-normal">Ordenado por reincidencia de observaciones</span>
+                      </h3>
+
+                      {sortedPlates.length === 0 ? (
+                        <div className="text-center py-12 bg-slate-50 border border-slate-200 rounded-xl">
+                          <p className="text-xs font-bold text-slate-400">No se encontraron inspecciones para el periodo o búsqueda seleccionada.</p>
+                        </div>
+                      ) : (
+                        sortedPlates.map((group) => {
+                          const hasCriticalFailures = group.rojoCount > 0 || group.amarilloCount >= 2;
+                          const itemLabels: { [key: string]: string } = {
+                            postura_anden: '1. Horario Postura Andén',
+                            limpieza_estructura: '2. Limpieza & Estructura',
+                            luces_encendidas: '3. Luces Encendidas',
+                            separador_termico: '4. Separador Térmico',
+                            lingas_camion: '5. Lingas de Sujeción'
+                          };
+
+                          return (
+                            <div
+                              key={group.plate}
+                              className={`bg-white border rounded-2xl p-4 shadow-sm space-y-3 transition-all ${
+                                group.rojoCount > 0
+                                  ? 'border-rose-400 bg-rose-50/10 ring-1 ring-rose-200'
+                                  : group.amarilloCount > 0
+                                  ? 'border-amber-300 bg-amber-50/10'
+                                  : 'border-slate-200'
+                              }`}
+                            >
+                              {/* CABECERA PATENTE Y BADGES */}
+                              <div className="flex items-start justify-between flex-wrap gap-2 border-b border-slate-100 pb-2.5">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-base font-black font-mono bg-slate-900 text-white px-3 py-1 rounded-lg tracking-wider">
+                                      {group.plate}
+                                    </span>
+                                    {Array.from(group.truckNumbers).map(tn => (
+                                      <span key={tn} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                                        Camión #{tn}
+                                      </span>
+                                    ))}
+                                    {hasCriticalFailures && (
+                                      <span className="text-[10px] font-black uppercase text-rose-800 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full animate-pulse flex items-center gap-1">
+                                        <span>🚨 ALERTA TRANSPORTISTA EXTERNO</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 font-semibold flex items-center gap-3 flex-wrap pt-0.5">
+                                    <span>Despachos evaluados: <strong className="text-slate-800 font-mono">{group.records.length}</strong></span>
+                                    <span>Supervisores: <strong className="text-slate-700">{Array.from(group.supervisors).join(', ')}</strong></span>
+                                  </div>
+                                </div>
+
+                                {/* RESUMEN DE CONTEOS DE SEMÁFORO DE LA PATENTE */}
+                                <div className="flex items-center gap-2 font-mono">
+                                  <span className="text-xs font-black text-emerald-800 bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                                    🟢 {group.verdeCount}
+                                  </span>
+                                  <span className="text-xs font-black text-amber-900 bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                                    🟡 {group.amarilloCount}
+                                  </span>
+                                  <span className="text-xs font-black text-rose-900 bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                                    🔴 {group.rojoCount}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* DESGLOSE DETALLADO DE LOS 5 PUNTOS DE INSPECCIÓN DE ESTA PATENTE */}
+                              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 pt-1">
+                                {Object.keys(group.itemCounts).map(itemKey => {
+                                  const counts = group.itemCounts[itemKey];
+                                  return (
+                                    <div
+                                      key={itemKey}
+                                      className={`p-2 rounded-xl border text-[10.5px] space-y-1 ${
+                                        counts.rojo > 0
+                                          ? 'bg-rose-50 border-rose-300 text-rose-950 font-bold'
+                                          : counts.amarillo > 0
+                                          ? 'bg-amber-50 border-amber-300 text-amber-950 font-bold'
+                                          : 'bg-slate-50 border-slate-200 text-slate-700'
+                                      }`}
+                                    >
+                                      <div className="font-extrabold truncate" title={itemLabels[itemKey]}>
+                                        {itemLabels[itemKey]}
+                                      </div>
+                                      <div className="flex items-center justify-between font-mono font-black text-[10px]">
+                                        <span className={counts.verde > 0 ? 'text-emerald-700' : 'text-slate-400'}>🟢 {counts.verde}</span>
+                                        <span className={counts.amarillo > 0 ? 'text-amber-700 font-bold' : 'text-slate-400'}>🟡 {counts.amarillo}</span>
+                                        <span className={counts.rojo > 0 ? 'text-rose-700 font-extrabold' : 'text-slate-400'}>🔴 {counts.rojo}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* COMENTARIOS Y EVIDENCIAS DE FOTOS DE COLCHONETAS / LINGAS */}
+                              <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                                {group.records.map(r => {
+                                  const chk = r.checklist || {};
+                                  const colchonetasComment = chk.colchonetas_comment;
+                                  const lingasComment = chk.lingas_comment;
+                                  const colchonetasPhotos: string[] = chk.colchonetas_photos || [];
+                                  const lingasPhotos: string[] = chk.lingas_photos || [];
+                                  const allPhotos = [...colchonetasPhotos, ...lingasPhotos];
+
+                                  if (!colchonetasComment && !lingasComment && allPhotos.length === 0) return null;
+
+                                  return (
+                                    <div key={r.id} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs space-y-1">
+                                      <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                                        <span>Despacho de fecha: <strong>{r.inspection_date}</strong> ({r.close_time || 'Sin hora'})</span>
+                                        <span>Supervisor: <strong>{r.supervisor_name}</strong></span>
+                                      </div>
+                                      {colchonetasComment && (
+                                        <p className="text-[11px] text-slate-700 font-medium">
+                                          <strong>Obs. Colchonetas:</strong> {colchonetasComment}
+                                        </p>
+                                      )}
+                                      {lingasComment && (
+                                        <p className="text-[11px] text-slate-700 font-medium">
+                                          <strong>Obs. Lingas:</strong> {lingasComment}
+                                        </p>
+                                      )}
+                                      {allPhotos.length > 0 && (
+                                        <div className="flex items-center gap-1.5 pt-1">
+                                          {allPhotos.map((pUrl, pIdx) => (
+                                            <img
+                                              key={pIdx}
+                                              src={pUrl}
+                                              alt={`Evidencia ${pIdx + 1}`}
+                                              className="w-10 h-10 rounded-lg object-cover border border-slate-200 cursor-pointer hover:scale-105 transition-transform"
+                                              onClick={() => openPhotoGallery(allPhotos, pIdx)}
+                                            />
+                                          ))}
+                                          <span className="text-[10px] text-slate-400 font-bold ml-1">
+                                            ({allPhotos.length} foto(s))
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
 
         {activeTab === 'zonales' && (() => {
           setActiveTab('historial');
