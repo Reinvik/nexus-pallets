@@ -2677,9 +2677,52 @@ export default function App({ user }: { user: any }) {
       });
 
       let insertedDispatch: any = null;
+      let targetDispatchId = editingDispatchId;
 
-      if (editingDispatchId) {
-        // MODO EDICIÓN DE DESPACHO EXISTENTE
+      // Si no hay un ID explícito de edición, buscar si ya existe un despacho registrado hoy para este mismo camión o patente
+      if (!targetDispatchId) {
+        const cleanTruckNum = (truckNumber || '').trim();
+        const cleanTruckPlate = (truckPlate || '').trim().toUpperCase();
+
+        // 1. Buscar en registros locales de hoy cargados en memoria
+        const localMatch = records.find(rec => {
+          const recDate = String(rec.inspection_date || rec.created_at || '').slice(0, 10);
+          if (recDate !== dateStr) return false;
+
+          const matchNum = cleanTruckNum && cleanTruckNum !== 'N/A' && rec.truck_number === cleanTruckNum;
+          const matchPlate = cleanTruckPlate && cleanTruckPlate !== 'N/A' && (rec.truck_plate || '').trim().toUpperCase() === cleanTruckPlate;
+
+          return matchNum || matchPlate;
+        });
+
+        if (localMatch) {
+          targetDispatchId = localMatch.id;
+        } else if ((cleanTruckNum && cleanTruckNum !== 'N/A') || (cleanTruckPlate && cleanTruckPlate !== 'N/A')) {
+          // 2. Si no está en memoria local, verificar en Supabase DB para evitar duplicados creados desde otros dispositivos
+          try {
+            let query = supabase
+              .from('pallet_dispatches')
+              .select('id, truck_number, truck_plate, inspection_date')
+              .eq('inspection_date', dateStr);
+
+            if (cleanTruckNum && cleanTruckNum !== 'N/A') {
+              query = query.eq('truck_number', cleanTruckNum);
+            } else if (cleanTruckPlate && cleanTruckPlate !== 'N/A') {
+              query = query.eq('truck_plate', cleanTruckPlate);
+            }
+
+            const { data: dbMatches } = await query;
+            if (dbMatches && dbMatches.length > 0) {
+              targetDispatchId = dbMatches[0].id;
+            }
+          } catch (e) {
+            console.warn("Error al verificar duplicados en DB:", e);
+          }
+        }
+      }
+
+      if (targetDispatchId) {
+        // MODO EDICIÓN / ACTUALIZACIÓN DE DESPACHO EXISTENTE DE HOY
         const { data: updatedData, error } = await supabase
           .from('pallet_dispatches')
           .update({
@@ -2704,12 +2747,12 @@ export default function App({ user }: { user: any }) {
             truck_kilos: truckKilos || null,
             anden_number: truckAnden || null
           })
-          .eq('id', editingDispatchId)
+          .eq('id', targetDispatchId)
           .select();
 
         if (error) throw error;
         insertedDispatch = updatedData ? updatedData[0] : null;
-        setSuccessMsg(`¡Despacho #${truckNumber || ''} actualizado correctamente!`);
+        setSuccessMsg(`¡Despacho Camión #${truckNumber || ''} actualizado correctamente!`);
       } else {
         // MODO NUEVO DESPACHO
         const { data: insertedData, error } = await supabase
@@ -2776,6 +2819,7 @@ export default function App({ user }: { user: any }) {
           }], { onConflict: 'dispatch_id,zonal_name,viaje_numero' });
         }
         fetchZonalDepartureLogs();
+        fetchHistory(historyPeriod);
       }
 
       setEditingDispatchId(null);
