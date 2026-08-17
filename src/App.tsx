@@ -1715,13 +1715,15 @@ export default function App({ user }: { user: any }) {
 
   const [historyPeriod, setHistoryPeriod] = useState<'hoy' | 'semana' | 'mes' | 'todo'>('hoy');
 
+  const DISPATCH_LIST_COLUMNS = 'id, truck_number, truck_plate, supervisor_name, inspection_date, inspection_time, positions_occupied, checklist, zonals_detail, observations, created_at, temp_1er, temp_2do, temp_3er, close_time, truck_kilos, anden_number, signed_by, signed_at, signed_by_title';
+
   const fetchHistory = async (period: 'hoy' | 'semana' | 'mes' | 'todo' = historyPeriod) => {
     setLoading(true);
     setHistoryPeriod(period);
     try {
       let query = supabase
         .from('pallet_dispatches')
-        .select('*')
+        .select(DISPATCH_LIST_COLUMNS)
         .order('created_at', { ascending: false });
 
       const now = new Date();
@@ -1735,7 +1737,7 @@ export default function App({ user }: { user: any }) {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         query = query.gte('created_at', startOfMonth);
       } else {
-        query = query.limit(500);
+        query = query.limit(300);
       }
 
       const { data, error } = await query;
@@ -1746,7 +1748,7 @@ export default function App({ user }: { user: any }) {
       if ((period === 'hoy' || period === 'mes') && res.length === 0) {
         const fallbackQuery = await supabase
           .from('pallet_dispatches')
-          .select('*')
+          .select(DISPATCH_LIST_COLUMNS)
           .order('created_at', { ascending: false })
           .limit(30);
         if (!fallbackQuery.error && fallbackQuery.data) {
@@ -2070,6 +2072,22 @@ export default function App({ user }: { user: any }) {
 
     let container: HTMLDivElement | null = null;
     try {
+      // Cargar la firma base64 si no está presente en el objeto local
+      if (rec.signed_by && !rec.signature_b64) {
+        try {
+          const { data: sigData } = await supabase
+            .from('pallet_dispatches')
+            .select('signature_b64')
+            .eq('id', rec.id)
+            .single();
+          if (sigData?.signature_b64) {
+            rec = { ...rec, signature_b64: sigData.signature_b64 };
+          }
+        } catch (e) {
+          console.warn("Firma base64 no encontrada:", e);
+        }
+      }
+
       // Convertir el logo a Base64 para incrustación directa sin llamadas de red
       const logoBase64 = await getLogoBase64(cialLogo);
 
