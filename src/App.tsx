@@ -284,8 +284,9 @@ const checkIsShiftLeaderOrAdmin = (user: any): boolean => {
 
 export default function App({ user }: { user: any }) {
   const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'salidas' | 'kpi_salidas' | 'bitacora_atrasos' | 'inspeccion_reporte' | 'usuarios'>('salidas');
-  const [inspectionPeriod, setInspectionPeriod] = useState<'hoy' | 'semana' | 'todo'>('semana');
+  const [inspectionPeriod, setInspectionPeriod] = useState<'hoy' | 'semana' | 'mes' | 'todo'>('mes');
   const [inspectionSearch, setInspectionSearch] = useState('');
+  const [expandedInspectionPlates, setExpandedInspectionPlates] = useState<{ [plateKey: string]: boolean }>({});
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -7667,7 +7668,7 @@ export default function App({ user }: { user: any }) {
                 </div>
 
                 {/* PERIODO DE FILTRADO */}
-                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold flex-wrap">
                   <button
                     type="button"
                     onClick={() => setInspectionPeriod('hoy')}
@@ -7685,6 +7686,15 @@ export default function App({ user }: { user: any }) {
                     }`}
                   >
                     🗓️ Esta Semana
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectionPeriod('mes')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      inspectionPeriod === 'mes' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    📅 Este Mes
                   </button>
                   <button
                     type="button"
@@ -7719,6 +7729,10 @@ export default function App({ user }: { user: any }) {
                   } else if (inspectionPeriod === 'semana') {
                     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
                     return String(rec.created_at || rec.inspection_date).slice(0, 10) >= sevenDaysAgo;
+                  } else if (inspectionPeriod === 'mes') {
+                    const now = new Date();
+                    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+                    return String(rec.created_at || rec.inspection_date).slice(0, 10) >= startOfMonth;
                   }
                   return true;
                 }).filter(rec => {
@@ -7841,6 +7855,7 @@ export default function App({ user }: { user: any }) {
                       ) : (
                         sortedPlates.map((group) => {
                           const hasCriticalFailures = group.rojoCount > 0 || group.amarilloCount >= 2;
+                          const isExpanded = !!expandedInspectionPlates[group.plate];
                           const itemLabels: { [key: string]: string } = {
                             postura_anden: '1. Horario Postura Andén',
                             limpieza_estructura: '2. Limpieza & Estructura',
@@ -7852,7 +7867,7 @@ export default function App({ user }: { user: any }) {
                           return (
                             <div
                               key={group.plate}
-                              className={`bg-white border rounded-2xl p-4 shadow-sm space-y-3 transition-all ${
+                              className={`bg-white border rounded-2xl p-3.5 shadow-sm space-y-3 transition-all ${
                                 group.rojoCount > 0
                                   ? 'border-rose-400 bg-rose-50/10 ring-1 ring-rose-200'
                                   : group.amarilloCount > 0
@@ -7860,31 +7875,36 @@ export default function App({ user }: { user: any }) {
                                   : 'border-slate-200'
                               }`}
                             >
-                              {/* CABECERA PATENTE Y BADGES */}
-                              <div className="flex items-start justify-between flex-wrap gap-2 border-b border-slate-100 pb-2.5">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-base font-black font-mono bg-slate-900 text-white px-3 py-1 rounded-lg tracking-wider">
-                                      {group.plate}
+                              {/* CABECERA PATENTE RESUMIDA (HACER CLIC PARA DESPLEGAR DETALLE) */}
+                              <div
+                                onClick={() => {
+                                  setExpandedInspectionPlates(prev => ({
+                                    ...prev,
+                                    [group.plate]: !prev[group.plate]
+                                  }));
+                                }}
+                                className="flex items-center justify-between flex-wrap gap-2 cursor-pointer select-none py-1 hover:opacity-90 transition-opacity"
+                              >
+                                <div className="flex items-center gap-2.5 flex-wrap">
+                                  <span className="text-base font-black font-mono bg-slate-900 text-white px-3 py-1 rounded-xl tracking-wider shadow-2xs">
+                                    {group.plate}
+                                  </span>
+                                  {Array.from(group.truckNumbers).map(tn => (
+                                    <span key={tn} className="text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg font-mono">
+                                      Camión #{tn}
                                     </span>
-                                    {Array.from(group.truckNumbers).map(tn => (
-                                      <span key={tn} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
-                                        Camión #{tn}
-                                      </span>
-                                    ))}
-                                    {hasCriticalFailures && (
-                                      <span className="text-[10px] font-black uppercase text-rose-800 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full animate-pulse flex items-center gap-1">
-                                        <span>🚨 ALERTA TRANSPORTISTA EXTERNO</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="text-[11px] text-slate-500 font-semibold flex items-center gap-3 flex-wrap pt-0.5">
-                                    <span>Despachos evaluados: <strong className="text-slate-800 font-mono">{group.records.length}</strong></span>
-                                    <span>Supervisores: <strong className="text-slate-700">{Array.from(group.supervisors).join(', ')}</strong></span>
-                                  </div>
+                                  ))}
+                                  {hasCriticalFailures && (
+                                    <span className="text-[10px] font-black uppercase text-rose-800 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full animate-pulse flex items-center gap-1">
+                                      <span>🚨 ALERTA TRANSPORTISTA EXTERNO</span>
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] text-slate-500 font-semibold hidden md:inline">
+                                    ({group.records.length} despacho{group.records.length > 1 ? 's' : ''})
+                                  </span>
                                 </div>
 
-                                {/* RESUMEN DE CONTEOS DE SEMÁFORO DE LA PATENTE */}
+                                {/* RESUMEN DE CONTEOS DE SEMÁFORO DE LA PATENTE Y BOTÓN DESPLEGAR */}
                                 <div className="flex items-center gap-2 font-mono">
                                   <span className="text-xs font-black text-emerald-800 bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
                                     🟢 {group.verdeCount}
@@ -7895,86 +7915,141 @@ export default function App({ user }: { user: any }) {
                                   <span className="text-xs font-black text-rose-900 bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
                                     🔴 {group.rojoCount}
                                   </span>
+
+                                  <span className="ml-1 text-slate-500 hover:text-slate-800 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs flex items-center gap-1 font-sans font-bold">
+                                    {isExpanded ? (
+                                      <>
+                                        <span className="text-[10px] hidden sm:inline">Ocultar</span>
+                                        <ChevronUp className="w-4 h-4 text-slate-600" />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="text-[10px] hidden sm:inline">Ver Fotos & Calificaciones</span>
+                                        <ChevronDown className="w-4 h-4 text-slate-600" />
+                                      </>
+                                    )}
+                                  </span>
                                 </div>
                               </div>
 
-                              {/* DESGLOSE DETALLADO DE LOS 5 PUNTOS DE INSPECCIÓN DE ESTA PATENTE */}
-                              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 pt-1">
-                                {Object.keys(group.itemCounts).map(itemKey => {
-                                  const counts = group.itemCounts[itemKey];
-                                  return (
-                                    <div
-                                      key={itemKey}
-                                      className={`p-2 rounded-xl border text-[10.5px] space-y-1 ${
-                                        counts.rojo > 0
-                                          ? 'bg-rose-50 border-rose-300 text-rose-950 font-bold'
-                                          : counts.amarillo > 0
-                                          ? 'bg-amber-50 border-amber-300 text-amber-950 font-bold'
-                                          : 'bg-slate-50 border-slate-200 text-slate-700'
-                                      }`}
-                                    >
-                                      <div className="font-extrabold truncate" title={itemLabels[itemKey]}>
-                                        {itemLabels[itemKey]}
-                                      </div>
-                                      <div className="flex items-center justify-between font-mono font-black text-[10px]">
-                                        <span className={counts.verde > 0 ? 'text-emerald-700' : 'text-slate-400'}>🟢 {counts.verde}</span>
-                                        <span className={counts.amarillo > 0 ? 'text-amber-700 font-bold' : 'text-slate-400'}>🟡 {counts.amarillo}</span>
-                                        <span className={counts.rojo > 0 ? 'text-rose-700 font-extrabold' : 'text-slate-400'}>🔴 {counts.rojo}</span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                              {/* DETALLE COMPLETO (SOLO VISIBLE AL HACER CLIC) */}
+                              {isExpanded && (
+                                <div className="space-y-3 pt-3 border-t border-slate-200/80 animate-fade-in">
+                                  <div className="text-[11px] text-slate-500 font-semibold flex items-center gap-3 flex-wrap">
+                                    <span>Despachos evaluados: <strong className="text-slate-800 font-mono">{group.records.length}</strong></span>
+                                    <span>Supervisores evaluadores: <strong className="text-slate-700">{Array.from(group.supervisors).join(', ')}</strong></span>
+                                  </div>
 
-                              {/* COMENTARIOS Y EVIDENCIAS DE FOTOS DE COLCHONETAS / LINGAS */}
-                              <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                                {group.records.map(r => {
-                                  const chk = r.checklist || {};
-                                  const colchonetasComment = chk.colchonetas_comment;
-                                  const lingasComment = chk.lingas_comment;
-                                  const colchonetasPhotos: string[] = chk.colchonetas_photos || [];
-                                  const lingasPhotos: string[] = chk.lingas_photos || [];
-                                  const allPhotos = [...colchonetasPhotos, ...lingasPhotos];
-
-                                  if (!colchonetasComment && !lingasComment && allPhotos.length === 0) return null;
-
-                                  return (
-                                    <div key={r.id} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs space-y-1">
-                                      <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
-                                        <span>Despacho de fecha: <strong>{r.inspection_date}</strong> ({r.close_time || 'Sin hora'})</span>
-                                        <span>Supervisor: <strong>{r.supervisor_name}</strong></span>
-                                      </div>
-                                      {colchonetasComment && (
-                                        <p className="text-[11px] text-slate-700 font-medium">
-                                          <strong>Obs. Colchonetas:</strong> {colchonetasComment}
-                                        </p>
-                                      )}
-                                      {lingasComment && (
-                                        <p className="text-[11px] text-slate-700 font-medium">
-                                          <strong>Obs. Lingas:</strong> {lingasComment}
-                                        </p>
-                                      )}
-                                      {allPhotos.length > 0 && (
-                                        <div className="flex items-center gap-1.5 pt-1">
-                                          {allPhotos.map((pUrl, pIdx) => (
-                                            <img
-                                              key={pIdx}
-                                              src={pUrl}
-                                              alt={`Evidencia ${pIdx + 1}`}
-                                              className="w-10 h-10 rounded-lg object-cover border border-slate-200 cursor-pointer hover:scale-105 transition-transform"
-                                              onClick={() => openPhotoGallery(allPhotos, pIdx)}
-                                            />
-                                          ))}
-                                          <span className="text-[10px] text-slate-400 font-bold ml-1">
-                                            ({allPhotos.length} foto(s))
-                                          </span>
+                                  {/* DESGLOSE DETALLADO DE LOS 5 PUNTOS DE INSPECCIÓN DE ESTA PATENTE */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 pt-1">
+                                    {Object.keys(group.itemCounts).map(itemKey => {
+                                      const counts = group.itemCounts[itemKey];
+                                      return (
+                                        <div
+                                          key={itemKey}
+                                          className={`p-2 rounded-xl border text-[10.5px] space-y-1 ${
+                                            counts.rojo > 0
+                                              ? 'bg-rose-50 border-rose-300 text-rose-950 font-bold'
+                                              : counts.amarillo > 0
+                                              ? 'bg-amber-50 border-amber-300 text-amber-950 font-bold'
+                                              : 'bg-slate-50 border-slate-200 text-slate-700'
+                                          }`}
+                                        >
+                                          <div className="font-extrabold truncate" title={itemLabels[itemKey]}>
+                                            {itemLabels[itemKey]}
+                                          </div>
+                                          <div className="flex items-center justify-between font-mono font-black text-[10px]">
+                                            <span className={counts.verde > 0 ? 'text-emerald-700' : 'text-slate-400'}>🟢 {counts.verde}</span>
+                                            <span className={counts.amarillo > 0 ? 'text-amber-700 font-bold' : 'text-slate-400'}>🟡 {counts.amarillo}</span>
+                                            <span className={counts.rojo > 0 ? 'text-rose-700 font-extrabold' : 'text-slate-400'}>🔴 {counts.rojo}</span>
+                                          </div>
                                         </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                                      );
+                                    })}
+                                  </div>
 
+                                  {/* COMENTARIOS Y EVIDENCIAS DE FOTOS DE COLCHONETAS / LINGAS POR SUPERVISOR */}
+                                  <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                                    {group.records.map(r => {
+                                      const chk = r.checklist || {};
+                                      const colchonetasComment = chk.colchonetas_comment;
+                                      const lingasComment = chk.lingas_comment;
+                                      const colchonetasPhotos: string[] = chk.colchonetas_photos || [];
+                                      const lingasPhotos: string[] = chk.lingas_photos || [];
+                                      const allPhotos = [...colchonetasPhotos, ...lingasPhotos];
+
+                                      return (
+                                        <div key={r.id} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                                          <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 flex-wrap gap-1">
+                                            <span>Fecha Despacho: <strong className="font-mono text-slate-700">{r.inspection_date}</strong> ({r.close_time || 'Sin hora'})</span>
+                                            <span>Supervisor Evaluador: <strong className="text-slate-800">{r.supervisor_name}</strong></span>
+                                          </div>
+
+                                          {/* Calificación rápida de los 5 puntos en este despacho */}
+                                          <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-mono py-1 border-y border-slate-200/50">
+                                            {[
+                                              { k: 'postura_anden', l: 'Andén' },
+                                              { k: 'limpieza_estructura', l: 'Limpieza/Estructura' },
+                                              { k: 'luces_encendidas', l: 'Luces' },
+                                              { k: 'separador_termico', l: 'Sep. Térmico' },
+                                              { k: 'lingas_camion', l: 'Lingas' }
+                                            ].map(chkItem => {
+                                              const st = getChecklistStatus(chk[chkItem.k]);
+                                              return (
+                                                <span
+                                                  key={chkItem.k}
+                                                  className={`px-1.5 py-0.5 rounded font-bold border ${
+                                                    st === 'VERDE' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                                                    st === 'AMARILLO' ? 'bg-amber-100 text-amber-900 border-amber-300 font-extrabold' :
+                                                    st === 'ROJO' ? 'bg-rose-100 text-rose-800 border-rose-300 font-black animate-pulse' :
+                                                    'bg-slate-100 text-slate-500 border-slate-200'
+                                                  }`}
+                                                >
+                                                  {st === 'VERDE' ? '🟢' : st === 'AMARILLO' ? '🟡' : st === 'ROJO' ? '🔴' : '⚪'} {chkItem.l}
+                                                </span>
+                                              );
+                                            })}
+                                          </div>
+
+                                          {colchonetasComment && (
+                                            <p className="text-[11px] text-slate-700 font-medium">
+                                              <strong>Obs. Separador Térmico:</strong> {colchonetasComment}
+                                            </p>
+                                          )}
+                                          {lingasComment && (
+                                            <p className="text-[11px] text-slate-700 font-medium">
+                                              <strong>Obs. Lingas:</strong> {lingasComment}
+                                            </p>
+                                          )}
+                                          {allPhotos.length > 0 ? (
+                                            <div className="flex items-center gap-1.5 pt-1">
+                                              {allPhotos.map((pUrl, pIdx) => (
+                                                <img
+                                                  key={pIdx}
+                                                  src={pUrl}
+                                                  alt={`Evidencia ${pIdx + 1}`}
+                                                  className="w-12 h-12 rounded-lg object-cover border border-slate-200 cursor-pointer hover:scale-105 transition-transform shadow-2xs"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openPhotoGallery(allPhotos, pIdx);
+                                                  }}
+                                                />
+                                              ))}
+                                              <span className="text-[10px] text-slate-400 font-bold ml-1">
+                                                ({allPhotos.length} foto(s))
+                                              </span>
+                                            </div>
+                                          ) : (
+                                            <div className="text-[10px] text-slate-400 italic">
+                                              Sin respaldos fotográficos adjuntos en este despacho.
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })
