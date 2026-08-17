@@ -1713,9 +1713,9 @@ export default function App({ user }: { user: any }) {
     }
   }, [user]);
 
-  const [historyPeriod, setHistoryPeriod] = useState<'hoy' | 'semana' | 'todo'>('hoy');
+  const [historyPeriod, setHistoryPeriod] = useState<'hoy' | 'semana' | 'mes' | 'todo'>('hoy');
 
-  const fetchHistory = async (period: 'hoy' | 'semana' | 'todo' = historyPeriod) => {
+  const fetchHistory = async (period: 'hoy' | 'semana' | 'mes' | 'todo' = historyPeriod) => {
     setLoading(true);
     setHistoryPeriod(period);
     try {
@@ -1731,22 +1731,24 @@ export default function App({ user }: { user: any }) {
       } else if (period === 'semana') {
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
         query = query.gte('created_at', sevenDaysAgo);
+      } else if (period === 'mes') {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        query = query.gte('created_at', startOfMonth);
       } else {
-        query = query.limit(200);
+        query = query.limit(500);
       }
 
       const { data, error } = await query;
       if (error) throw error;
 
       let res = data || [];
-      // Si 'hoy' retorna 0 registros (ej: temprano en la mañana sin despachos aún hoy),
-      // cargar los últimos 15 despachos como respaldo para que no quede vacía la pantalla.
-      if (period === 'hoy' && res.length === 0) {
+      // Si 'hoy' o 'mes' retorna pocos o 0 registros, cargar fallback de los últimos 30
+      if ((period === 'hoy' || period === 'mes') && res.length === 0) {
         const fallbackQuery = await supabase
           .from('pallet_dispatches')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(15);
+          .limit(30);
         if (!fallbackQuery.error && fallbackQuery.data) {
           res = fallbackQuery.data;
         }
@@ -3035,7 +3037,7 @@ export default function App({ user }: { user: any }) {
             </span>
           </button>
           <button 
-            onClick={() => setActiveTab('inspeccion_reporte')}
+            onClick={() => { setActiveTab('inspeccion_reporte'); fetchHistory(inspectionPeriod); }}
             className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'inspeccion_reporte' ? 'border-amber-500 text-amber-700 bg-amber-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
           >
             <span className="flex items-center justify-center gap-1.5">
@@ -7710,7 +7712,10 @@ export default function App({ user }: { user: any }) {
                 <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold flex-wrap">
                   <button
                     type="button"
-                    onClick={() => setInspectionPeriod('hoy')}
+                    onClick={() => {
+                      setInspectionPeriod('hoy');
+                      fetchHistory('hoy');
+                    }}
                     className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                       inspectionPeriod === 'hoy' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
                     }`}
@@ -7719,7 +7724,10 @@ export default function App({ user }: { user: any }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setInspectionPeriod('semana')}
+                    onClick={() => {
+                      setInspectionPeriod('semana');
+                      fetchHistory('semana');
+                    }}
                     className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                       inspectionPeriod === 'semana' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
                     }`}
@@ -7728,7 +7736,10 @@ export default function App({ user }: { user: any }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setInspectionPeriod('mes')}
+                    onClick={() => {
+                      setInspectionPeriod('mes');
+                      fetchHistory('mes');
+                    }}
                     className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                       inspectionPeriod === 'mes' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
                     }`}
@@ -7737,7 +7748,10 @@ export default function App({ user }: { user: any }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setInspectionPeriod('todo')}
+                    onClick={() => {
+                      setInspectionPeriod('todo');
+                      fetchHistory('todo');
+                    }}
                     className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                       inspectionPeriod === 'todo' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
                     }`}
@@ -7762,16 +7776,16 @@ export default function App({ user }: { user: any }) {
               {/* CÁLCULO DE MÉTRICAS GLOBALES */}
               {(() => {
                 const filteredRecords = records.filter(rec => {
+                  const recDateStr = String(rec.inspection_date || rec.created_at || '').slice(0, 10);
                   if (inspectionPeriod === 'hoy') {
-                    const dateStr = String(rec.created_at || rec.inspection_date).slice(0, 10);
-                    return dateStr === getChileDateString();
+                    return recDateStr === getChileDateString();
                   } else if (inspectionPeriod === 'semana') {
                     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-                    return String(rec.created_at || rec.inspection_date).slice(0, 10) >= sevenDaysAgo;
+                    return recDateStr >= sevenDaysAgo;
                   } else if (inspectionPeriod === 'mes') {
                     const now = new Date();
                     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-                    return String(rec.created_at || rec.inspection_date).slice(0, 10) >= startOfMonth;
+                    return recDateStr >= startOfMonth;
                   }
                   return true;
                 }).filter(rec => {
