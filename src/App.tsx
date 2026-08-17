@@ -1713,7 +1713,7 @@ export default function App({ user }: { user: any }) {
     }
   }, [user]);
 
-  const [historyPeriod, setHistoryPeriod] = useState<'hoy' | 'semana' | 'mes' | 'todo'>('hoy');
+  const [historyPeriod, setHistoryPeriod] = useState<'hoy' | 'semana' | 'mes' | 'todo'>('mes');
 
   const fetchFullDispatchDetail = async (id: string): Promise<DispatchRecord | null> => {
     try {
@@ -1748,23 +1748,25 @@ export default function App({ user }: { user: any }) {
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
         query = query.gte('created_at', sevenDaysAgo);
       } else if (period === 'mes') {
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        query = query.gte('created_at', startOfMonth);
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const startOfMonth = `${year}-${month}-01`;
+        query = query.gte('inspection_date', startOfMonth);
       } else {
-        query = query.limit(300);
+        query = query.limit(500);
       }
 
       const { data, error } = await query;
       if (error) throw error;
 
       let res = data || [];
-      // Si 'hoy' o 'mes' retorna pocos o 0 registros, cargar fallback de los últimos 30
-      if ((period === 'hoy' || period === 'mes') && res.length === 0) {
+      // Si retorna 0 registros, cargar fallback de los últimos 100
+      if (res.length === 0) {
         const fallbackQuery = await supabase
           .from('v_pallet_dispatches')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(30);
+          .limit(100);
         if (!fallbackQuery.error && fallbackQuery.data) {
           res = fallbackQuery.data;
         }
@@ -8066,7 +8068,21 @@ export default function App({ user }: { user: any }) {
                                       const lingasComment = chk.lingas_comment;
                                       const colchonetasPhotos: string[] = chk.colchonetas_photos || [];
                                       const lingasPhotos: string[] = chk.lingas_photos || [];
-                                      const allPhotos = [...colchonetasPhotos, ...lingasPhotos];
+                                      const generalPhotos: string[] = chk.photos || [];
+
+                                      const sepStatus = getChecklistStatus(chk.separador_termico);
+                                      const lingasStatus = getChecklistStatus(chk.lingas_camion);
+                                      const hasAnyFault = ['postura_anden', 'limpieza_estructura', 'luces_encendidas', 'separador_termico', 'lingas_camion'].some(k => {
+                                        const st = getChecklistStatus(chk[k]);
+                                        return st === 'AMARILLO' || st === 'ROJO';
+                                      });
+
+                                      // FILTRAR FOTOS: Solo mostrar fotografías asociadas a puntos en AMARILLO o ROJO
+                                      const relevantColchonetasPhotos = (sepStatus === 'AMARILLO' || sepStatus === 'ROJO') ? colchonetasPhotos : [];
+                                      const relevantLingasPhotos = (lingasStatus === 'AMARILLO' || lingasStatus === 'ROJO') ? lingasPhotos : [];
+                                      const relevantGeneralPhotos = hasAnyFault ? generalPhotos : [];
+
+                                      const displayPhotos = Array.from(new Set([...relevantColchonetasPhotos, ...relevantLingasPhotos, ...relevantGeneralPhotos]));
 
                                       return (
                                         <div key={r.id} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs space-y-1.5">
@@ -8101,37 +8117,45 @@ export default function App({ user }: { user: any }) {
                                             })}
                                           </div>
 
-                                          {colchonetasComment && (
-                                            <p className="text-[11px] text-slate-700 font-medium">
+                                          {(sepStatus === 'AMARILLO' || sepStatus === 'ROJO') && colchonetasComment && (
+                                            <p className="text-[11px] text-amber-900 bg-amber-50 p-1.5 rounded-lg border border-amber-200 font-medium">
                                               <strong>Obs. Separador Térmico:</strong> {colchonetasComment}
                                             </p>
                                           )}
-                                          {lingasComment && (
-                                            <p className="text-[11px] text-slate-700 font-medium">
+                                          {(lingasStatus === 'AMARILLO' || lingasStatus === 'ROJO') && lingasComment && (
+                                            <p className="text-[11px] text-amber-900 bg-amber-50 p-1.5 rounded-lg border border-amber-200 font-medium">
                                               <strong>Obs. Lingas:</strong> {lingasComment}
                                             </p>
                                           )}
-                                          {allPhotos.length > 0 ? (
-                                            <div className="flex items-center gap-1.5 pt-1">
-                                              {allPhotos.map((pUrl, pIdx) => (
-                                                <img
-                                                  key={pIdx}
-                                                  src={pUrl}
-                                                  alt={`Evidencia ${pIdx + 1}`}
-                                                  className="w-12 h-12 rounded-lg object-cover border border-slate-200 cursor-pointer hover:scale-105 transition-transform shadow-2xs"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openPhotoGallery(allPhotos, pIdx);
-                                                  }}
-                                                />
-                                              ))}
-                                              <span className="text-[10px] text-slate-400 font-bold ml-1">
-                                                ({allPhotos.length} foto(s))
+
+                                          {/* SOLO MOSTRAR FOTOS SI EXISTEN FOTOS DE PUNTOS EN AMARILLO O ROJO */}
+                                          {displayPhotos.length > 0 ? (
+                                            <div className="space-y-1 pt-1">
+                                              <span className="text-[10px] font-black uppercase text-amber-800 flex items-center gap-1">
+                                                📷 Evidencias de Faltas (🟡 / 🔴) ({displayPhotos.length} foto(s)):
                                               </span>
+                                              <div className="flex items-center gap-1.5">
+                                                {displayPhotos.map((pUrl, pIdx) => (
+                                                  <img
+                                                    key={pIdx}
+                                                    src={pUrl}
+                                                    alt={`Evidencia Observación ${pIdx + 1}`}
+                                                    className="w-14 h-14 rounded-xl object-cover border-2 border-amber-400 cursor-pointer hover:scale-105 transition-transform shadow-sm"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      openPhotoGallery(displayPhotos, pIdx);
+                                                    }}
+                                                  />
+                                                ))}
+                                              </div>
+                                            </div>
+                                          ) : hasAnyFault ? (
+                                            <div className="text-[10px] text-amber-700 italic bg-amber-50/50 p-1 rounded border border-amber-200">
+                                              ⚠️ Despacho presenta observaciones (🟡 / 🔴) pero no se adjuntaron fotos de respaldo.
                                             </div>
                                           ) : (
-                                            <div className="text-[10px] text-slate-400 italic">
-                                              Sin respaldos fotográficos adjuntos en este despacho.
+                                            <div className="text-[10px] text-emerald-700 font-semibold bg-emerald-50/50 p-1 rounded border border-emerald-200 flex items-center gap-1">
+                                              ✅ Inspección 100% Conforme. Sin observaciones ni fallas.
                                             </div>
                                           )}
                                         </div>
