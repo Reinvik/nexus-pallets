@@ -140,23 +140,25 @@ interface TruckDraft {
 }
 
 const INITIAL_CHECKLIST = {
-  postura_anden: 'GRIS',
-  limpieza_estructura: 'GRIS',
-  luces_encendidas: 'GRIS',
-  separador_termico: 'GRIS',
-  lingas_camion: 'GRIS'
+  postura_anden: 'VERDE',
+  limpieza_estructura: 'VERDE',
+  luces_encendidas: 'VERDE',
+  separador_termico: 'VERDE',
+  lingas_camion: 'VERDE'
 };
 
 export const getChecklistStatus = (val: any): 'GRIS' | 'VERDE' | 'AMARILLO' | 'ROJO' => {
-  if (val === 'VERDE' || val === 'AMARILLO' || val === 'ROJO') return val;
-  return 'GRIS';
+  if (val === true) return 'VERDE';
+  if (val === false) return 'ROJO';
+  if (val === 'VERDE' || val === 'AMARILLO' || val === 'ROJO' || val === 'GRIS') return val;
+  return 'VERDE';
 };
 
 export const toggleChecklistStatus = (currentStatus: 'GRIS' | 'VERDE' | 'AMARILLO' | 'ROJO'): 'GRIS' | 'VERDE' | 'AMARILLO' | 'ROJO' => {
-  if (currentStatus === 'GRIS') return 'VERDE';
   if (currentStatus === 'VERDE') return 'AMARILLO';
   if (currentStatus === 'AMARILLO') return 'ROJO';
-  return 'GRIS';
+  if (currentStatus === 'ROJO') return 'GRIS';
+  return 'VERDE';
 };
 
 const formatSupervisorName = (email: string | undefined): string => {
