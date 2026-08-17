@@ -4738,7 +4738,20 @@ export default function App({ user }: { user: any }) {
 
                             <button
                               type="button"
-                              onClick={() => setExpandedRecords(prev => ({ ...prev, [rec.id]: !prev[rec.id] }))}
+                              onClick={() => {
+                                const isOpening = !expandedRecords[rec.id];
+                                setExpandedRecords(prev => ({ ...prev, [rec.id]: !prev[rec.id] }));
+                                // Si se está abriendo y aún no se han cargado las fotos (la vista las excluye),
+                                // cargamos el registro completo desde pallet_dispatches
+                                if (isOpening) {
+                                  const cl = rec.checklist as any;
+                                  const hasPhotos = cl?.colchonetas_photos?.length > 0 || cl?.lingas_photos?.length > 0;
+                                  const hasZonalPhotos = rec.zonals_detail?.some((z: any) => z.photos?.length > 0);
+                                  if (!hasPhotos && !hasZonalPhotos) {
+                                    fetchFullDispatchDetail(rec.id);
+                                  }
+                                }
+                              }}
                               className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border flex items-center gap-1 ${
                                 expandedRecords[rec.id] 
                                   ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' 
