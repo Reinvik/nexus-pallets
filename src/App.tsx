@@ -1715,15 +1715,29 @@ export default function App({ user }: { user: any }) {
 
   const [historyPeriod, setHistoryPeriod] = useState<'hoy' | 'semana' | 'mes' | 'todo'>('hoy');
 
-  const DISPATCH_LIST_COLUMNS = 'id, truck_number, truck_plate, supervisor_name, inspection_date, inspection_time, positions_occupied, checklist, zonals_detail, observations, created_at, temp_1er, temp_2do, temp_3er, close_time, truck_kilos, anden_number, signed_by, signed_at, signed_by_title';
+  const fetchFullDispatchDetail = async (id: string): Promise<DispatchRecord | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('pallet_dispatches')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error || !data) return null;
+      setRecords(prev => prev.map(r => r.id === id ? { ...r, ...data } : r));
+      return data as DispatchRecord;
+    } catch (e) {
+      console.warn("Error cargando detalle completo del despacho:", e);
+      return null;
+    }
+  };
 
   const fetchHistory = async (period: 'hoy' | 'semana' | 'mes' | 'todo' = historyPeriod) => {
     setLoading(true);
     setHistoryPeriod(period);
     try {
       let query = supabase
-        .from('pallet_dispatches')
-        .select(DISPATCH_LIST_COLUMNS)
+        .from('v_pallet_dispatches')
+        .select('*')
         .order('created_at', { ascending: false });
 
       const now = new Date();
@@ -1747,8 +1761,8 @@ export default function App({ user }: { user: any }) {
       // Si 'hoy' o 'mes' retorna pocos o 0 registros, cargar fallback de los últimos 30
       if ((period === 'hoy' || period === 'mes') && res.length === 0) {
         const fallbackQuery = await supabase
-          .from('pallet_dispatches')
-          .select(DISPATCH_LIST_COLUMNS)
+          .from('v_pallet_dispatches')
+          .select('*')
           .order('created_at', { ascending: false })
           .limit(30);
         if (!fallbackQuery.error && fallbackQuery.data) {
@@ -2072,19 +2086,11 @@ export default function App({ user }: { user: any }) {
 
     let container: HTMLDivElement | null = null;
     try {
-      // Cargar la firma base64 si no está presente en el objeto local
+      // Cargar la firma base64 y fotos completas si no están presentes en el objeto local
       if (rec.signed_by && !rec.signature_b64) {
-        try {
-          const { data: sigData } = await supabase
-            .from('pallet_dispatches')
-            .select('signature_b64')
-            .eq('id', rec.id)
-            .single();
-          if (sigData?.signature_b64) {
-            rec = { ...rec, signature_b64: sigData.signature_b64 };
-          }
-        } catch (e) {
-          console.warn("Firma base64 no encontrada:", e);
+        const detail = await fetchFullDispatchDetail(rec.id);
+        if (detail?.signature_b64) {
+          rec = { ...rec, signature_b64: detail.signature_b64 };
         }
       }
 
@@ -2417,21 +2423,28 @@ export default function App({ user }: { user: any }) {
   };
 
   // Cargar un despacho guardado desde el historial directamente a la pantalla de Despacho Camión para reeditarlo
-  const openEditDispatchInForm = (rec: DispatchRecord) => {
-    setEditingDispatchId(rec.id);
-    setSupervisorName(rec.supervisor_name || formatSupervisorName(user?.email));
-    setTruckNumber(rec.truck_number !== 'N/A' ? rec.truck_number : '');
-    setTruckPlate(rec.truck_plate !== 'N/A' ? rec.truck_plate : '');
-    setTruckAnden(rec.anden_number || '');
-    setPositionsOccupied(rec.positions_occupied || 26);
-    setObservations(rec.observations || '');
-    setTemp1er(rec.temp_1er ?? 0);
-    setTemp2do(rec.temp_2do ?? 0);
-    setTemp3er(rec.temp_3er ?? 0);
-    setCloseTime(rec.close_time || '');
-    setTruckKilos(rec.truck_kilos ? String(rec.truck_kilos) : '');
+  const openEditDispatchInForm = async (rec: DispatchRecord) => {
+    let fullRec = rec;
+    const clCheck = (rec.checklist as any) || {};
+    if (!clCheck.photos && !clCheck.colchonetas_photos && !clCheck.lingas_photos) {
+      const detail = await fetchFullDispatchDetail(rec.id);
+      if (detail) fullRec = detail;
+    }
 
-    const cl = (rec.checklist as any) || {};
+    setEditingDispatchId(fullRec.id);
+    setSupervisorName(fullRec.supervisor_name || formatSupervisorName(user?.email));
+    setTruckNumber(fullRec.truck_number !== 'N/A' ? fullRec.truck_number : '');
+    setTruckPlate(fullRec.truck_plate !== 'N/A' ? fullRec.truck_plate : '');
+    setTruckAnden(fullRec.anden_number || '');
+    setPositionsOccupied(fullRec.positions_occupied || 26);
+    setObservations(fullRec.observations || '');
+    setTemp1er(fullRec.temp_1er ?? 0);
+    setTemp2do(fullRec.temp_2do ?? 0);
+    setTemp3er(fullRec.temp_3er ?? 0);
+    setCloseTime(fullRec.close_time || '');
+    setTruckKilos(fullRec.truck_kilos ? String(fullRec.truck_kilos) : '');
+
+    const cl = (fullRec.checklist as any) || {};
     setChecklist({
       postura_anden: cl.postura_anden !== false,
       limpieza_estructura: cl.limpieza_estructura !== false,
@@ -2445,7 +2458,7 @@ export default function App({ user }: { user: any }) {
     setColchonetasComment(cl.colchonetas_comment || '');
     setPhotos(cl.photos || []);
 
-    setSelectedZonals(JSON.parse(JSON.stringify(rec.zonals_detail || [])));
+    setSelectedZonals(JSON.parse(JSON.stringify(fullRec.zonals_detail || [])));
 
     setActiveTab('nuevo');
   };
@@ -7949,10 +7962,16 @@ export default function App({ user }: { user: any }) {
                               {/* CABECERA PATENTE RESUMIDA (HACER CLIC PARA DESPLEGAR DETALLE) */}
                               <div
                                 onClick={() => {
+                                  const willExpand = !expandedInspectionPlates[group.plate];
                                   setExpandedInspectionPlates(prev => ({
                                     ...prev,
-                                    [group.plate]: !prev[group.plate]
+                                    [group.plate]: willExpand
                                   }));
+                                  if (willExpand) {
+                                    group.records.forEach(r => {
+                                      fetchFullDispatchDetail(r.id);
+                                    });
+                                  }
                                 }}
                                 className="flex items-center justify-between flex-wrap gap-2 cursor-pointer select-none py-1 hover:opacity-90 transition-opacity"
                               >
