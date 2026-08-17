@@ -2093,7 +2093,7 @@ export default function App({ user }: { user: any }) {
             <tr style="text-align: center; font-size: 11px; height: 35px;">
               <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace;">${i + 1}</td>
               <td style="border: 1px solid #000; padding: 6px; text-align: left; font-weight: bold; text-transform: uppercase; font-family: sans-serif;">
-                ${z.zonal_name} ${z.viaje_numero && z.viaje_numero > 1 ? z.viaje_numero : ''} 
+                ${z.zonal_name} 
                 <span style="font-size: 8px; color: #555; font-weight: normal; margin-left: 4px;">(${z.lugar_camion})</span>
               </td>
               <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${bandejas > 0 ? bandejas : '—'}</td>
@@ -2153,10 +2153,7 @@ export default function App({ user }: { user: any }) {
           <!-- Datos generales -->
           <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
             <tr style="height: 24px;">
-              <td style="width: 65%; border: 1px solid #000; padding: 5px;"><strong>ZONALES:</strong> <span style="font-weight: 900; text-transform: uppercase; font-size: 12.5px; color: #000;">${rec.zonals_detail.map(z => {
-                const viajeNum = z.viaje_numero || 1;
-                return viajeNum > 1 ? `${z.zonal_name} ${viajeNum}` : z.zonal_name;
-              }).join(' - ')}</span></td>
+              <td style="width: 65%; border: 1px solid #000; padding: 5px;"><strong>ZONALES:</strong> <span style="font-weight: 900; text-transform: uppercase; font-size: 12.5px; color: #000;">${rec.zonals_detail.map(z => z.zonal_name).join(' - ')}</span></td>
               <td style="width: 35%; border: 1px solid #000; padding: 5px;"><strong>PATENTE:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000;">${rec.truck_plate !== 'N/A' ? rec.truck_plate : 'S/A'}</span></td>
             </tr>
             <tr style="height: 24px;">
@@ -2671,12 +2668,11 @@ export default function App({ user }: { user: any }) {
     const timeStr = getChileTimeString(now);
 
     try {
-      // Mapear zonales para concatenar el número de viaje/carga si es mayor que 1
+      // Mapear zonales preservando el nombre limpio del zonal
       const formattedZonals = selectedZonals.map(sz => {
-        const viajeNum = sz.viaje_numero || 1;
         return {
           ...sz,
-          zonal_name: viajeNum > 1 ? `${sz.zonal_name} ${viajeNum}` : sz.zonal_name
+          zonal_name: sz.zonal_name
         };
       });
 
@@ -4117,8 +4113,7 @@ export default function App({ user }: { user: any }) {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                     {selectedZonals.map((z, idx) => {
                       const zt = getZonalTotals(z);
-                      const viajeNum = z.viaje_numero || 1;
-                      const zonalDisplayName = viajeNum > 1 ? `${z.zonal_name} ${viajeNum}` : z.zonal_name;
+                      const zonalDisplayName = z.zonal_name;
                       return (
                         <div key={idx} className="bg-white/5 border border-white/10 p-3 rounded-xl space-y-1.5">
                           <div className="flex items-center justify-between border-b border-white/10 pb-1">
@@ -4549,7 +4544,7 @@ export default function App({ user }: { user: any }) {
                               className="inline-flex items-center gap-1 bg-white border border-slate-200 text-slate-800 text-[11px] font-extrabold px-2 py-0.5 rounded-lg shadow-2xs"
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-brand-primary"></span>
-                              {z.zonal_name} {z.viaje_numero && z.viaje_numero > 1 ? `#${z.viaje_numero}` : ''}
+                              {z.zonal_name}
                               <span className="text-[9px] text-slate-400 font-mono font-normal">({z.lugar_camion})</span>
                             </span>
                           ))}
@@ -6886,7 +6881,7 @@ export default function App({ user }: { user: any }) {
                             <tr key={log.id || `${log.dispatch_id}-${log.zonal_name}-${log.viaje_numero}`} className="hover:bg-slate-50/80 transition-all">
                               <td className="p-3 font-mono font-bold">{log.inspection_date}</td>
                               <td className="p-3 font-extrabold uppercase">
-                                {getBaseZonalName(log.zonal_name)}{log.viaje_numero > 1 ? ` ${log.viaje_numero}` : ''}
+                                {log.zonal_name}
                               </td>
                               <td className="p-3 text-center font-mono">{log.target_time} hrs</td>
                               <td className="p-3 text-center font-mono font-black">{log.actual_time} hrs</td>
@@ -7008,7 +7003,7 @@ export default function App({ user }: { user: any }) {
                               <tr key={log.id || `${log.dispatch_id}-${log.zonal_name}-${log.viaje_numero}`} className="hover:bg-slate-50/80 transition-all">
                                 <td className="p-3 font-mono font-bold">{log.inspection_date}</td>
                                 <td className="p-3 font-extrabold uppercase">
-                                  {log.zonal_name} {log.viaje_numero > 1 ? `(Viaje ${log.viaje_numero})` : ''}
+                                  {log.zonal_name}
                                 </td>
                                 <td className="p-3 text-center font-mono">{log.target_time} hrs</td>
                                 <td className="p-3 text-center font-mono font-black">{log.actual_time} hrs</td>
@@ -7378,7 +7373,7 @@ export default function App({ user }: { user: any }) {
                               </td>
 
                               <td className="py-3 px-2.5 font-black uppercase text-slate-800 whitespace-nowrap">
-                                {baseZonal} {viajeNum > 1 ? `(${viajeNum})` : ''}
+                                {log.zonal_name}
                               </td>
 
                               <td className="py-3 px-2.5 text-center font-mono whitespace-nowrap">
@@ -9103,19 +9098,42 @@ export default function App({ user }: { user: any }) {
 
               {/* Zonales */}
               <div className="space-y-2">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Zonales despachados</p>
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Zonales despachados</p>
+                  {(() => {
+                    const gWood = signPreviewRecord.zonals_detail.reduce((sum, z) => 
+                      sum + (z.congelados?.wood_bases || 0) + (z.congelados?.wood_extra || 0) +
+                      (z.estandar?.wood_bases || 0) + (z.estandar?.wood_extra || 0) +
+                      (z.bandejas?.wood_bases || 0) + (z.bandejas?.wood_extra || 0), 0);
+                    const gPlastic = signPreviewRecord.zonals_detail.reduce((sum, z) => 
+                      sum + (z.congelados?.plastic_bases || 0) + (z.congelados?.plastic_extra || 0) +
+                      (z.estandar?.plastic_bases || 0) + (z.estandar?.plastic_extra || 0) +
+                      (z.bandejas?.plastic_bases || 0) + (z.bandejas?.plastic_extra || 0), 0);
+                    const gBandejas = signPreviewRecord.zonals_detail.reduce((sum, z) => 
+                      sum + (z.bandejas?.bandejas_count || 0), 0);
+                    return (
+                      <span className="text-[11px] font-mono font-black text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg">
+                        Totales: 🪵 Madera: {gWood} | ♻️ Plástico: {gPlastic} | 📦 Bandejas: {gBandejas}
+                      </span>
+                    );
+                  })()}
+                </div>
                 {signPreviewRecord.zonals_detail.map((z, i) => {
-                  const woodTotal = (z.congelados?.wood_bases || 0) + (z.congelados?.wood_extra || 0) + (z.estandar?.wood_bases || 0) + (z.estandar?.wood_extra || 0);
-                  const plasticTotal = (z.congelados?.plastic_bases || 0) + (z.congelados?.plastic_extra || 0) + (z.estandar?.plastic_bases || 0) + (z.estandar?.plastic_extra || 0);
+                  const woodTotal = (z.congelados?.wood_bases || 0) + (z.congelados?.wood_extra || 0) + 
+                                    (z.estandar?.wood_bases || 0) + (z.estandar?.wood_extra || 0) +
+                                    (z.bandejas?.wood_bases || 0) + (z.bandejas?.wood_extra || 0);
+                  const plasticTotal = (z.congelados?.plastic_bases || 0) + (z.congelados?.plastic_extra || 0) + 
+                                       (z.estandar?.plastic_bases || 0) + (z.estandar?.plastic_extra || 0) +
+                                       (z.bandejas?.plastic_bases || 0) + (z.bandejas?.plastic_extra || 0);
                   const bandejaTotal = (z.bandejas?.bandejas_count || 0);
                   return (
                     <div key={i} className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2 text-xs">
                       <span className="font-black text-slate-800">{z.zonal_name}</span>
-                      <div className="flex gap-3 text-slate-500">
-                        {woodTotal > 0 && <span>🪵 {woodTotal}</span>}
-                        {plasticTotal > 0 && <span>♻️ {plasticTotal}</span>}
-                        {bandejaTotal > 0 && <span>📦 {bandejaTotal}</span>}
-                        {z.sello && <span>🔒 {z.sello}</span>}
+                      <div className="flex gap-3 text-slate-500 font-mono font-bold">
+                        {woodTotal > 0 && <span>🪵 {woodTotal} Madera</span>}
+                        {plasticTotal > 0 && <span>♻️ {plasticTotal} Plástico</span>}
+                        {bandejaTotal > 0 && <span>📦 {bandejaTotal} Bandejas</span>}
+                        {z.sello && <span className="font-sans text-slate-700">🔒 Sello: {z.sello}</span>}
                       </div>
                     </div>
                   );
