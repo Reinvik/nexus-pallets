@@ -247,7 +247,8 @@ export const compareTimes = (actualTimeStr: string, targetTimeStr: string) => {
  */
 export const getBaseZonalName = (zonalName: string): string => {
   if (!zonalName) return '—';
-  return zonalName.replace(/\s+\d+$/i, '').trim();
+  // Eliminar TODOS los números al final (ej: "VIÑA DEL MAR 2 2 2" → "VIÑA DEL MAR")
+  return zonalName.replace(/(\s+\d+)+$/i, '').trim();
 };
 
 const ADMIN_EMAILS = [
@@ -1979,7 +1980,8 @@ export default function App({ user }: { user: any }) {
   const getBaseZonalName = (fullName: string): string => {
     if (!fullName) return '';
     let clean = fullName.replace(/\s*\(\d+\)\s*/g, '').trim();
-    clean = clean.replace(/\s+\d+$/g, '').trim();
+    // Eliminar TODOS los números al final (ej: "VIÑA DEL MAR 2 2" → "VIÑA DEL MAR")
+    clean = clean.replace(/(\s+\d+)+$/g, '').trim();
     const matched = ZONALES_LIST.find(z => z.toLowerCase() === clean.toLowerCase());
     return matched || clean.toUpperCase();
   };
