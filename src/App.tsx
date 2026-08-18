@@ -2090,11 +2090,18 @@ export default function App({ user }: { user: any }) {
 
     let container: HTMLDivElement | null = null;
     try {
-      // Cargar la firma base64 y fotos completas si no están presentes en el objeto local
-      if (rec.signed_by && !rec.signature_b64) {
+      // Cargar la firma base64 y datos completos (incluyendo sellos) si no están presentes
+      const needsFullDetail = (rec.signed_by && !rec.signature_b64) ||
+        rec.zonals_detail?.some((z: any) => z.sello === undefined || z.sello === null);
+      if (needsFullDetail) {
         const detail = await fetchFullDispatchDetail(rec.id);
-        if (detail?.signature_b64) {
-          rec = { ...rec, signature_b64: detail.signature_b64 };
+        if (detail) {
+          rec = {
+            ...rec,
+            signature_b64: detail.signature_b64 ?? rec.signature_b64,
+            // zonals_detail del registro completo incluye el sello y photos
+            zonals_detail: detail.zonals_detail ?? rec.zonals_detail,
+          };
         }
       }
 
