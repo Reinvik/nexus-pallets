@@ -413,6 +413,17 @@ export default function App({ user }: { user: any }) {
   const [saveProgressToast, setSaveProgressToast] = useState<string | null>(null);
   const [saveProgressLoading, setSaveProgressLoading] = useState(false);
 
+  // ── Auto-guardado A+B+C ──────────────────────────────────────────────────
+  // 'idle' = sin cambios desde último guardado
+  // 'unsaved' = hay cambios sin guardar
+  // 'saving' = guardando ahora
+  // 'saved' = guardado exitoso
+  // 'error' = error al guardar
+  type DraftSaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error';
+  const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus>('idle');
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
+  const [autoSaveRetries, setAutoSaveRetries] = useState(0);
+
   // Manejo de Temperaturas Termos: Solo 1 congelado (<= -9°C) a la vez. Si uno se activa, los demás pasan a 0°C (Refrigerado).
   const handleSetTemp1er = (val: number) => {
     setTemp1er(val);
@@ -1698,6 +1709,64 @@ export default function App({ user }: { user: any }) {
     }
   };
 
+  // ── C: Guardar sin fotos con reintentos (hasta 3 intentos) ──────────────
+  const autoSaveDraftTextOnly = async (retryCount = 0): Promise<boolean> => {
+    if (!activeDraftId) return false;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 8000; // 8s entre reintentos
+    try {
+      // Construir el checklist SIN fotos (solo estados semáforo y comentarios)
+      const checklistNoPhotos = {
+        postura_anden:       (checklist as any).postura_anden,
+        limpieza_estructura: (checklist as any).limpieza_estructura,
+        luces_encendidas:    (checklist as any).luces_encendidas,
+        separador_termico:   (checklist as any).separador_termico,
+        lingas_camion:       (checklist as any).lingas_camion,
+        colchonetas_comment: lingasComment,
+        lingas_comment:      lingasComment,
+        // fotos explícitamente excluidas para mantener payload liviano
+      };
+
+      // Zonales sin photos array
+      const zonalsSinFotos = selectedZonals.map((z: any) => {
+        const { photos: _p, ...rest } = z;
+        return rest;
+      });
+
+      await supabase.from('active_truck_drafts').upsert([{
+        id: activeDraftId,
+        truck_number:       truckNumber || '',
+        truck_plate:        (truckPlate || '').trim().toUpperCase(),
+        truck_anden:        truckAnden || '',
+        positions_occupied: positionsOccupied ?? 26,
+        observations:       observations || '',
+        temp_1er:           temp1er ?? 0,
+        temp_2do:           temp2do ?? 0,
+        temp_3er:           temp3er ?? 0,
+        close_time:         closeTime || '',
+        truck_kilos:        truckKilos || '',
+        checklist:          checklistNoPhotos,
+        selected_zonals:    zonalsSinFotos,
+        photos:             [], // sin fotos globales en auto-save
+        supervisor_name:    supervisorName || '',
+        created_by:         user?.email || '',
+        updated_at:         new Date().toISOString()
+      }], { onConflict: 'id' });
+
+      setAutoSaveRetries(0);
+      return true;
+    } catch (err) {
+      if (retryCount < MAX_RETRIES - 1) {
+        setAutoSaveRetries(retryCount + 1);
+        await new Promise(res => setTimeout(res, RETRY_DELAY_MS));
+        return autoSaveDraftTextOnly(retryCount + 1);
+      }
+      setAutoSaveRetries(MAX_RETRIES);
+      return false;
+    }
+  };
+
+
   // Cargar historial y retornos
   useEffect(() => {
     fetchHistory();
@@ -1713,6 +1782,37 @@ export default function App({ user }: { user: any }) {
       setReturnSupervisor(formatSupervisorName(user.email));
     }
   }, [user]);
+
+  // ── B: Marcar como "unsaved" cuando cambia cualquier dato del formulario ──
+  useEffect(() => {
+    if (!activeDraftId) return;
+    setDraftSaveStatus('unsaved');
+  }, [
+    truckNumber, truckPlate, truckAnden, positionsOccupied, observations,
+    temp1er, temp2do, temp3er, closeTime, truckKilos,
+    checklist, selectedZonals, activeDraftId
+  ]);
+
+  // ── A: Auto-guardado cada 5 minutos (sin fotos) + C: reintentos ──────────
+  useEffect(() => {
+    if (!activeDraftId) return;
+    const INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
+
+    const run = async () => {
+      if (draftSaveStatus === 'saving') return; // no solapar guardados
+      setDraftSaveStatus('saving');
+      const ok = await autoSaveDraftTextOnly();
+      if (ok) {
+        setLastAutoSaveTime(new Date());
+        setDraftSaveStatus('saved');
+      } else {
+        setDraftSaveStatus('error');
+      }
+    };
+
+    const interval = setInterval(run, INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [activeDraftId, draftSaveStatus]);
 
   const [historyPeriod, setHistoryPeriod] = useState<'hoy' | 'semana' | 'mes' | 'todo'>('mes');
 
@@ -3202,7 +3302,11 @@ export default function App({ user }: { user: any }) {
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     type="button"
-                    onClick={handleSaveProgress}
+                    onClick={async () => {
+                      await handleSaveProgress();
+                      setDraftSaveStatus('saved');
+                      setLastAutoSaveTime(new Date());
+                    }}
                     disabled={saveProgressLoading}
                     className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
                     title="Guarda tu avance en la nube sin salir del formulario"
@@ -3210,6 +3314,41 @@ export default function App({ user }: { user: any }) {
                     {saveProgressLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                     <span>GUARDAR AVANCE</span>
                   </button>
+
+                  {/* ── B: Badge de estado del guardado ── */}
+                  {activeDraftId && (() => {
+                    if (draftSaveStatus === 'saving') return (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg animate-pulse select-none">
+                        <RefreshCw className="w-3 h-3 animate-spin" /> Guardando...
+                      </span>
+                    );
+                    if (draftSaveStatus === 'error') return (
+                      <button
+                        type="button"
+                        title="Error al guardar automáticamente. Clic para reintentar."
+                        onClick={async () => {
+                          setDraftSaveStatus('saving');
+                          const ok = await autoSaveDraftTextOnly();
+                          if (ok) { setLastAutoSaveTime(new Date()); setDraftSaveStatus('saved'); }
+                          else setDraftSaveStatus('error');
+                        }}
+                        className="flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-300 px-2 py-1 rounded-lg cursor-pointer hover:bg-rose-100 transition-all select-none"
+                      >
+                        ⚠️ Error{autoSaveRetries > 0 ? ` (intento ${autoSaveRetries}/3)` : ''} · Reintentar
+                      </button>
+                    );
+                    if (draftSaveStatus === 'saved' && lastAutoSaveTime) return (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg select-none">
+                        ✅ Guardado {lastAutoSaveTime.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    );
+                    if (draftSaveStatus === 'unsaved') return (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg select-none">
+                        🟡 Sin guardar
+                      </span>
+                    );
+                    return null;
+                  })()}
 
                   <button
                     type="button"
