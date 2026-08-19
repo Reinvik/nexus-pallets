@@ -2636,6 +2636,21 @@ export default function App({ user }: { user: any }) {
 
   // Estado Poka-Yoke: Advertencia por datos faltantes del camión
   const [missingFieldsAlert, setMissingFieldsAlert] = useState<string[] | null>(null);
+  // Advertencia al intentar firmar desde el Historial
+  const [signWarningAlert, setSignWarningAlert] = useState<{ fields: string[]; rec: DispatchRecord } | null>(null);
+
+  const getMissingSignFields = (rec: DispatchRecord): string[] => {
+    const missing: string[] = [];
+    if (!rec.truck_number || !String(rec.truck_number).trim()) missing.push('N° de Camión');
+    if (!rec.truck_plate || !rec.truck_plate.trim() || rec.truck_plate === 'N/A') missing.push('Patente del Camión');
+    if (!rec.anden_number || !String(rec.anden_number).trim()) missing.push('N° de Andén');
+    if (!rec.truck_kilos || Number(rec.truck_kilos) === 0) missing.push('Kilos Totales del Camión');
+    if (!rec.close_time || !rec.close_time.trim()) missing.push('Hora de Cierre del Camión');
+    rec.zonals_detail?.forEach(z => {
+      if (!z.sello || !String(z.sello).trim()) missing.push(`N° de Sello en Zonal "${z.zonal_name}"`);
+    });
+    return missing;
+  };
 
   const getMissingDispatchData = (): string[] => {
     const missing: string[] = [];
@@ -4732,7 +4747,14 @@ export default function App({ user }: { user: any }) {
                             ) : userCanSign !== false ? (
                               <button
                                 type="button"
-                                onClick={() => setSignPreviewRecord(rec)}
+                                onClick={() => {
+                                  const missing = getMissingSignFields(rec);
+                                  if (missing.length > 0) {
+                                    setSignWarningAlert({ fields: missing, rec });
+                                  } else {
+                                    setSignPreviewRecord(rec);
+                                  }
+                                }}
                                 className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-violet-500 bg-violet-500 hover:bg-violet-600 text-white flex items-center gap-1"
                                 title="Firmar este despacho digitalmente"
                               >
@@ -9319,6 +9341,68 @@ export default function App({ user }: { user: any }) {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* MODAL ADVERTENCIA AL FIRMAR: CAMPOS INCOMPLETOS EN HISTORIAL  */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {signWarningAlert && (
+        <div className="fixed inset-0 z-[99998] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-7 space-y-5 border-2 border-orange-400">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-orange-100 border border-orange-300 text-orange-600 flex items-center justify-center shrink-0 shadow-sm">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                  ⚠️ Advertencia: Datos Incompletos
+                </h3>
+                <p className="text-xs font-semibold text-slate-500 mt-1">
+                  Este despacho tiene campos sin rellenar. Verifica antes de firmar:
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-orange-50/70 border border-orange-200/80 rounded-2xl p-4 space-y-2">
+              <span className="text-[11px] font-black uppercase text-orange-800 tracking-wider block">
+                Campos faltantes o vacíos:
+              </span>
+              <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {signWarningAlert.fields.map((field, idx) => (
+                  <li key={idx} className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-white border border-orange-200 rounded-xl px-3 py-2 shadow-2xs">
+                    <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0"></span>
+                    <span>{field}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <p className="text-xs font-semibold text-slate-600 text-center">
+              Puedes volver al historial para editar el despacho, o firmar de todas formas si los datos son correctos.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setSignWarningAlert(null)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-2xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 border border-slate-300"
+              >
+                ✏️ VOLVER Y REVISAR
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const rec = signWarningAlert.rec;
+                  setSignWarningAlert(null);
+                  setSignPreviewRecord(rec);
+                }}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-2xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 shadow-md"
+              >
+                ✍️ FIRMAR DE TODAS FORMAS
+              </button>
             </div>
           </div>
         </div>
