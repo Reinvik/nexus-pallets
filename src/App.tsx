@@ -2222,27 +2222,27 @@ export default function App({ user }: { user: any }) {
           const bandejas = z.bandejas.bandejas_count || 0;
           
           rows.push(`
-            <tr style="text-align: center; font-size: 11px; height: 35px;">
-              <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace;">${i + 1}</td>
-              <td style="border: 1px solid #000; padding: 6px; text-align: left; font-weight: bold; text-transform: uppercase; font-family: sans-serif;">
+            <tr style="text-align: center; font-size: 10px; height: 24px;">
+              <td style="border: 1px solid #000; padding: 2px 4px; font-weight: bold; font-family: monospace;">${i + 1}</td>
+              <td style="border: 1px solid #000; padding: 2px 4px; text-align: left; font-weight: bold; text-transform: uppercase; font-family: sans-serif;">
                 ${z.zonal_name} 
-                <span style="font-size: 8px; color: #555; font-weight: normal; margin-left: 4px;">(${z.lugar_camion})</span>
+                <span style="font-size: 7.5px; color: #555; font-weight: normal; margin-left: 3px;">(${z.lugar_camion})</span>
               </td>
-              <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${bandejas > 0 ? bandejas : '—'}</td>
-              <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${wood > 0 ? wood : 'X'}</td>
-              <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${plastic > 0 ? plastic : 'X'}</td>
-              <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; font-size: 11px;">${z.sello || ''}</td>
+              <td style="border: 1px solid #000; padding: 2px 4px; font-weight: bold; font-family: monospace; font-size: 10px;">${bandejas > 0 ? bandejas : '—'}</td>
+              <td style="border: 1px solid #000; padding: 2px 4px; font-weight: bold; font-family: monospace; font-size: 10px;">${wood > 0 ? wood : 'X'}</td>
+              <td style="border: 1px solid #000; padding: 2px 4px; font-weight: bold; font-family: monospace; font-size: 10px;">${plastic > 0 ? plastic : 'X'}</td>
+              <td style="border: 1px solid #000; padding: 2px 4px; font-weight: bold; font-family: monospace; font-size: 10px;">${z.sello || ''}</td>
             </tr>
           `);
         } else {
           rows.push(`
-            <tr style="text-align: center; font-size: 11px; height: 35px;">
-              <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-family: monospace; color: #ccc;">${i + 1}</td>
-              <td style="border: 1px solid #000; padding: 6px; text-align: left; color: #ccc;">—</td>
-              <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
-              <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
-              <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
-              <td style="border: 1px solid #000; padding: 6px; color: #ccc;">—</td>
+            <tr style="text-align: center; font-size: 10px; height: 24px;">
+              <td style="border: 1px solid #000; padding: 2px 4px; font-weight: bold; font-family: monospace; color: #ccc;">${i + 1}</td>
+              <td style="border: 1px solid #000; padding: 2px 4px; text-align: left; color: #ccc;">—</td>
+              <td style="border: 1px solid #000; padding: 2px 4px; color: #ccc;">—</td>
+              <td style="border: 1px solid #000; padding: 2px 4px; color: #ccc;">—</td>
+              <td style="border: 1px solid #000; padding: 2px 4px; color: #ccc;">—</td>
+              <td style="border: 1px solid #000; padding: 2px 4px; color: #ccc;">—</td>
             </tr>
           `);
         }
@@ -2263,100 +2263,100 @@ export default function App({ user }: { user: any }) {
         .join(' ');
 
       const pdfHtml = `
-        <div style="font-family: Arial, sans-serif; font-size: 9.5px; width: 750px; padding: 25px; box-sizing: border-box; background-color: #ffffff; color: #000000; margin: 0 auto; line-height: 1.25;">
+        <div style="font-family: Arial, sans-serif; font-size: 9px; width: 750px; padding: 14px 18px; box-sizing: border-box; background-color: #ffffff; color: #000000; margin: 0 auto; line-height: 1.2;">
           
           <!-- Header -->
-          <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px;">
+          <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 5px;">
             <tr>
-              <td style="width: 25%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle;">
-                <img src="${logoBase64}" style="height: 48px; width: auto; object-fit: contain;" />
+              <td style="width: 25%; border: 1px solid #000; text-align: center; padding: 4px; vertical-align: middle;">
+                <img src="${logoBase64}" style="height: 38px; width: auto; object-fit: contain;" />
               </td>
-              <td style="width: 50%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle;">
-                <div style="font-size: 13px; font-weight: 900; letter-spacing: 0.5px; font-family: sans-serif;">CHECK LIST CAMIONES SUR Y NORTE</div>
-                <div style="font-size: 8.5px; margin-top: 2px; font-weight: bold; color: #444; font-family: sans-serif;">(Archivados) En oficina del Jefe de turno</div>
+              <td style="width: 50%; border: 1px solid #000; text-align: center; padding: 4px; vertical-align: middle;">
+                <div style="font-size: 12px; font-weight: 900; letter-spacing: 0.5px; font-family: sans-serif;">CHECK LIST CAMIONES SUR Y NORTE</div>
+                <div style="font-size: 8px; margin-top: 1px; font-weight: bold; color: #444; font-family: sans-serif;">(Archivados) En oficina del Jefe de turno</div>
               </td>
-              <td style="width: 25%; border: 1px solid #000; text-align: center; padding: 6px; vertical-align: middle; background-color: #fafafa;">
-                <div style="font-size: 7.5px; font-weight: 800; color: #666; text-transform: uppercase; letter-spacing: 0.5px; font-family: sans-serif;">NUMERO CAMIÓN</div>
-                <div style="font-size: 18px; font-weight: 900; margin-top: 2px; font-family: monospace; color: #000;">${rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'}</div>
+              <td style="width: 25%; border: 1px solid #000; text-align: center; padding: 4px; vertical-align: middle; background-color: #fafafa;">
+                <div style="font-size: 7px; font-weight: 800; color: #666; text-transform: uppercase; letter-spacing: 0.5px; font-family: sans-serif;">NUMERO CAMIÓN</div>
+                <div style="font-size: 16px; font-weight: 900; margin-top: 1px; font-family: monospace; color: #000;">${rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'}</div>
               </td>
             </tr>
           </table>
 
           <!-- Datos generales -->
-          <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
-            <tr style="height: 24px;">
-              <td style="width: 65%; border: 1px solid #000; padding: 5px;"><strong>ZONALES:</strong> <span style="font-weight: 900; text-transform: uppercase; font-size: 12.5px; color: #000;">${rec.zonals_detail.map(z => z.zonal_name).join(' - ')}</span></td>
-              <td style="width: 35%; border: 1px solid #000; padding: 5px;"><strong>PATENTE:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000;">${rec.truck_plate !== 'N/A' ? rec.truck_plate : 'S/A'}</span></td>
+          <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 5px; font-size: 8.5px;">
+            <tr style="height: 21px;">
+              <td style="width: 65%; border: 1px solid #000; padding: 3px 5px;"><strong>ZONALES:</strong> <span style="font-weight: 900; text-transform: uppercase; font-size: 11.5px; color: #000;">${rec.zonals_detail.map(z => z.zonal_name).join(' - ')}</span></td>
+              <td style="width: 35%; border: 1px solid #000; padding: 3px 5px;"><strong>PATENTE:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 11.5px; color: #000;">${rec.truck_plate !== 'N/A' ? rec.truck_plate : 'S/A'}</span></td>
             </tr>
-            <tr style="height: 24px;">
-              <td style="border: 1px solid #000; padding: 5px;"><strong>Hora Inspección:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000;">${rec.inspection_time}</span></td>
-              <td style="border: 1px solid #000; padding: 5px;"><strong>FECHA:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000;">${getFormatDate(rec.inspection_date)}</span></td>
+            <tr style="height: 21px;">
+              <td style="border: 1px solid #000; padding: 3px 5px;"><strong>Hora Inspección:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 11.5px; color: #000;">${rec.inspection_time}</span></td>
+              <td style="border: 1px solid #000; padding: 3px 5px;"><strong>FECHA:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 11.5px; color: #000;">${getFormatDate(rec.inspection_date)}</span></td>
             </tr>
           </table>
 
           <!-- Checklist de rampa -->
-          <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
+          <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 5px; font-size: 8.5px;">
             <thead>
-              <tr style="background-color: #f3f4f6; font-weight: 900; text-align: center; height: 24px;">
-                <th style="border: 1px solid #000; padding: 5px; text-align: left; width: 70%; font-size: 8.5px; letter-spacing: 0.5px;">ITEMS DE INSPECCIÓN</th>
-                <th style="border: 1px solid #000; padding: 5px; width: 15%; font-size: 8px;">CUMPLE</th>
-                <th style="border: 1px solid #000; padding: 5px; width: 15%; font-size: 8px;">NO CUMPLE</th>
+              <tr style="background-color: #f3f4f6; font-weight: 900; text-align: center; height: 19px;">
+                <th style="border: 1px solid #000; padding: 3px 5px; text-align: left; width: 70%; font-size: 8px; letter-spacing: 0.5px;">ITEMS DE INSPECCIÓN</th>
+                <th style="border: 1px solid #000; padding: 3px 5px; width: 15%; font-size: 7.5px;">CUMPLE</th>
+                <th style="border: 1px solid #000; padding: 3px 5px; width: 15%; font-size: 7.5px;">NO CUMPLE</th>
               </tr>
             </thead>
             <tbody>
-              <tr style="height: 24px;">
-                <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">1. Horario de postura en el Andén</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.postura_anden ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.postura_anden ? 'X' : ''}</td>
+              <tr style="height: 18px;">
+                <td style="border: 1px solid #000; padding: 1px 5px; font-weight: bold; vertical-align: middle;">1. Horario de postura en el Andén</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.postura_anden ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.postura_anden ? 'X' : ''}</td>
               </tr>
-              <tr style="height: 24px;">
-                <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">2. Estado de camión a Cargar (Limpieza, Daño estructural)</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.limpieza_estructura ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.limpieza_estructura ? 'X' : ''}</td>
+              <tr style="height: 18px;">
+                <td style="border: 1px solid #000; padding: 1px 5px; font-weight: bold; vertical-align: middle;">2. Estado de camión a Cargar (Limpieza, Daño estructural)</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.limpieza_estructura ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.limpieza_estructura ? 'X' : ''}</td>
               </tr>
-              <tr style="height: 24px;">
-                <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">3. Estado de Luces (ENCENDIDAS)</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.luces_encendidas ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.luces_encendidas ? 'X' : ''}</td>
+              <tr style="height: 18px;">
+                <td style="border: 1px solid #000; padding: 1px 5px; font-weight: bold; vertical-align: middle;">3. Estado de Luces (ENCENDIDAS)</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.luces_encendidas ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.luces_encendidas ? 'X' : ''}</td>
               </tr>
-              <tr style="height: 24px;">
-                <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">4. Verificación Separador Térmico</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.separador_termico ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.separador_termico ? 'X' : ''}</td>
+              <tr style="height: 18px;">
+                <td style="border: 1px solid #000; padding: 1px 5px; font-weight: bold; vertical-align: middle;">4. Verificación Separador Térmico</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.separador_termico ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.separador_termico ? 'X' : ''}</td>
               </tr>
-              <tr style="height: 24px;">
-                <td style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; vertical-align: middle;">5. Verificación Lingas por camión</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.lingas_camion ? 'X' : ''}</td>
-                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 12.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.lingas_camion ? 'X' : ''}</td>
+              <tr style="height: 18px;">
+                <td style="border: 1px solid #000; padding: 1px 5px; font-weight: bold; vertical-align: middle;">5. Verificación Lingas por camión</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11.5px; font-family: Arial, sans-serif; line-height: 1;">${rec.checklist.lingas_camion ? 'X' : ''}</td>
+                <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; font-weight: 900; font-size: 11.5px; font-family: Arial, sans-serif; line-height: 1;">${!rec.checklist.lingas_camion ? 'X' : ''}</td>
               </tr>
             </tbody>
           </table>
 
           <!-- Posiciones ocupadas -->
-          <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; font-size: 9px;">
-            <tr style="height: 24px;">
-              <td style="width: 40%; border: 1px solid #000; padding: 5px;"><strong>Posiciones ocupadas dentro del camión:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000;">${rec.positions_occupied}</span></td>
-              <td style="width: 60%; border: 1px solid #000; padding: 5px; font-size: 8.5px;"><strong>Alto de Bandejas:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 11px; color: #000;">${altoBandejasFormulas || ''}</span></td>
+          <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 5px; font-size: 8.5px;">
+            <tr style="height: 20px;">
+              <td style="width: 40%; border: 1px solid #000; padding: 2px 5px;"><strong>Posiciones ocupadas dentro del camión:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 11.5px; color: #000;">${rec.positions_occupied}</span></td>
+              <td style="width: 60%; border: 1px solid #000; padding: 2px 5px; font-size: 8px;"><strong>Alto de Bandejas:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 10px; color: #000;">${altoBandejasFormulas || ''}</span></td>
             </tr>
-            <tr style="height: 24px;">
-              <td colspan="2" style="border: 1px solid #000; padding: 5px;"><strong>Motivos del alto:</strong> </td>
+            <tr style="height: 20px;">
+              <td colspan="2" style="border: 1px solid #000; padding: 2px 5px;"><strong>Motivos del alto:</strong> </td>
             </tr>
           </table>
 
           <!-- Tabla principal de carga -->
-          <div style="font-size: 10px; font-weight: 900; text-align: center; margin-top: 15px; margin-bottom: 5px; letter-spacing: 0.5px; text-transform: uppercase; font-family: sans-serif;">CARGA DE ZONALES</div>
-          <div style="display: flex; width: 100%; margin-bottom: 12px; gap: 0; box-sizing: border-box; align-items: stretch;">
+          <div style="font-size: 9px; font-weight: 900; text-align: center; margin-top: 5px; margin-bottom: 3px; letter-spacing: 0.5px; text-transform: uppercase; font-family: sans-serif;">CARGA DE ZONALES</div>
+          <div style="display: flex; width: 100%; margin-bottom: 5px; gap: 0; box-sizing: border-box; align-items: stretch;">
             
             <!-- Tabla de Zonales (6 celdas por fila, ancho 86%) -->
-            <table style="width: 86%; border-collapse: collapse; border: 2px solid #000; border-right: none; font-size: 9px; box-sizing: border-box; table-layout: fixed;">
+            <table style="width: 86%; border-collapse: collapse; border: 2px solid #000; border-right: none; font-size: 8.5px; box-sizing: border-box; table-layout: fixed;">
               <thead>
-                <tr style="background-color: #f3f4f6; font-weight: 900; text-align: center; font-size: 8px; height: 24px;">
-                  <th style="border: 1px solid #000; padding: 4px; width: 6%;">N°</th>
-                  <th style="border: 1px solid #000; padding: 4px; width: 34%; text-align: left;">ZONAL</th>
-                  <th style="border: 1px solid #000; padding: 4px; width: 15%;">BANDEJAS</th>
-                  <th style="border: 1px solid #000; padding: 4px; width: 15%;">PALLETS MADERA</th>
-                  <th style="border: 1px solid #000; padding: 4px; width: 15%;">PALLETS PLÁSTICO</th>
-                  <th style="border: 1px solid #000; padding: 4px; width: 15%;">N° DE SELLO</th>
+                <tr style="background-color: #f3f4f6; font-weight: 900; text-align: center; font-size: 7.5px; height: 19px;">
+                  <th style="border: 1px solid #000; padding: 2px; width: 6%;">N°</th>
+                  <th style="border: 1px solid #000; padding: 2px; width: 34%; text-align: left;">ZONAL</th>
+                  <th style="border: 1px solid #000; padding: 2px; width: 15%;">BANDEJAS</th>
+                  <th style="border: 1px solid #000; padding: 2px; width: 15%;">PALLETS MADERA</th>
+                  <th style="border: 1px solid #000; padding: 2px; width: 15%;">PALLETS PLÁSTICO</th>
+                  <th style="border: 1px solid #000; padding: 2px; width: 15%;">N° DE SELLO</th>
                 </tr>
               </thead>
               <tbody>
@@ -2366,28 +2366,28 @@ export default function App({ user }: { user: any }) {
 
             <!-- Cuadro de Temperaturas de Termos (ancho 14%, acoplado) -->
             <div style="width: 14%; border: 2px solid #000; display: flex; flex-direction: column; box-sizing: border-box; background-color: #fff;">
-              <div style="background-color: #f3f4f6; border-bottom: 1px solid #000; padding: 4px; text-align: center; font-weight: 900; font-size: 7.5px; height: 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; line-height: 1.1;">
+              <div style="background-color: #f3f4f6; border-bottom: 1px solid #000; padding: 2px; text-align: center; font-weight: 900; font-size: 7px; height: 19px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; line-height: 1.1;">
                 TEMPERATURA TERMO / °C
               </div>
               
-              <div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; height: 140px; box-sizing: border-box;">
+              <div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; height: 96px; box-sizing: border-box;">
                 
                 <!-- 1ER -->
                 <div style="display: flex; height: 33.3%; align-items: center; border-bottom: 1px solid #000; box-sizing: border-box;">
-                  <div style="width: 45%; font-weight: bold; font-size: 7.5px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">1ER</div>
-                  <div style="width: 55%; font-weight: 900; font-family: monospace; font-size: 12.5px; text-align: center; color: #000;">${rec.temp_1er}°C</div>
+                  <div style="width: 45%; font-weight: bold; font-size: 7px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">1ER</div>
+                  <div style="width: 55%; font-weight: 900; font-family: monospace; font-size: 11px; text-align: center; color: #000;">${rec.temp_1er}°C</div>
                 </div>
                 
                 <!-- 2DO -->
                 <div style="display: flex; height: 33.3%; align-items: center; border-bottom: 1px solid #000; box-sizing: border-box;">
-                  <div style="width: 45%; font-weight: bold; font-size: 7.5px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">2DO</div>
-                  <div style="width: 55%; font-weight: 900; font-family: monospace; font-size: 12.5px; text-align: center; color: #000;">${rec.temp_2do}°C</div>
+                  <div style="width: 45%; font-weight: bold; font-size: 7px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">2DO</div>
+                  <div style="width: 55%; font-weight: 900; font-family: monospace; font-size: 11px; text-align: center; color: #000;">${rec.temp_2do}°C</div>
                 </div>
                 
                 <!-- 3ER -->
                 <div style="display: flex; height: 33.3%; align-items: center; box-sizing: border-box;">
-                  <div style="width: 45%; font-weight: bold; font-size: 7.5px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">3ER</div>
-                  <div style="width: 55%; font-weight: 900; font-family: monospace; font-size: 12.5px; text-align: center; color: #000;">${rec.temp_3er}°C</div>
+                  <div style="width: 45%; font-weight: bold; font-size: 7px; text-align: center; background-color: #f9f9f9; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid #000;">3ER</div>
+                  <div style="width: 55%; font-weight: 900; font-family: monospace; font-size: 11px; text-align: center; color: #000;">${rec.temp_3er}°C</div>
                 </div>
 
               </div>
@@ -2396,9 +2396,9 @@ export default function App({ user }: { user: any }) {
           </div>
 
           <!-- Observaciones y firmas -->
-          <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 9px;">
+          <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 8.5px;">
             <tr>
-              <td colspan="2" style="border: 1px solid #000; padding: 6px; height: 35px; vertical-align: top; font-size: 8.5px;">
+              <td colspan="2" style="border: 1px solid #000; padding: 4px 5px; height: 22px; vertical-align: top; font-size: 8px;">
                 <strong>OBSERVACIONES:</strong> <span style="font-weight: 600;">${rec.observations || ''}</span>
               </td>
             </tr>
@@ -2408,51 +2408,61 @@ export default function App({ user }: { user: any }) {
               const allPhotos = [...zonalPhotos, ...legacyPhotos];
               if (allPhotos.length === 0) return '';
 
+              // Tamaño dinámico de miniaturas de fotos según volumen para optimizar el eje Y
+              let photoHeight = '52px';
+              if (allPhotos.length > 10) {
+                photoHeight = '34px';
+              } else if (allPhotos.length > 6) {
+                photoHeight = '40px';
+              } else if (allPhotos.length > 3) {
+                photoHeight = '46px';
+              }
+
               return `
                 <tr>
-                  <td colspan="2" style="border: 1px solid #000; padding: 6px; background-color: #fafafa;">
-                    <strong style="font-size: 8px; text-transform: uppercase;">RESPALDOS FOTOGRÁFICOS (${allPhotos.length}):</strong>
-                    <div style="display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap;">
-                      ${allPhotos.map((pUrl: string) => `<img src="${pUrl}" style="height: 85px; width: auto; max-width: 45%; object-fit: cover; border: 1px solid #000; border-radius: 4px;" />`).join('')}
+                  <td colspan="2" style="border: 1px solid #000; padding: 3px 5px; background-color: #fafafa;">
+                    <div style="font-size: 7.5px; font-weight: bold; text-transform: uppercase; margin-bottom: 2px;">RESPALDOS FOTOGRÁFICOS (${allPhotos.length}):</div>
+                    <div style="display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap; align-items: center;">
+                      ${allPhotos.map((pUrl: string) => `<img src="${pUrl}" style="height: ${photoHeight}; width: auto; max-width: 30%; object-fit: cover; border: 1px solid #000; border-radius: 3px;" />`).join('')}
                     </div>
                   </td>
                 </tr>
               `;
             })()}
             <tr>
-              <td style="width: 55%; border: 1px solid #000; padding: 5px; vertical-align: top; height: 32px;">
-                <strong>SUP. ENCARGADO:</strong> <span style="font-weight: 900; text-transform: uppercase; font-size: 12.5px; color: #000;">${rec.supervisor_name}</span>
+              <td style="width: 55%; border: 1px solid #000; padding: 3px 5px; vertical-align: top; height: 26px;">
+                <strong>SUP. ENCARGADO:</strong> <span style="font-weight: 900; text-transform: uppercase; font-size: 11.5px; color: #000;">${rec.supervisor_name}</span>
               </td>
-              <td rowspan="2" style="width: 45%; border: 1px solid #000; padding: 6px; text-align: center; vertical-align: middle; height: 70px; background-color: #fafafa;">
+              <td rowspan="2" style="width: 45%; border: 1px solid #000; padding: 3px 5px; text-align: center; vertical-align: middle; height: 56px; background-color: #fafafa;">
                 ${rec.signature_b64 ? `
-                  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; box-sizing: border-box; padding: 2px;">
-                    <img src="${rec.signature_b64}" style="height: 38px; width: auto; max-width: 95%; object-fit: contain; margin-top: -4px; margin-bottom: 2px;" />
-                    <div style="font-size: 8px; font-weight: 900; color: #000; text-transform: uppercase; line-height: 1;">${signerName}</div>
-                    <div style="font-size: 7px; font-weight: 800; color: #333; text-transform: uppercase; line-height: 1.1; margin-top: 1px;">${signerTitle}</div>
-                    <div style="font-size: 6.5px; color: #666; margin-top: 1px; line-height: 1;">Firma Digital: ${rec.signed_at ? new Date(rec.signed_at).toLocaleDateString('es-CL') : ''}</div>
+                  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; box-sizing: border-box; padding: 1px;">
+                    <img src="${rec.signature_b64}" style="height: 30px; width: auto; max-width: 95%; object-fit: contain; margin-top: -2px; margin-bottom: 1px;" />
+                    <div style="font-size: 7.5px; font-weight: 900; color: #000; text-transform: uppercase; line-height: 1;">${signerName}</div>
+                    <div style="font-size: 6.5px; font-weight: 800; color: #333; text-transform: uppercase; line-height: 1.1; margin-top: 1px;">${signerTitle}</div>
+                    <div style="font-size: 6px; color: #666; margin-top: 1px; line-height: 1;">Firma Digital: ${rec.signed_at ? new Date(rec.signed_at).toLocaleDateString('es-CL') : ''}</div>
                   </div>
                 ` : `
-                  <div style="font-size: 7.5px; color: #555; font-weight: bold; text-transform: uppercase; margin-bottom: 25px; letter-spacing: 0.5px;">Timbre y Firma</div>
+                  <div style="font-size: 7px; color: #555; font-weight: bold; text-transform: uppercase; margin-bottom: 18px; letter-spacing: 0.5px;">Timbre y Firma</div>
                   <div style="border-top: 1.5px dashed #000; width: 85%; margin: 0 auto;"></div>
                 `}
               </td>
             </tr>
             <tr>
-              <td style="border: 1px solid #000; padding: 5px; height: 32px;">
-                <strong>HORA CIERRE DE CAMION:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 12.5px; color: #000; margin-left: 2px;">${rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}</span>
+              <td style="border: 1px solid #000; padding: 3px 5px; height: 26px;">
+                <strong>HORA CIERRE DE CAMION:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 11.5px; color: #000; margin-left: 2px;">${rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}</span>
               </td>
             </tr>
-            <tr style="height: 24px;">
-              <td colspan="2" style="border: 1px solid #000; padding: 5px; background-color: #fcfcfc;">
-                <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 8.5px; text-transform: uppercase;">
-                  <span>KILOS TOTALES DEL CAMIÓN: <strong style="font-family: monospace; font-size: 12.5px; font-weight: 900; color: #000; margin-left: 2px;">${rec.truck_kilos ? (typeof rec.truck_kilos === 'number' ? rec.truck_kilos.toLocaleString('es-CL') : rec.truck_kilos) + ' kg' : '___________________________'}</strong></span>
-                  <span style="font-family: monospace; padding-right: 10px; font-size: 12.5px; font-weight: 900; color: #000;">TOTALES DESPACHO: M:${totalW} | P:${totalP} | B:${totalB}</span>
+            <tr style="height: 20px;">
+              <td colspan="2" style="border: 1px solid #000; padding: 3px 5px; background-color: #fcfcfc;">
+                <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 8px; text-transform: uppercase;">
+                  <span>KILOS TOTALES DEL CAMIÓN: <strong style="font-family: monospace; font-size: 11.5px; font-weight: 900; color: #000; margin-left: 2px;">${rec.truck_kilos ? (typeof rec.truck_kilos === 'number' ? rec.truck_kilos.toLocaleString('es-CL') : rec.truck_kilos) + ' kg' : '___________________________'}</strong></span>
+                  <span style="font-family: monospace; padding-right: 10px; font-size: 11.5px; font-weight: 900; color: #000;">TOTALES DESPACHO: M:${totalW} | P:${totalP} | B:${totalB}</span>
                 </div>
               </td>
             </tr>
           </table>
           
-          <div style="font-size: 7.5px; font-weight: bold; color: #666; text-align: center; margin-top: 15px; letter-spacing: 1px; text-transform: uppercase;">CONTROL UNIDADES LOGÍSTICAS — CIAL ALIMENTOS</div>
+          <div style="font-size: 7px; font-weight: bold; color: #666; text-align: center; margin-top: 6px; letter-spacing: 0.5px; text-transform: uppercase;">CONTROL UNIDADES LOGÍSTICAS — CIAL ALIMENTOS</div>
         </div>
       `;
 
@@ -2502,11 +2512,26 @@ export default function App({ user }: { user: any }) {
 
       // Dimensiones de hoja Letter: 215.9 x 279.4 mm
       const pageWidth = 215.9;
-      const margin = 8;
-      const printWidth = pageWidth - (margin * 2);
-      const printHeight = (canvas.height * printWidth) / canvas.width;
+      const pageHeight = 279.4;
+      const marginX = 6;
+      const marginY = 6;
+      const maxPrintWidth = pageWidth - (marginX * 2);
+      const maxPrintHeight = pageHeight - (marginY * 2);
 
-      pdf.addImage(imgData, 'JPEG', margin, margin, printWidth, printHeight);
+      // Escalar proporcionalmente tanto en X como en Y para que NUNCA se corte en el eje vertical
+      let printWidth = maxPrintWidth;
+      let printHeight = (canvas.height * printWidth) / canvas.width;
+
+      if (printHeight > maxPrintHeight) {
+        printHeight = maxPrintHeight;
+        printWidth = (canvas.width * printHeight) / canvas.height;
+      }
+
+      // Centrar horizontalmente si printWidth se redujo para ajustar la altura
+      const posX = marginX + (maxPrintWidth - printWidth) / 2;
+      const posY = marginY;
+
+      pdf.addImage(imgData, 'JPEG', posX, posY, printWidth, printHeight);
 
       const filename = `Despacho_Camion_${rec.truck_plate || 'SinPatente'}_${rec.inspection_date}.pdf`;
 
@@ -10102,7 +10127,7 @@ export default function App({ user }: { user: any }) {
                               <style>
                                 @page {
                                   size: letter portrait;
-                                  margin: 8mm;
+                                  margin: 5mm;
                                 }
                                 body {
                                   margin: 0;
