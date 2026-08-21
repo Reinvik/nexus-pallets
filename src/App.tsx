@@ -435,11 +435,16 @@ export default function App({ user }: { user: any }) {
     photos: string[];
     date: string;
     supervisor: string;
+    previousZonals?: string[];
+    previousDate?: string | null;
+    currentZonals?: string[];
   }
   interface FailureAlertData {
     plate: string;
     truckNumbers: string[];
     records: DispatchRecord[];
+    lastZonals?: string[];
+    lastDispatchDate?: string;
     failures: FailureAlertItem[];
   }
   const [failureAlertModal, setFailureAlertModal] = useState<FailureAlertData | null>(null);
@@ -2793,7 +2798,7 @@ export default function App({ user }: { user: any }) {
     return missing;
   };
 
-  // ── Helpers para Alerta de Fallas a Supervisor de Rampas/Camiones ─────────
+  // ── Helpers para Alerta de Fallas a Supervisor de Rampas/Camiones & Trazabilidad Zonales ──
   const ITEM_CHECKLIST_LABELS: { [key: string]: string } = {
     postura_anden: '1. Horario Postura en Andén',
     limpieza_estructura: '2. Estado Camión / Limpieza / Daño Estructural',
@@ -2802,13 +2807,61 @@ export default function App({ user }: { user: any }) {
     lingas_camion: '5. Verificación Lingas por Camión'
   };
 
+  // Obtener la Zonal previa visitada antes de un despacho específico (para saber dónde se dañó el separador)
+  const getPreviousZonalForRecord = (currentRecord: DispatchRecord, allRecords: DispatchRecord[]) => {
+    const normPlate = (currentRecord.truck_plate || '').trim().toUpperCase();
+    const normNum = (currentRecord.truck_number || '').trim().toUpperCase();
+
+    const truckRecords = allRecords.filter(r => {
+      const p = (r.truck_plate || '').trim().toUpperCase();
+      const n = (r.truck_number || '').trim().toUpperCase();
+      return (p && p !== 'N/A' && p === normPlate) || (normNum && normNum !== 'N/A' && n === normNum);
+    }).sort((a, b) => {
+      const timeA = `${a.inspection_date || ''} ${a.close_time || a.inspection_time || '00:00'}`;
+      const timeB = `${b.inspection_date || ''} ${b.close_time || b.inspection_time || '00:00'}`;
+      return timeB.localeCompare(timeA);
+    });
+
+    const currIdx = truckRecords.findIndex(r => r.id === currentRecord.id);
+    if (currIdx >= 0 && currIdx < truckRecords.length - 1) {
+      const prev = truckRecords[currIdx + 1];
+      const previousZonals = prev.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
+      return {
+        previousRecord: prev,
+        previousZonals,
+        previousDate: prev.inspection_date,
+        previousSupervisor: prev.supervisor_name
+      };
+    }
+
+    return {
+      previousRecord: null,
+      previousZonals: [],
+      previousDate: null,
+      previousSupervisor: null
+    };
+  };
+
   const openFailureAlertModalForPlate = (group: { plate: string; truckNumbers: Set<string> | string[]; records: DispatchRecord[] }) => {
     const truckNums = Array.isArray(group.truckNumbers) ? group.truckNumbers : Array.from(group.truckNumbers);
     const failures: FailureAlertItem[] = [];
 
-    group.records.forEach(r => {
+    // Ordenar despachos del grupo cronológicamente descendente
+    const sortedGroupRecords = [...group.records].sort((a, b) => {
+      const timeA = `${a.inspection_date || ''} ${a.close_time || a.inspection_time || '00:00'}`;
+      const timeB = `${b.inspection_date || ''} ${b.close_time || b.inspection_time || '00:00'}`;
+      return timeB.localeCompare(timeA);
+    });
+
+    const lastRecord = sortedGroupRecords[0];
+    const lastZonals = lastRecord?.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
+    const lastDispatchDate = lastRecord?.inspection_date;
+
+    sortedGroupRecords.forEach(r => {
       const chk = r.checklist || {};
       const items = ['postura_anden', 'limpieza_estructura', 'luces_encendidas', 'separador_termico', 'lingas_camion'];
+      const prevInfo = getPreviousZonalForRecord(r, records);
+      const currZonals = r.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
 
       items.forEach(key => {
         const st = getChecklistStatus(chk[key]);
@@ -2833,7 +2886,10 @@ export default function App({ user }: { user: any }) {
             comment,
             photos,
             date: r.inspection_date,
-            supervisor: r.supervisor_name
+            supervisor: r.supervisor_name,
+            previousZonals: prevInfo.previousZonals,
+            previousDate: prevInfo.previousDate,
+            currentZonals: currZonals
           });
         }
       });
@@ -2842,7 +2898,9 @@ export default function App({ user }: { user: any }) {
     setFailureAlertModal({
       plate: group.plate,
       truckNumbers: truckNums,
-      records: group.records,
+      records: sortedGroupRecords,
+      lastZonals,
+      lastDispatchDate,
       failures
     });
   };
@@ -2855,10 +2913,16 @@ export default function App({ user }: { user: any }) {
 
   const buildFailureReportPlainText = (data: FailureAlertData): string => {
     const truckNumStr = data.truckNumbers.length > 0 ? ` (N° ${data.truckNumbers.join(', ')})` : '';
-    let text = `Estimado(a) Supervisor(a) de Camiones y Rampas,\n\n`;
-    text += `Por medio del presente se notifica que durante la inspección operativa del camión patente ${data.plate}${truckNumStr}, se han detectado las siguientes anomalías / fallas de rampa:\n\n`;
+    let text = `Estimado(a) Supervisor(a) de Camiones, Rampas y Zonales,\n\n`;
+    text += `Por medio del presente se notifica que durante la inspección operativa del camión patente ${data.plate}${truckNumStr}, se han detectado anomalías y/o daños en los equipos de rampa.\n\n`;
+    
+    if (data.lastZonals && data.lastZonals.length > 0) {
+      text += `📍 ÚLTIMA(S) ZONAL(ES) VISITADA(S) POR ESTE CAMIÓN: ${data.lastZonals.join(', ')} ${data.lastDispatchDate ? `(${data.lastDispatchDate})` : ''}\n`;
+      text += `ℹ️ Nota Operativa: La carga y descarga en zonales es realizada por personal CIAL. Las observaciones en separadores térmicos / colchonetas corresponden a manipulación en la zonal de descarga previa.\n\n`;
+    }
+
     text += `═══════════════════════════════════════════════\n`;
-    text += `DETALLE DE OBSERVACIONES Y SEMÁFOROS:\n`;
+    text += `DETALLE DE OBSERVACIONES Y TRAZABILIDAD DE DAÑOS:\n`;
     text += `═══════════════════════════════════════════════\n\n`;
 
     if (data.failures.length === 0) {
@@ -2867,7 +2931,16 @@ export default function App({ user }: { user: any }) {
       data.failures.forEach((f, idx) => {
         const icono = f.status === 'ROJO' ? '🔴 [RECHAZADO / CRÍTICO]' : '🟡 [OBSERVACIÓN MENOR]';
         text += `${idx + 1}. ${icono} ${f.itemLabel}\n`;
-        text += `   • Fecha: ${f.date} | Inspector: ${f.supervisor}\n`;
+        text += `   • Fecha Inspección: ${f.date} | Inspector Planta: ${f.supervisor}\n`;
+        
+        if (f.itemKey === 'separador_termico') {
+          if (f.previousZonals && f.previousZonals.length > 0) {
+            text += `   • 🚨 TRAZABILIDAD: Daño detectado tras retorno de Zonal previa: ${f.previousZonals.join(', ')} (${f.previousDate || 'Viaje anterior'})\n`;
+          } else if (f.currentZonals && f.currentZonals.length > 0) {
+            text += `   • Zonal asignada en este despacho: ${f.currentZonals.join(', ')}\n`;
+          }
+        }
+
         if (f.comment) {
           text += `   • Detalle / Observación: ${f.comment}\n`;
         }
@@ -2879,7 +2952,7 @@ export default function App({ user }: { user: any }) {
     }
 
     text += `═══════════════════════════════════════════════\n`;
-    text += `Favor coordinar las acciones correctivas con el transportista y el equipo de rampas.\n\n`;
+    text += `Favor coordinar las acciones correctivas con la sucursal zonal y el equipo de rampas.\n\n`;
     text += `Saludos cordiales,\n`;
     text += `${supervisorName || user?.email || 'Control de Despachos'}\n`;
     text += `Control Unidades Logísticas — CIAL Alimentos`;
@@ -8336,6 +8409,21 @@ export default function App({ user }: { user: any }) {
                             lingas_camion: '5. Lingas de Sujeción'
                           };
 
+                          // Ordenar cronológicamente descendente los despachos de este camión
+                          const sortedGroupRecords = [...group.records].sort((a, b) => {
+                            const timeA = `${a.inspection_date || ''} ${a.close_time || a.inspection_time || '00:00'}`;
+                            const timeB = `${b.inspection_date || ''} ${b.close_time || b.inspection_time || '00:00'}`;
+                            return timeB.localeCompare(timeA);
+                          });
+
+                          const lastRecord = sortedGroupRecords[0];
+                          const lastZonals = lastRecord?.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
+                          const lastDispatchDate = lastRecord?.inspection_date;
+                          const thermalDamages = sortedGroupRecords.filter(r => {
+                            const st = getChecklistStatus(r.checklist?.separador_termico);
+                            return st === 'AMARILLO' || st === 'ROJO';
+                          });
+
                           return (
                             <div
                               key={group.plate}
@@ -8363,7 +8451,7 @@ export default function App({ user }: { user: any }) {
                                 }}
                                 className="flex items-center justify-between flex-wrap gap-2 cursor-pointer select-none py-1 hover:opacity-90 transition-opacity"
                               >
-                                <div className="flex items-center gap-2.5 flex-wrap">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-base font-black font-mono bg-slate-900 text-white px-3 py-1 rounded-xl tracking-wider shadow-2xs">
                                     {group.plate}
                                   </span>
@@ -8372,9 +8460,23 @@ export default function App({ user }: { user: any }) {
                                       Camión #{tn}
                                     </span>
                                   ))}
+
+                                  {/* ÚLTIMA ZONAL VISITADA */}
+                                  <span className="text-xs font-bold text-slate-800 bg-amber-50 border border-amber-300 px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs" title="Última zonal despachada por este camión">
+                                    <span className="text-amber-700">📍 Última Zonal:</span>
+                                    <span className="font-mono font-black text-slate-900">{lastZonals.length > 0 ? lastZonals.join(', ') : 'S/A'}</span>
+                                    {lastDispatchDate && <span className="text-[10px] text-slate-500 font-normal">({lastDispatchDate})</span>}
+                                  </span>
+
+                                  {thermalDamages.length > 0 && (
+                                    <span className="text-[10px] font-black uppercase text-amber-950 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-lg flex items-center gap-1" title="Esta unidad presenta daños o colchonetas rotas reportadas">
+                                      <span>🛡️ Sep. Térmico Dañado ({thermalDamages.length})</span>
+                                    </span>
+                                  )}
+
                                   {hasCriticalFailures && (
                                     <span className="text-[10px] font-black uppercase text-rose-800 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full animate-pulse flex items-center gap-1">
-                                      <span>🚨 ALERTA TRANSPORTISTA EXTERNO</span>
+                                      <span>🚨 ALERTA TRANSPORTISTA</span>
                                     </span>
                                   )}
                                   <span className="text-[11px] text-slate-500 font-semibold hidden md:inline">
@@ -8408,7 +8510,7 @@ export default function App({ user }: { user: any }) {
                                         ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-500'
                                         : 'bg-slate-700 hover:bg-slate-800 text-white border-slate-600'
                                     }`}
-                                    title="Enviar aviso/correo al supervisor encargado de camiones y rampas"
+                                    title="Enviar aviso/correo al supervisor encargado de camiones, rampas y zonales"
                                   >
                                     <Mail className="w-3.5 h-3.5" />
                                     <span>Aviso Correo</span>
@@ -8467,8 +8569,8 @@ export default function App({ user }: { user: any }) {
                                   </div>
 
                                   {/* COMENTARIOS Y EVIDENCIAS DE FOTOS DE COLCHONETAS / LINGAS POR SUPERVISOR */}
-                                  <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                                    {group.records.map(r => {
+                                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                                    {sortedGroupRecords.map(r => {
                                       const chk = r.checklist || {};
                                       const colchonetasComment = chk.colchonetas_comment;
                                       const lingasComment = chk.lingas_comment;
@@ -8483,6 +8585,9 @@ export default function App({ user }: { user: any }) {
                                         return st === 'AMARILLO' || st === 'ROJO';
                                       });
 
+                                      const prevZonalInfo = getPreviousZonalForRecord(r, records);
+                                      const thisZonals = r.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
+
                                       // FILTRAR FOTOS: Solo mostrar fotografías asociadas a puntos en AMARILLO o ROJO
                                       const relevantColchonetasPhotos = (sepStatus === 'AMARILLO' || sepStatus === 'ROJO') ? colchonetasPhotos : [];
                                       const relevantLingasPhotos = (lingasStatus === 'AMARILLO' || lingasStatus === 'ROJO') ? lingasPhotos : [];
@@ -8491,9 +8596,16 @@ export default function App({ user }: { user: any }) {
                                       const displayPhotos = Array.from(new Set([...relevantColchonetasPhotos, ...relevantLingasPhotos, ...relevantGeneralPhotos]));
 
                                       return (
-                                        <div key={r.id} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                                        <div key={r.id} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs space-y-2 shadow-2xs">
                                           <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 flex-wrap gap-1">
-                                            <span>Fecha Despacho: <strong className="font-mono text-slate-700">{r.inspection_date}</strong> ({r.close_time || 'Sin hora'})</span>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <span>Fecha: <strong className="font-mono text-slate-700">{r.inspection_date}</strong> ({r.close_time || r.inspection_time || 'Sin hora'})</span>
+                                              {thisZonals.length > 0 && (
+                                                <span className="text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded-lg font-mono">
+                                                  📍 Zonal Despacho: <strong>{thisZonals.join(', ')}</strong>
+                                                </span>
+                                              )}
+                                            </div>
                                             <span>Supervisor Evaluador: <strong className="text-slate-800">{r.supervisor_name}</strong></span>
                                           </div>
 
@@ -8523,34 +8635,70 @@ export default function App({ user }: { user: any }) {
                                             })}
                                           </div>
 
-                                          {(sepStatus === 'AMARILLO' || sepStatus === 'ROJO') && colchonetasComment && (
-                                            <p className="text-[11px] text-amber-900 bg-amber-50 p-1.5 rounded-lg border border-amber-200 font-medium">
-                                              <strong>Obs. Separador Térmico:</strong> {colchonetasComment}
-                                            </p>
+                                          {/* BLOQUE DE TRAZABILIDAD CRUCIAL: SEPARADOR TÉRMICO / COLCHONETAS DAÑADAS */}
+                                          {(sepStatus === 'AMARILLO' || sepStatus === 'ROJO') && (
+                                            <div className="bg-amber-50/80 border border-amber-300 p-2.5 rounded-xl text-xs space-y-1.5">
+                                              <div className="flex items-center justify-between font-black text-amber-950 flex-wrap gap-1">
+                                                <span className="flex items-center gap-1.5 text-xs">
+                                                  <span>🛡️</span>
+                                                  <span>Trazabilidad de Daño en Separador Térmico / Colchonetas:</span>
+                                                </span>
+                                                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-black ${
+                                                  sepStatus === 'ROJO' ? 'bg-rose-600 text-white' : 'bg-amber-400 text-amber-950'
+                                                }`}>
+                                                  {sepStatus === 'ROJO' ? '🔴 CRÍTICO / ROTO' : '🟡 OBSERVADO'}
+                                                </span>
+                                              </div>
+
+                                              <div className="bg-white p-2 rounded-lg border border-amber-200 text-[11px] space-y-1">
+                                                <p className="text-slate-800">
+                                                  📍 <strong>Zonal previa donde se manipuló/descargó el separador:</strong>{' '}
+                                                  {prevZonalInfo.previousZonals.length > 0 ? (
+                                                    <span className="font-black font-mono text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                                                      {prevZonalInfo.previousZonals.join(', ')} ({prevZonalInfo.previousDate})
+                                                    </span>
+                                                  ) : (
+                                                    <span className="italic text-slate-500">
+                                                      Primer despacho registrado en el sistema — Zonal actual: {thisZonals.join(', ') || 'S/A'}
+                                                    </span>
+                                                  )}
+                                                </p>
+                                                {colchonetasComment && (
+                                                  <p className="text-slate-900 font-medium">
+                                                    <strong>Detalle del daño reportado:</strong> {colchonetasComment}
+                                                  </p>
+                                                )}
+                                                <p className="text-[10px] text-slate-500 italic">
+                                                  * CIAL efectúa la carga en planta y la descarga en la zonal de destino (personal CIAL responsable de la manipulación de colchonetas).
+                                                </p>
+                                              </div>
+                                            </div>
                                           )}
+
                                           {(lingasStatus === 'AMARILLO' || lingasStatus === 'ROJO') && lingasComment && (
                                             <p className="text-[11px] text-amber-900 bg-amber-50 p-1.5 rounded-lg border border-amber-200 font-medium">
-                                              <strong>Obs. Lingas:</strong> {lingasComment}
+                                              <strong>Obs. Lingas de Sujeción:</strong> {lingasComment}
                                             </p>
                                           )}
 
-                                          {/* SOLO MOSTRAR FOTOS SI EXISTEN FOTOS DE PUNTOS EN AMARILLO O ROJO */}
+                                          {/* FOTOS DE EVIDENCIAS */}
                                           {displayPhotos.length > 0 ? (
                                             <div className="space-y-1 pt-1">
                                               <span className="text-[10px] font-black uppercase text-amber-800 flex items-center gap-1">
-                                                📷 Evidencias de Faltas (🟡 / 🔴) ({displayPhotos.length} foto(s)):
+                                                📷 Evidencias Fotográficas ({displayPhotos.length} foto(s)):
                                               </span>
-                                              <div className="flex items-center gap-1.5">
+                                              <div className="flex items-center gap-1.5 flex-wrap">
                                                 {displayPhotos.map((pUrl, pIdx) => (
                                                   <img
                                                     key={pIdx}
                                                     src={pUrl}
                                                     alt={`Evidencia Observación ${pIdx + 1}`}
-                                                    className="w-14 h-14 rounded-xl object-cover border-2 border-amber-400 cursor-pointer hover:scale-105 transition-transform shadow-sm"
+                                                    className="w-16 h-16 rounded-xl object-cover border-2 border-amber-400 cursor-pointer hover:scale-105 transition-transform shadow-sm bg-white"
                                                     onClick={(e) => {
                                                       e.stopPropagation();
                                                       openPhotoGallery(displayPhotos, pIdx);
                                                     }}
+                                                    title="Clic para ampliar foto"
                                                   />
                                                 ))}
                                               </div>
@@ -10489,6 +10637,24 @@ export default function App({ user }: { user: any }) {
                 </div>
               </div>
 
+              {/* BANNER DE TRAZABILIDAD ZONAL */}
+              {failureAlertModal.lastZonals && failureAlertModal.lastZonals.length > 0 && (
+                <div className="bg-amber-50 border border-amber-300 p-3 rounded-2xl text-[11px] space-y-1">
+                  <div className="flex items-center justify-between font-black text-amber-950">
+                    <span className="flex items-center gap-1.5">
+                      <span>📍</span>
+                      <span>Última(s) Zonal(es) visitada(s) por este camión:</span>
+                    </span>
+                    <span className="font-mono bg-white px-2 py-0.5 rounded border border-amber-300">
+                      {failureAlertModal.lastZonals.join(', ')} {failureAlertModal.lastDispatchDate ? `(${failureAlertModal.lastDispatchDate})` : ''}
+                    </span>
+                  </div>
+                  <p className="text-amber-800 text-[10px]">
+                    * Nota Operativa: CIAL carga en planta y descarga en sucursales zonales. Las roturas o daños en separadores térmicos / colchonetas ocurren en la zonal previa donde se descargó la unidad.
+                  </p>
+                </div>
+              )}
+
               {/* LISTADO DE FALLAS DETECTADAS */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -10529,9 +10695,24 @@ export default function App({ user }: { user: any }) {
                           </span>
                         </div>
 
+                        {/* TRAZABILIDAD SEPARADOR TÉRMICO */}
+                        {f.itemKey === 'separador_termico' && (
+                          <div className="bg-white/90 p-2 rounded-xl border border-current/20 text-[11px] space-y-0.5">
+                            <span className="font-bold text-amber-950 block">
+                              📍 Zonal de descarga previa: {f.previousZonals && f.previousZonals.length > 0 ? (
+                                <strong className="font-mono text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                                  {f.previousZonals.join(', ')} ({f.previousDate || 'Viaje anterior'})
+                                </strong>
+                              ) : (
+                                <span className="italic text-slate-500 font-normal">Zonal actual: {f.currentZonals?.join(', ') || 'S/A'}</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+
                         {f.comment && (
                           <p className="text-[11px] font-medium bg-white/70 p-2 rounded-xl border border-current/20">
-                            <strong>Comentario / Causa:</strong> {f.comment}
+                            <strong>Detalle / Causa:</strong> {f.comment}
                           </p>
                         )}
 
