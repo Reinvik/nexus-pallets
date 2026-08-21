@@ -2853,9 +2853,28 @@ export default function App({ user }: { user: any }) {
       return timeB.localeCompare(timeA);
     });
 
-    const lastRecord = sortedGroupRecords[0];
-    const lastZonals = lastRecord?.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
-    const lastDispatchDate = lastRecord?.inspection_date;
+    // Buscar si hay daño en separador térmico
+    const latestThermalDamage = sortedGroupRecords.find(r => {
+      const st = getChecklistStatus(r.checklist?.separador_termico);
+      return st === 'AMARILLO' || st === 'ROJO';
+    });
+
+    let targetLastZonals: string[] = [];
+    let targetLastDate: string | undefined = undefined;
+
+    if (latestThermalDamage) {
+      const prevInfo = getPreviousZonalForRecord(latestThermalDamage, records);
+      if (prevInfo.previousZonals.length > 0) {
+        targetLastZonals = prevInfo.previousZonals;
+        targetLastDate = prevInfo.previousDate || undefined;
+      }
+    }
+
+    if (targetLastZonals.length === 0) {
+      const lastRecord = sortedGroupRecords[0];
+      targetLastZonals = lastRecord?.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
+      targetLastDate = lastRecord?.inspection_date;
+    }
 
     sortedGroupRecords.forEach(r => {
       const chk = r.checklist || {};
@@ -2899,8 +2918,8 @@ export default function App({ user }: { user: any }) {
       plate: group.plate,
       truckNumbers: truckNums,
       records: sortedGroupRecords,
-      lastZonals,
-      lastDispatchDate,
+      lastZonals: targetLastZonals,
+      lastDispatchDate: targetLastDate,
       failures
     });
   };
@@ -2917,8 +2936,8 @@ export default function App({ user }: { user: any }) {
     text += `Por medio del presente se notifica que durante la inspección operativa del camión patente ${data.plate}${truckNumStr}, se han detectado anomalías y/o daños en los equipos de rampa.\n\n`;
     
     if (data.lastZonals && data.lastZonals.length > 0) {
-      text += `📍 ÚLTIMA(S) ZONAL(ES) VISITADA(S) POR ESTE CAMIÓN: ${data.lastZonals.join(', ')} ${data.lastDispatchDate ? `(${data.lastDispatchDate})` : ''}\n`;
-      text += `ℹ️ Nota Operativa: La carga y descarga en zonales es realizada por personal CIAL. Las observaciones en separadores térmicos / colchonetas corresponden a manipulación en la zonal de descarga previa.\n\n`;
+      text += `📍 ZONAL DE ORIGEN DEL DAÑO (VIAJE PREVIO A LA DETECCIÓN): ${data.lastZonals.join(', ')} ${data.lastDispatchDate ? `(${data.lastDispatchDate})` : ''}\n`;
+      text += `ℹ️ Nota Operativa: Los camiones son tercerizados, pero la carga y descarga la realiza personal CIAL. Las roturas en separadores térmicos / colchonetas ocurren durante la descarga en la zonal de destino previa antes de retornar a andén.\n\n`;
     }
 
     text += `═══════════════════════════════════════════════\n`;
@@ -2931,11 +2950,11 @@ export default function App({ user }: { user: any }) {
       data.failures.forEach((f, idx) => {
         const icono = f.status === 'ROJO' ? '🔴 [RECHAZADO / CRÍTICO]' : '🟡 [OBSERVACIÓN MENOR]';
         text += `${idx + 1}. ${icono} ${f.itemLabel}\n`;
-        text += `   • Fecha Inspección: ${f.date} | Inspector Planta: ${f.supervisor}\n`;
+        text += `   • Fecha Detección en Andén: ${f.date} | Inspector Planta: ${f.supervisor}\n`;
         
         if (f.itemKey === 'separador_termico') {
           if (f.previousZonals && f.previousZonals.length > 0) {
-            text += `   • 🚨 TRAZABILIDAD: Daño detectado tras retorno de Zonal previa: ${f.previousZonals.join(', ')} (${f.previousDate || 'Viaje anterior'})\n`;
+            text += `   • 🚨 TRAZABILIDAD: Daño originado en Zonal previa: ${f.previousZonals.join(', ')} (${f.previousDate || 'Viaje anterior'})\n`;
           } else if (f.currentZonals && f.currentZonals.length > 0) {
             text += `   • Zonal asignada en este despacho: ${f.currentZonals.join(', ')}\n`;
           }
@@ -8409,16 +8428,54 @@ export default function App({ user }: { user: any }) {
                             lingas_camion: '5. Lingas de Sujeción'
                           };
 
-                          // Ordenar cronológicamente descendente los despachos de este camión
+                          // 1. Ordenar cronológicamente descendente los despachos de este grupo/periodo
                           const sortedGroupRecords = [...group.records].sort((a, b) => {
                             const timeA = `${a.inspection_date || ''} ${a.close_time || a.inspection_time || '00:00'}`;
                             const timeB = `${b.inspection_date || ''} ${b.close_time || b.inspection_time || '00:00'}`;
                             return timeB.localeCompare(timeA);
                           });
 
-                          const lastRecord = sortedGroupRecords[0];
-                          const lastZonals = lastRecord?.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
-                          const lastDispatchDate = lastRecord?.inspection_date;
+                          // 2. Obtener historial completo de este camión en toda la base de datos (records)
+                          const allTruckRecordsSorted = records.filter(r => {
+                            const p = (r.truck_plate || '').trim().toUpperCase();
+                            const n = (r.truck_number || '').trim().toUpperCase();
+                            const normKey = (group.plate || '').trim().toUpperCase();
+                            return (p && p !== 'N/A' && p === normKey) || (n && n !== 'N/A' && n === normKey) || (`CAMIÓN #${n}` === normKey);
+                          }).sort((a, b) => {
+                            const timeA = `${a.inspection_date || ''} ${a.close_time || a.inspection_time || '00:00'}`;
+                            const timeB = `${b.inspection_date || ''} ${b.close_time || b.inspection_time || '00:00'}`;
+                            return timeB.localeCompare(timeA);
+                          });
+
+                          // 3. Buscar el despacho más reciente donde se detectó daño de separador térmico
+                          const latestThermalDamageRecord = allTruckRecordsSorted.find(r => {
+                            const st = getChecklistStatus(r.checklist?.separador_termico);
+                            return st === 'AMARILLO' || st === 'ROJO';
+                          });
+
+                          let displayedZonals: string[] = [];
+                          let displayedDate: string | null = null;
+                          let isDamageOriginZonal = false;
+                          let detectedProblemDate: string | null = null;
+
+                          if (latestThermalDamageRecord) {
+                            detectedProblemDate = latestThermalDamageRecord.inspection_date;
+                            const problemIdx = allTruckRecordsSorted.findIndex(r => r.id === latestThermalDamageRecord.id);
+                            // La zonal anterior a la que se detectó el problema
+                            if (problemIdx >= 0 && problemIdx < allTruckRecordsSorted.length - 1) {
+                              const prevTrip = allTruckRecordsSorted[problemIdx + 1];
+                              displayedZonals = prevTrip.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
+                              displayedDate = prevTrip.inspection_date;
+                              isDamageOriginZonal = true;
+                            }
+                          }
+
+                          if (!isDamageOriginZonal) {
+                            const lastRecord = allTruckRecordsSorted[0] || sortedGroupRecords[0];
+                            displayedZonals = lastRecord?.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
+                            displayedDate = lastRecord?.inspection_date;
+                          }
+
                           const thermalDamages = sortedGroupRecords.filter(r => {
                             const st = getChecklistStatus(r.checklist?.separador_termico);
                             return st === 'AMARILLO' || st === 'ROJO';
@@ -8461,12 +8518,20 @@ export default function App({ user }: { user: any }) {
                                     </span>
                                   ))}
 
-                                  {/* ÚLTIMA ZONAL VISITADA */}
-                                  <span className="text-xs font-bold text-slate-800 bg-amber-50 border border-amber-300 px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs" title="Última zonal despachada por este camión">
-                                    <span className="text-amber-700">📍 Última Zonal:</span>
-                                    <span className="font-mono font-black text-slate-900">{lastZonals.length > 0 ? lastZonals.join(', ') : 'S/A'}</span>
-                                    {lastDispatchDate && <span className="text-[10px] text-slate-500 font-normal">({lastDispatchDate})</span>}
-                                  </span>
+                                  {/* ZONAL ORIGEN DEL DAÑO O ÚLTIMA ZONAL */}
+                                  {isDamageOriginZonal ? (
+                                    <span className="text-xs font-bold text-amber-950 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs" title={`Problema detectado al ingresar a andén el ${detectedProblemDate}. La rotura ocurrió en el viaje previo a ${displayedZonals.join(', ')} (${displayedDate})`}>
+                                      <span className="text-amber-800 font-extrabold">📍 Zonal Origen Daño:</span>
+                                      <span className="font-mono font-black text-amber-950">{displayedZonals.length > 0 ? displayedZonals.join(', ') : 'S/A'}</span>
+                                      {displayedDate && <span className="text-[10px] text-amber-800 font-normal">({displayedDate})</span>}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs font-bold text-slate-800 bg-slate-100 border border-slate-300 px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs" title="Última zonal visitada por este camión">
+                                      <span className="text-slate-600 font-bold">📍 Última Zonal:</span>
+                                      <span className="font-mono font-black text-slate-900">{displayedZonals.length > 0 ? displayedZonals.join(', ') : 'S/A'}</span>
+                                      {displayedDate && <span className="text-[10px] text-slate-500 font-normal">({displayedDate})</span>}
+                                    </span>
+                                  )}
 
                                   {thermalDamages.length > 0 && (
                                     <span className="text-[10px] font-black uppercase text-amber-950 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-lg flex items-center gap-1" title="Esta unidad presenta daños o colchonetas rotas reportadas">
