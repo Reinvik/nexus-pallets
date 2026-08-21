@@ -34,7 +34,10 @@ import {
   Search,
   CheckCircle2,
   TrendingUp,
-  Save
+  Save,
+  Mail,
+  Copy,
+  Send
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -423,6 +426,26 @@ export default function App({ user }: { user: any }) {
   const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus>('idle');
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
   const [autoSaveRetries, setAutoSaveRetries] = useState(0);
+  // ── Alerta de Fallas en Camiones y Rampas (Aviso por Correo / Reporte) ──
+  interface FailureAlertItem {
+    itemKey: string;
+    itemLabel: string;
+    status: 'AMARILLO' | 'ROJO';
+    comment?: string;
+    photos: string[];
+    date: string;
+    supervisor: string;
+  }
+  interface FailureAlertData {
+    plate: string;
+    truckNumbers: string[];
+    records: DispatchRecord[];
+    failures: FailureAlertItem[];
+  }
+  const [failureAlertModal, setFailureAlertModal] = useState<FailureAlertData | null>(null);
+  const [alertRecipientEmail, setAlertRecipientEmail] = useState<string>(() => localStorage.getItem('nexus_rampas_alert_to') || '');
+  const [alertCcEmail, setAlertCcEmail] = useState<string>(() => localStorage.getItem('nexus_rampas_alert_cc') || '');
+  const [alertCopiedToast, setAlertCopiedToast] = useState(false);
 
   // Manejo de Temperaturas Termos: Solo 1 congelado (<= -9°C) a la vez. Si uno se activa, los demás pasan a 0°C (Refrigerado).
   const handleSetTemp1er = (val: number) => {
@@ -2770,6 +2793,121 @@ export default function App({ user }: { user: any }) {
     return missing;
   };
 
+  // ── Helpers para Alerta de Fallas a Supervisor de Rampas/Camiones ─────────
+  const ITEM_CHECKLIST_LABELS: { [key: string]: string } = {
+    postura_anden: '1. Horario Postura en Andén',
+    limpieza_estructura: '2. Estado Camión / Limpieza / Daño Estructural',
+    luces_encendidas: '3. Estado de Luces (Encendidas)',
+    separador_termico: '4. Verificación Separador Térmico / Colchonetas',
+    lingas_camion: '5. Verificación Lingas por Camión'
+  };
+
+  const openFailureAlertModalForPlate = (group: { plate: string; truckNumbers: Set<string> | string[]; records: DispatchRecord[] }) => {
+    const truckNums = Array.isArray(group.truckNumbers) ? group.truckNumbers : Array.from(group.truckNumbers);
+    const failures: FailureAlertItem[] = [];
+
+    group.records.forEach(r => {
+      const chk = r.checklist || {};
+      const items = ['postura_anden', 'limpieza_estructura', 'luces_encendidas', 'separador_termico', 'lingas_camion'];
+
+      items.forEach(key => {
+        const st = getChecklistStatus(chk[key]);
+        if (st === 'AMARILLO' || st === 'ROJO') {
+          let comment = '';
+          let photos: string[] = [];
+
+          if (key === 'separador_termico') {
+            comment = chk.colchonetas_comment || '';
+            photos = chk.colchonetas_photos || [];
+          } else if (key === 'lingas_camion') {
+            comment = chk.lingas_comment || '';
+            photos = chk.lingas_photos || [];
+          } else {
+            photos = chk.photos || [];
+          }
+
+          failures.push({
+            itemKey: key,
+            itemLabel: ITEM_CHECKLIST_LABELS[key] || key,
+            status: st,
+            comment,
+            photos,
+            date: r.inspection_date,
+            supervisor: r.supervisor_name
+          });
+        }
+      });
+    });
+
+    setFailureAlertModal({
+      plate: group.plate,
+      truckNumbers: truckNums,
+      records: group.records,
+      failures
+    });
+  };
+
+  const openFailureAlertModalForRecord = (rec: DispatchRecord) => {
+    const plate = (rec.truck_plate && rec.truck_plate !== 'N/A') ? rec.truck_plate.trim().toUpperCase() : `CAMIÓN #${rec.truck_number || 'S/A'}`;
+    const truckNums = rec.truck_number && rec.truck_number !== 'N/A' ? [rec.truck_number] : [];
+    openFailureAlertModalForPlate({ plate, truckNumbers: truckNums, records: [rec] });
+  };
+
+  const buildFailureReportPlainText = (data: FailureAlertData): string => {
+    const truckNumStr = data.truckNumbers.length > 0 ? ` (N° ${data.truckNumbers.join(', ')})` : '';
+    let text = `Estimado(a) Supervisor(a) de Camiones y Rampas,\n\n`;
+    text += `Por medio del presente se notifica que durante la inspección operativa del camión patente ${data.plate}${truckNumStr}, se han detectado las siguientes anomalías / fallas de rampa:\n\n`;
+    text += `═══════════════════════════════════════════════\n`;
+    text += `DETALLE DE OBSERVACIONES Y SEMÁFOROS:\n`;
+    text += `═══════════════════════════════════════════════\n\n`;
+
+    if (data.failures.length === 0) {
+      text += `• Sin observaciones críticas registradas en este período.\n\n`;
+    } else {
+      data.failures.forEach((f, idx) => {
+        const icono = f.status === 'ROJO' ? '🔴 [RECHAZADO / CRÍTICO]' : '🟡 [OBSERVACIÓN MENOR]';
+        text += `${idx + 1}. ${icono} ${f.itemLabel}\n`;
+        text += `   • Fecha: ${f.date} | Inspector: ${f.supervisor}\n`;
+        if (f.comment) {
+          text += `   • Detalle / Observación: ${f.comment}\n`;
+        }
+        if (f.photos && f.photos.length > 0) {
+          text += `   • Evidencias Fotográficas: ${f.photos.length} foto(s) registradas en plataforma Nexus Pallets\n`;
+        }
+        text += `\n`;
+      });
+    }
+
+    text += `═══════════════════════════════════════════════\n`;
+    text += `Favor coordinar las acciones correctivas con el transportista y el equipo de rampas.\n\n`;
+    text += `Saludos cordiales,\n`;
+    text += `${supervisorName || user?.email || 'Control de Despachos'}\n`;
+    text += `Control Unidades Logísticas — CIAL Alimentos`;
+    return text;
+  };
+
+  const handleSendFailureEmail = () => {
+    if (!failureAlertModal) return;
+    const to = alertRecipientEmail.trim();
+    const cc = alertCcEmail.trim();
+    if (to) localStorage.setItem('nexus_rampas_alert_to', to);
+    if (cc) localStorage.setItem('nexus_rampas_alert_cc', cc);
+
+    const subject = `🚨 ALERTA INSPECCIÓN: Fallas detectadas en Camión ${failureAlertModal.plate}`;
+    const body = buildFailureReportPlainText(failureAlertModal);
+
+    const mailtoUrl = `mailto:${encodeURIComponent(to)}?cc=${encodeURIComponent(cc)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailtoUrl, '_blank');
+  };
+
+  const handleCopyFailureReport = () => {
+    if (!failureAlertModal) return;
+    const body = buildFailureReportPlainText(failureAlertModal);
+    navigator.clipboard.writeText(body);
+    setAlertCopiedToast(true);
+    setTimeout(() => setAlertCopiedToast(false), 3000);
+  };
+
   const getMissingDispatchData = (): string[] => {
     const missing: string[] = [];
 
@@ -4894,6 +5032,27 @@ export default function App({ user }: { user: any }) {
                                 </>
                                 ) : null;
                               })()}
+
+                            {/* BOTÓN REPORTE DE FALLAS A RAMPAS SI HAY OBSERVACIONES */}
+                            {(() => {
+                              const chk = rec.checklist || {};
+                              const hasFaults = ['postura_anden', 'limpieza_estructura', 'luces_encendidas', 'separador_termico', 'lingas_camion'].some(k => {
+                                const st = getChecklistStatus(chk[k]);
+                                return st === 'AMARILLO' || st === 'ROJO';
+                              });
+                              if (!hasFaults) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => openFailureAlertModalForRecord(rec)}
+                                  className="px-2.5 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-800 flex items-center gap-1"
+                                  title="Enviar aviso por correo sobre las fallas de este camión"
+                                >
+                                  <Mail className="w-3.5 h-3.5 text-rose-600" />
+                                  <span className="hidden sm:inline">Aviso Falla</span>
+                                </button>
+                              );
+                            })()}
 
                             {/* BOTÓN FIRMAR (Sujeto a permiso can_sign) */}
                             {rec.signed_by ? (
@@ -8130,10 +8289,36 @@ export default function App({ user }: { user: any }) {
 
                     {/* LISTADO DE PATENTES CON ACUMULACIÓN DE SEMÁFOROS */}
                     <div className="space-y-4">
-                      <h3 className="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center justify-between border-b pb-2">
-                        <span>🚛 Estado Consolidado por Patente ({sortedPlates.length})</span>
-                        <span className="text-[10px] text-slate-400 font-normal">Ordenado por reincidencia de observaciones</span>
-                      </h3>
+                      <div className="flex items-center justify-between border-b pb-2 flex-wrap gap-2">
+                        <h3 className="text-xs font-black uppercase text-slate-700 tracking-wider">
+                          🚛 Estado Consolidado por Patente ({sortedPlates.length})
+                        </h3>
+
+                        {totalRojos + totalAmarillos > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allFailRecords = filteredRecords.filter(r => {
+                                const chk = r.checklist || {};
+                                return ['postura_anden', 'limpieza_estructura', 'luces_encendidas', 'separador_termico', 'lingas_camion'].some(k => {
+                                  const st = getChecklistStatus(chk[k]);
+                                  return st === 'AMARILLO' || st === 'ROJO';
+                                });
+                              });
+                              openFailureAlertModalForPlate({
+                                plate: `CONSOLIDADO ${inspectionPeriod.toUpperCase()} (${sortedPlates.filter(p => p.rojoCount + p.amarilloCount > 0).length} CAMIONES)`,
+                                truckNumbers: Array.from(new Set(allFailRecords.map(r => r.truck_number).filter(Boolean))),
+                                records: allFailRecords
+                              });
+                            }}
+                            className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer border border-rose-500"
+                            title="Enviar reporte por correo con todas las fallas detectadas en el período seleccionado"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            <span>Notificar Fallas del Período ({totalRojos + totalAmarillos})</span>
+                          </button>
+                        )}
+                      </div>
 
                       {sortedPlates.length === 0 ? (
                         <div className="text-center py-12 bg-slate-50 border border-slate-200 rounded-xl">
@@ -8197,8 +8382,8 @@ export default function App({ user }: { user: any }) {
                                   </span>
                                 </div>
 
-                                {/* RESUMEN DE CONTEOS DE SEMÁFORO DE LA PATENTE Y BOTÓN DESPLEGAR */}
-                                <div className="flex items-center gap-2 font-mono">
+                                {/* RESUMEN DE CONTEOS DE SEMÁFORO DE LA PATENTE, BOTÓN AVISO CORREO Y BOTÓN DESPLEGAR */}
+                                <div className="flex items-center gap-2 font-mono flex-wrap">
                                   <span className="text-xs font-black text-emerald-800 bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
                                     🟢 {group.verdeCount}
                                   </span>
@@ -8208,6 +8393,26 @@ export default function App({ user }: { user: any }) {
                                   <span className="text-xs font-black text-rose-900 bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
                                     🔴 {group.rojoCount}
                                   </span>
+
+                                  {/* Botón Enviar Aviso por Correo */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openFailureAlertModalForPlate(group);
+                                    }}
+                                    className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer border transition-all ${
+                                      group.rojoCount > 0
+                                        ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-500 animate-pulse'
+                                        : group.amarilloCount > 0
+                                        ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-500'
+                                        : 'bg-slate-700 hover:bg-slate-800 text-white border-slate-600'
+                                    }`}
+                                    title="Enviar aviso/correo al supervisor encargado de camiones y rampas"
+                                  >
+                                    <Mail className="w-3.5 h-3.5" />
+                                    <span>Aviso Correo</span>
+                                  </button>
 
                                   <span className="ml-1 text-slate-500 hover:text-slate-800 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs flex items-center gap-1 font-sans font-bold">
                                     {isExpanded ? (
@@ -10197,7 +10402,210 @@ export default function App({ user }: { user: any }) {
         </div>
       )}
 
-      {/* FOOTER */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* MODAL: AVISO Y ENVÍO DE CORREO DE FALLAS EN CAMIÓN / RAMPA     */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {failureAlertModal && (
+        <div className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border-2 border-rose-400 flex flex-col max-h-[92vh] animate-fade-in">
+            
+            {/* CABECERA MODAL */}
+            <div className="bg-slate-900 text-white p-4 sm:p-5 flex items-center justify-between gap-3 shrink-0 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500 text-rose-400 flex items-center justify-center shrink-0 shadow-sm">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
+                    <span>Aviso de Fallas a Supervisor de Rampas</span>
+                    <span className="font-mono bg-rose-600 text-white px-2.5 py-0.5 rounded-lg text-xs font-black">
+                      {failureAlertModal.plate}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 font-semibold mt-0.5">
+                    Envío formal de anomalías y evidencias fotográficas detectadas durante la inspección.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setFailureAlertModal(null)}
+                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* CUERPO DEL MODAL (SCROLLABLE) */}
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+              
+              {/* TOAST DE COPIADO EXITOSO */}
+              {alertCopiedToast && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl font-bold flex items-center gap-2 animate-fade-in shadow-sm">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>¡Reporte formateado copiado al portapapeles con éxito! Listo para pegar en WhatsApp o correo.</span>
+                </div>
+              )}
+
+              {/* CAMPOS DE DESTINATARIO Y COPIA */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider block">
+                  Configuración de Destinatarios
+                </span>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-brand-primary" />
+                    <span>Para (Supervisor Encargado de Camiones / Rampas):</span>
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="ej. supervisor.rampas@cial.cl"
+                    value={alertRecipientEmail}
+                    onChange={(e) => {
+                      setAlertRecipientEmail(e.target.value);
+                      localStorage.setItem('nexus_rampas_alert_to', e.target.value);
+                    }}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary shadow-2xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-slate-500" />
+                    <span>En Copia (CC - Jefaturas, Transportes, etc. separados por coma):</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="ej. jefe.turno@cial.cl, transportes@cial.cl"
+                    value={alertCcEmail}
+                    onChange={(e) => {
+                      setAlertCcEmail(e.target.value);
+                      localStorage.setItem('nexus_rampas_alert_cc', e.target.value);
+                    }}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              {/* LISTADO DE FALLAS DETECTADAS */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider">
+                    Fallas & Observaciones Registradas ({failureAlertModal.failures.length})
+                  </span>
+                  {failureAlertModal.truckNumbers.length > 0 && (
+                    <span className="text-[10px] font-mono font-bold text-slate-500">
+                      N° Camión: {failureAlertModal.truckNumbers.join(', ')}
+                    </span>
+                  )}
+                </div>
+
+                {failureAlertModal.failures.length === 0 ? (
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
+                    <p className="text-xs font-bold text-emerald-800">
+                      🟢 No se registran fallas críticas ni observaciones en amarillo para esta patente.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {failureAlertModal.failures.map((f, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-3 rounded-2xl border space-y-1.5 ${
+                          f.status === 'ROJO'
+                            ? 'bg-rose-50/80 border-rose-300 text-rose-950'
+                            : 'bg-amber-50/80 border-amber-300 text-amber-950'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-extrabold text-xs flex items-center gap-1.5">
+                            <span>{f.status === 'ROJO' ? '🔴' : '🟡'}</span>
+                            <span>{f.itemLabel}</span>
+                          </span>
+                          <span className="text-[10px] font-mono font-bold opacity-80">
+                            {f.date} · {f.supervisor}
+                          </span>
+                        </div>
+
+                        {f.comment && (
+                          <p className="text-[11px] font-medium bg-white/70 p-2 rounded-xl border border-current/20">
+                            <strong>Comentario / Causa:</strong> {f.comment}
+                          </p>
+                        )}
+
+                        {/* MINIATURAS DE FOTOS DE EVIDENCIA ASOCIADAS */}
+                        {f.photos && f.photos.length > 0 && (
+                          <div className="space-y-1 pt-1">
+                            <span className="text-[10px] font-black uppercase tracking-wider block opacity-90">
+                              📷 Fotos de Evidencia ({f.photos.length}):
+                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {f.photos.map((pUrl, pIdx) => (
+                                <img
+                                  key={pIdx}
+                                  src={pUrl}
+                                  alt={`Evidencia ${pIdx + 1}`}
+                                  className="w-16 h-16 rounded-xl object-cover border-2 border-rose-400 cursor-pointer hover:scale-105 transition-transform shadow-xs bg-white"
+                                  onClick={() => openPhotoGallery(f.photos, pIdx)}
+                                  title="Clic para ampliar foto"
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* VISTA PREVIA DEL ASUNTO */}
+              <div className="bg-slate-100 p-3 rounded-xl border border-slate-200 text-slate-700 text-[11px]">
+                <strong className="text-slate-900 block font-black mb-0.5">Asunto del Correo:</strong>
+                <span className="font-mono">🚨 ALERTA INSPECCIÓN: Fallas detectadas en Camión {failureAlertModal.plate}</span>
+              </div>
+
+            </div>
+
+            {/* BOTONES DE ACCIÓN FOOTER */}
+            <div className="bg-slate-50 p-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleCopyFailureReport}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
+                title="Copiar texto formateado para pegar en WhatsApp o Teams"
+              >
+                <Copy className="w-4 h-4 text-slate-500" />
+                <span>Copiar Reporte</span>
+              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => setFailureAlertModal(null)}
+                  className="px-4 py-2.5 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition-all cursor-pointer active:scale-95"
+                >
+                  Cerrar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSendFailureEmail}
+                  className="flex-1 sm:flex-none px-5 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md border border-rose-500"
+                  title="Abrir en Outlook o cliente de correo predeterminado"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Abrir en Correo (Outlook / Webmail)</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       <footer className="bg-slate-100 border-t border-slate-200 text-slate-400 py-4 text-center text-[10px] font-semibold uppercase tracking-wider shrink-0 mt-auto">
         CIAL Alimentos — Control Despacho v1.1.0 (2026)
       </footer>
