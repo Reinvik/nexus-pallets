@@ -1814,7 +1814,7 @@ export default function App({ user }: { user: any }) {
     return () => clearInterval(interval);
   }, [activeDraftId, draftSaveStatus]);
 
-  const [historyPeriod, setHistoryPeriod] = useState<'hoy' | 'semana' | 'mes' | 'todo'>('mes');
+  const [historyPeriod, setHistoryPeriod] = useState<'hoy' | 'semana' | 'mes' | 'todo'>('hoy');
 
   const fetchFullDispatchDetail = async (id: string): Promise<DispatchRecord | null> => {
     try {
@@ -1843,11 +1843,18 @@ export default function App({ user }: { user: any }) {
 
       const now = new Date();
       if (period === 'hoy') {
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-        query = query.gte('created_at', startOfToday);
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const todayStr = `${year}-${month}-${day}`;
+        query = query.gte('inspection_date', todayStr);
       } else if (period === 'semana') {
-        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        query = query.gte('created_at', sevenDaysAgo);
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const y = sevenDaysAgo.getFullYear();
+        const m = String(sevenDaysAgo.getMonth() + 1).padStart(2, '0');
+        const d = String(sevenDaysAgo.getDate()).padStart(2, '0');
+        const weekStartStr = `${y}-${m}-${d}`;
+        query = query.gte('inspection_date', weekStartStr);
       } else if (period === 'mes') {
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -1860,19 +1867,7 @@ export default function App({ user }: { user: any }) {
       const { data, error } = await query;
       if (error) throw error;
 
-      let res = data || [];
-      // Si retorna 0 registros, cargar fallback de los últimos 100
-      if (res.length === 0) {
-        const fallbackQuery = await supabase
-          .from('v_pallet_dispatches')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(100);
-        if (!fallbackQuery.error && fallbackQuery.data) {
-          res = fallbackQuery.data;
-        }
-      }
-      setRecords(res);
+      setRecords(data || []);
     } catch (err: any) {
       console.error('Error cargando historial:', err);
       setErrorMsg('No se pudo cargar el historial de despachos.');
