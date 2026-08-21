@@ -394,7 +394,7 @@ export default function App({ user }: { user: any }) {
   const [expandedRecords, setExpandedRecords] = useState<{ [key: string]: boolean }>({});
   const [expandedZonalRows, setExpandedZonalRows] = useState<{ [key: string]: boolean }>({});
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
-  const [pdfPreviewModal, setPdfPreviewModal] = useState<{ rec: DispatchRecord; blobUrl: string; pdfObj: jsPDF } | null>(null);
+  const [pdfPreviewModal, setPdfPreviewModal] = useState<{ rec: DispatchRecord; blobUrl: string; pdfObj: jsPDF; htmlTemplate?: string } | null>(null);
   const [historySubTab, setHistorySubTab] = useState<'camiones' | 'zonales' | 'saldos'>('camiones');
   const [historyZonalFilter, setHistoryZonalFilter] = useState<string>('ALL');
 
@@ -2480,9 +2480,9 @@ export default function App({ user }: { user: any }) {
         })
       );
 
-      // Capturar usando html2canvas puro
+      // Capturar usando html2canvas optimizado
       const canvas = await html2canvas(container, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
@@ -2490,8 +2490,8 @@ export default function App({ user }: { user: any }) {
         windowWidth: 800
       });
 
-      // Convertir el canvas resultante a Data URL (JPEG calidad 0.98)
-      const imgData = canvas.toDataURL('image/jpeg', 0.98);
+      // Convertir el canvas resultante a Data URL (JPEG calidad 0.92)
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
 
       // Crear documento jsPDF de página 'letter' en milímetros
       const pdf = new jsPDF({
@@ -2514,7 +2514,7 @@ export default function App({ user }: { user: any }) {
         pdf.save(filename);
       } else {
         const blobUrl = String(pdf.output('bloburl'));
-        setPdfPreviewModal({ rec, blobUrl, pdfObj: pdf });
+        setPdfPreviewModal({ rec, blobUrl, pdfObj: pdf, htmlTemplate: pdfHtml });
       }
 
     } catch (err: any) {
@@ -10081,12 +10081,63 @@ export default function App({ user }: { user: any }) {
                 <button
                   type="button"
                   onClick={() => {
-                    window.open(pdfPreviewModal.blobUrl, '_blank');
+                    if (pdfPreviewModal.htmlTemplate) {
+                      const printIframe = document.createElement('iframe');
+                      printIframe.style.position = 'fixed';
+                      printIframe.style.right = '0';
+                      printIframe.style.bottom = '0';
+                      printIframe.style.width = '0';
+                      printIframe.style.height = '0';
+                      printIframe.style.border = '0';
+                      document.body.appendChild(printIframe);
+                      
+                      const doc = printIframe.contentWindow?.document;
+                      if (doc) {
+                        doc.open();
+                        doc.write(`
+                          <!DOCTYPE html>
+                          <html>
+                            <head>
+                              <title>Despacho Camión ${pdfPreviewModal.rec.truck_plate || pdfPreviewModal.rec.truck_number}</title>
+                              <style>
+                                @page {
+                                  size: letter portrait;
+                                  margin: 8mm;
+                                }
+                                body {
+                                  margin: 0;
+                                  padding: 0;
+                                  background: #fff;
+                                  -webkit-print-color-adjust: exact;
+                                  print-color-adjust: exact;
+                                }
+                              </style>
+                            </head>
+                            <body>
+                              ${pdfPreviewModal.htmlTemplate}
+                            </body>
+                          </html>
+                        `);
+                        doc.close();
+                        
+                        setTimeout(() => {
+                          printIframe.contentWindow?.focus();
+                          printIframe.contentWindow?.print();
+                          setTimeout(() => {
+                            if (document.body.contains(printIframe)) {
+                              document.body.removeChild(printIframe);
+                            }
+                          }, 2000);
+                        }, 200);
+                      }
+                    } else {
+                      window.open(pdfPreviewModal.blobUrl, '_blank');
+                    }
                   }}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 border border-emerald-500"
-                  title="Abrir vista previa del navegador para imprimir directamente con Ctrl + P"
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 border border-emerald-500"
+                  title="Imprimir comprobante al instante sin esperas"
                 >
-                  <span>🖨️ Imprimir / Abrir en Pestaña</span>
+                  <span>🖨️ Imprimir Ahora</span>
                 </button>
 
                 <button
