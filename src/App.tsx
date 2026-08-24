@@ -8653,12 +8653,53 @@ export default function App({ user }: { user: any }) {
                                       const prevZonalInfo = getPreviousZonalForRecord(r, records);
                                       const thisZonals = r.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
 
-                                      // FILTRAR FOTOS: Solo mostrar fotografías asociadas a puntos en AMARILLO o ROJO
-                                      const relevantColchonetasPhotos = (sepStatus === 'AMARILLO' || sepStatus === 'ROJO') ? colchonetasPhotos : [];
-                                      const relevantLingasPhotos = (lingasStatus === 'AMARILLO' || lingasStatus === 'ROJO') ? lingasPhotos : [];
-                                      const relevantGeneralPhotos = hasAnyFault ? generalPhotos : [];
+                                      // RECOLECTAR TODAS LAS FOTOS (VERDES, AMARILLAS Y ROJAS)
+                                      const inspectionPhotos: {
+                                        url: string;
+                                        category: string;
+                                        status: 'VERDE' | 'AMARILLO' | 'ROJO' | 'GRIS';
+                                        comment?: string;
+                                      }[] = [];
 
-                                      const displayPhotos = Array.from(new Set([...relevantColchonetasPhotos, ...relevantLingasPhotos, ...relevantGeneralPhotos]));
+                                      colchonetasPhotos.forEach((url) => {
+                                        inspectionPhotos.push({
+                                          url,
+                                          category: 'Separador Térmico',
+                                          status: sepStatus,
+                                          comment: colchonetasComment
+                                        });
+                                      });
+
+                                      lingasPhotos.forEach((url) => {
+                                        inspectionPhotos.push({
+                                          url,
+                                          category: 'Lingas de Sujeción',
+                                          status: lingasStatus,
+                                          comment: lingasComment
+                                        });
+                                      });
+
+                                      generalPhotos.forEach((url) => {
+                                        inspectionPhotos.push({
+                                          url,
+                                          category: 'Inspección General',
+                                          status: hasAnyFault ? 'AMARILLO' : 'VERDE'
+                                        });
+                                      });
+
+                                      // Fotos de Zonales de este despacho
+                                      (r.zonals_detail || []).forEach(z => {
+                                        (z.photos || []).forEach(url => {
+                                          inspectionPhotos.push({
+                                            url,
+                                            category: `Zonal ${z.zonal_name || 'Despacho'}`,
+                                            status: 'VERDE',
+                                            comment: z.sello ? `Sello: ${z.sello}` : undefined
+                                          });
+                                        });
+                                      });
+
+                                      const allPhotoUrls = inspectionPhotos.map(p => p.url);
 
                                       return (
                                         <div key={r.id} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs space-y-2 shadow-2xs">
@@ -8740,41 +8781,99 @@ export default function App({ user }: { user: any }) {
                                             </div>
                                           )}
 
-                                          {(lingasStatus === 'AMARILLO' || lingasStatus === 'ROJO') && lingasComment && (
-                                            <p className="text-[11px] text-amber-900 bg-amber-50 p-1.5 rounded-lg border border-amber-200 font-medium">
+                                          {/* COMENTARIOS ADICIONALES */}
+                                          {colchonetasComment && (sepStatus === 'VERDE' || sepStatus === 'GRIS') && (
+                                            <p className="text-[11px] text-emerald-900 bg-emerald-50 p-2 rounded-xl border border-emerald-200 font-medium">
+                                              <strong>Obs. Separador Térmico:</strong> {colchonetasComment}
+                                            </p>
+                                          )}
+
+                                          {lingasComment && (
+                                            <p className={`text-[11px] p-2 rounded-xl border font-medium ${
+                                              lingasStatus === 'ROJO' ? 'text-rose-900 bg-rose-50 border-rose-200' :
+                                              lingasStatus === 'AMARILLO' ? 'text-amber-900 bg-amber-50 border-amber-200' :
+                                              'text-slate-800 bg-white border-slate-200'
+                                            }`}>
                                               <strong>Obs. Lingas de Sujeción:</strong> {lingasComment}
                                             </p>
                                           )}
 
-                                          {/* FOTOS DE EVIDENCIAS */}
-                                          {displayPhotos.length > 0 ? (
-                                            <div className="space-y-1 pt-1">
-                                              <span className="text-[10px] font-black uppercase text-amber-800 flex items-center gap-1">
-                                                📷 Evidencias Fotográficas ({displayPhotos.length} foto(s)):
-                                              </span>
-                                              <div className="flex items-center gap-1.5 flex-wrap">
-                                                {displayPhotos.map((pUrl, pIdx) => (
-                                                  <img
-                                                    key={pIdx}
-                                                    src={pUrl}
-                                                    alt={`Evidencia Observación ${pIdx + 1}`}
-                                                    className="w-16 h-16 rounded-xl object-cover border-2 border-amber-400 cursor-pointer hover:scale-105 transition-transform shadow-sm bg-white"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      openPhotoGallery(displayPhotos, pIdx);
-                                                    }}
-                                                    title="Clic para ampliar foto"
-                                                  />
-                                                ))}
+                                          {r.observations && (
+                                            <p className="text-[11px] text-slate-700 bg-white p-2 rounded-xl border border-slate-200 font-medium">
+                                              <strong>Observaciones Generales:</strong> {r.observations}
+                                            </p>
+                                          )}
+
+                                          {/* GALERÍA DE FOTOS Y CALIFICACIONES (VERDES, AMARILLAS Y ROJAS) */}
+                                          {inspectionPhotos.length > 0 ? (
+                                            <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                                              <div className="flex items-center justify-between flex-wrap gap-1">
+                                                <span className="text-[10.5px] font-black uppercase text-slate-700 flex items-center gap-1.5">
+                                                  📷 Fotos Registradas ({inspectionPhotos.length} foto{inspectionPhotos.length > 1 ? 's' : ''}):
+                                                </span>
+                                                <span className="text-[9.5px] text-slate-400 font-semibold">
+                                                  Haz clic en una foto para ampliarla
+                                                </span>
+                                              </div>
+
+                                              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pt-1">
+                                                {inspectionPhotos.map((item, pIdx) => {
+                                                  const borderClass =
+                                                    item.status === 'ROJO' ? 'border-2 border-rose-500 shadow-sm shadow-rose-200 ring-1 ring-rose-300' :
+                                                    item.status === 'AMARILLO' ? 'border-2 border-amber-400 shadow-sm shadow-amber-200 ring-1 ring-amber-300' :
+                                                    item.status === 'VERDE' ? 'border-2 border-emerald-400 shadow-sm shadow-emerald-100' :
+                                                    'border-2 border-slate-300';
+
+                                                  const badgeClass =
+                                                    item.status === 'ROJO' ? 'bg-rose-600 text-white' :
+                                                    item.status === 'AMARILLO' ? 'bg-amber-400 text-amber-950 font-black' :
+                                                    item.status === 'VERDE' ? 'bg-emerald-600 text-white' :
+                                                    'bg-slate-700 text-white';
+
+                                                  const icon =
+                                                    item.status === 'ROJO' ? '🔴' :
+                                                    item.status === 'AMARILLO' ? '🟡' :
+                                                    item.status === 'VERDE' ? '🟢' : '⚪';
+
+                                                  return (
+                                                    <div
+                                                      key={pIdx}
+                                                      className={`relative rounded-xl overflow-hidden bg-white cursor-pointer hover:scale-[1.03] transition-all group ${borderClass}`}
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openPhotoGallery(allPhotoUrls, pIdx);
+                                                      }}
+                                                      title={`Ver foto de ${item.category} (${item.status})`}
+                                                    >
+                                                      <div className="aspect-square w-full relative bg-slate-100">
+                                                        <img
+                                                          src={item.url}
+                                                          alt={`${item.category} ${pIdx + 1}`}
+                                                          className="w-full h-full object-cover"
+                                                          loading="lazy"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                                          <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+                                                            🔍 Ver
+                                                          </span>
+                                                        </div>
+                                                      </div>
+                                                      <div className={`px-1.5 py-1 text-[9px] font-bold flex items-center justify-between gap-1 select-none truncate ${badgeClass}`}>
+                                                        <span className="truncate">{item.category}</span>
+                                                        <span className="shrink-0">{icon}</span>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
                                               </div>
                                             </div>
                                           ) : hasAnyFault ? (
-                                            <div className="text-[10px] text-amber-700 italic bg-amber-50/50 p-1 rounded border border-amber-200">
+                                            <div className="text-[10px] text-amber-700 italic bg-amber-50/50 p-2 rounded-xl border border-amber-200">
                                               ⚠️ Despacho presenta observaciones (🟡 / 🔴) pero no se adjuntaron fotos de respaldo.
                                             </div>
                                           ) : (
-                                            <div className="text-[10px] text-emerald-700 font-semibold bg-emerald-50/50 p-1 rounded border border-emerald-200 flex items-center gap-1">
-                                              ✅ Inspección 100% Conforme. Sin observaciones ni fallas.
+                                            <div className="text-[10px] text-emerald-700 font-semibold bg-emerald-50/50 p-2 rounded-xl border border-emerald-200 flex items-center justify-between">
+                                              <span>✅ Inspección 100% Conforme. Sin fotos adjuntas.</span>
                                             </div>
                                           )}
                                         </div>
