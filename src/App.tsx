@@ -2748,13 +2748,20 @@ export default function App({ user }: { user: any }) {
     setEditingZonalsDetail(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Eliminar despacho (Solo Admin)
+  // Eliminar despacho (Admin, Jefe de Turno o Supervisor creador de hoy)
   const handleDeleteDispatch = async (rec: DispatchRecord) => {
-    const confirmMsg = `¿Estás seguro de eliminar permanentemente el despacho de ${rec.supervisor_name} (Camión: ${rec.truck_number}, Patente: ${rec.truck_plate})?\n\nEsta acción recalculará inmediatamente los saldos de pallets.`;
+    const confirmMsg = `¿Estás seguro de eliminar permanentemente el despacho de ${rec.supervisor_name} (Camión: ${rec.truck_number}, Patente: ${rec.truck_plate})?\n\nEsta acción eliminará el registro y recalculará los saldos y monitores de salida.`;
     if (!window.confirm(confirmMsg)) return;
 
     setLoading(true);
     try {
+      // 1. Eliminar logs de salida asociados
+      await supabase
+        .from('zonal_departure_logs')
+        .delete()
+        .eq('dispatch_id', rec.id);
+
+      // 2. Eliminar el despacho
       const { error } = await supabase
         .from('pallet_dispatches')
         .delete()
@@ -2762,9 +2769,10 @@ export default function App({ user }: { user: any }) {
 
       if (error) throw error;
 
-      setSuccessMsg('Despacho eliminado correctamente.');
+      setSuccessMsg('Despacho y registros asociados eliminados correctamente.');
       fetchHistory();
       fetchReturns();
+      fetchZonalDepartureLogs();
     } catch (err: any) {
       console.error('Error eliminando despacho:', err);
       setErrorMsg(err.message || 'Error al eliminar el despacho.');
@@ -3190,52 +3198,9 @@ export default function App({ user }: { user: any }) {
       });
 
       let insertedDispatch: any = null;
-      let targetDispatchId = editingDispatchId;
 
-      // Si no hay un ID explícito de edición, buscar si ya existe un despacho registrado hoy para este mismo camión o patente
-      if (!targetDispatchId) {
-        const cleanTruckNum = (truckNumber || '').trim();
-        const cleanTruckPlate = (truckPlate || '').trim().toUpperCase();
-
-        // 1. Buscar en registros locales de hoy cargados en memoria
-        const localMatch = records.find(rec => {
-          const recDate = String(rec.inspection_date || rec.created_at || '').slice(0, 10);
-          if (recDate !== dateStr) return false;
-
-          const matchNum = cleanTruckNum && cleanTruckNum !== 'N/A' && rec.truck_number === cleanTruckNum;
-          const matchPlate = cleanTruckPlate && cleanTruckPlate !== 'N/A' && (rec.truck_plate || '').trim().toUpperCase() === cleanTruckPlate;
-
-          return matchNum || matchPlate;
-        });
-
-        if (localMatch) {
-          targetDispatchId = localMatch.id;
-        } else if ((cleanTruckNum && cleanTruckNum !== 'N/A') || (cleanTruckPlate && cleanTruckPlate !== 'N/A')) {
-          // 2. Si no está en memoria local, verificar en Supabase DB para evitar duplicados creados desde otros dispositivos
-          try {
-            let query = supabase
-              .from('pallet_dispatches')
-              .select('id, truck_number, truck_plate, inspection_date')
-              .eq('inspection_date', dateStr);
-
-            if (cleanTruckNum && cleanTruckNum !== 'N/A') {
-              query = query.eq('truck_number', cleanTruckNum);
-            } else if (cleanTruckPlate && cleanTruckPlate !== 'N/A') {
-              query = query.eq('truck_plate', cleanTruckPlate);
-            }
-
-            const { data: dbMatches } = await query;
-            if (dbMatches && dbMatches.length > 0) {
-              targetDispatchId = dbMatches[0].id;
-            }
-          } catch (e) {
-            console.warn("Error al verificar duplicados en DB:", e);
-          }
-        }
-      }
-
-      if (targetDispatchId) {
-        // MODO EDICIÓN / ACTUALIZACIÓN DE DESPACHO EXISTENTE DE HOY
+      if (editingDispatchId) {
+        // MODO EDICIÓN EXPLÍCITA (El usuario vino de EDITAR en el historial)
         const { data: updatedData, error } = await supabase
           .from('pallet_dispatches')
           .update({
@@ -3258,16 +3223,21 @@ export default function App({ user }: { user: any }) {
             temp_3er: temp3er,
             close_time: closeTime || null,
             truck_kilos: truckKilos || null,
-            anden_number: truckAnden || null
+            anden_number: truckAnden || null,
+            // Al modificar el contenido de un despacho, se anula la firma previa para requerir nueva firma
+            signed_by: null,
+            signed_at: null,
+            signature_b64: null,
+            signed_by_title: null
           })
-          .eq('id', targetDispatchId)
+          .eq('id', editingDispatchId)
           .select();
 
         if (error) throw error;
         insertedDispatch = updatedData ? updatedData[0] : null;
-        setSuccessMsg(`¡Despacho Camión #${truckNumber || ''} actualizado correctamente!`);
+        setSuccessMsg(`¡Despacho Camión #${truckNumber || ''} actualizado correctamente! (Requiere nueva firma)`);
       } else {
-        // MODO NUEVO DESPACHO
+        // MODO NUEVO DESPACHO (SIEMPRE INSERT NUEVO E INDEPENDIENTE)
         const { data: insertedData, error } = await supabase
           .from('pallet_dispatches')
           .insert([{
@@ -3299,7 +3269,7 @@ export default function App({ user }: { user: any }) {
 
         if (error) throw error;
         insertedDispatch = insertedData ? insertedData[0] : null;
-        setSuccessMsg("¡Despacho registrado correctamente!");
+        setSuccessMsg("¡Despacho confirmado y registrado con éxito!");
       }
 
       // Upsert logs de salida por zonal en zonal_departure_logs
@@ -3327,8 +3297,8 @@ export default function App({ user }: { user: any }) {
             is_on_time: comp.isOnTime,
             diff_minutes: comp.diffMinutes,
             supervisor_name: supervisorName,
-            signed_by: user?.email || null,
-            signed_by_name: signerDisplayName
+            signed_by: insertedDispatch.signed_by || null,
+            signed_by_name: insertedDispatch.signed_by ? signerDisplayName : null
           }], { onConflict: 'dispatch_id,zonal_name,viaje_numero' });
         }
         fetchZonalDepartureLogs();
@@ -5225,17 +5195,15 @@ export default function App({ user }: { user: any }) {
                                     <Edit2 className="w-3.5 h-3.5" />
                                     EDITAR
                                   </button>
-                                  {isAdmin && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteDispatch(rec)}
-                                      className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1"
-                                      title="Eliminar Despacho (Solo Admin)"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                      ELIMINAR
-                                    </button>
-                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteDispatch(rec)}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1"
+                                    title={isAdmin ? 'Eliminar Despacho (Admin)' : isShiftLeader ? 'Eliminar Despacho (Jefe de Turno)' : 'Eliminar mi despacho de hoy'}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    ELIMINAR
+                                  </button>
                                 </>
                                 ) : null;
                               })()}
