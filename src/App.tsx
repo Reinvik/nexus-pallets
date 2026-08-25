@@ -2980,13 +2980,8 @@ export default function App({ user }: { user: any }) {
 
   const buildFailureReportPlainText = (data: FailureAlertData): string => {
     const truckNumStr = data.truckNumbers.length > 0 ? ` (N° ${data.truckNumbers.join(', ')})` : '';
-    let text = `Estimado(a) Supervisor(a) de Camiones, Rampas y Zonales,\n\n`;
+    let text = `Estimado,\n\n`;
     text += `Por medio del presente se notifica que durante la inspección operativa del camión patente ${data.plate}${truckNumStr}, se han detectado anomalías y/o daños en los equipos de rampa.\n\n`;
-    
-    if (data.lastZonals && data.lastZonals.length > 0) {
-      text += `📍 ZONAL DE ORIGEN DEL DAÑO (VIAJE PREVIO A LA DETECCIÓN): ${data.lastZonals.join(', ')} ${data.lastDispatchDate ? `(${data.lastDispatchDate})` : ''}\n`;
-      text += `ℹ️ Nota Operativa: Los camiones son tercerizados, pero la carga y descarga la realiza personal CIAL. Las roturas en separadores térmicos / colchonetas ocurren durante la descarga en la zonal de destino previa antes de retornar a andén.\n\n`;
-    }
 
     text += `═══════════════════════════════════════════════\n`;
     text += `DETALLE DE OBSERVACIONES Y TRAZABILIDAD DE DAÑOS:\n`;
@@ -2998,31 +2993,32 @@ export default function App({ user }: { user: any }) {
       data.failures.forEach((f, idx) => {
         const icono = f.status === 'ROJO' ? '🔴 [RECHAZADO / CRÍTICO]' : '🟡 [OBSERVACIÓN MENOR]';
         text += `${idx + 1}. ${icono} ${f.itemLabel}\n`;
-        text += `   • Fecha Detección en Andén: ${f.date} | Inspector Planta: ${f.supervisor}\n`;
+        text += `• Fecha Detección en Andén: ${f.date} | Inspector Planta: ${f.supervisor}\n\n`;
         
         if (f.itemKey === 'separador_termico') {
           if (f.previousZonals && f.previousZonals.length > 0) {
-            text += `   • 🚨 TRAZABILIDAD: Daño originado en Zonal previa: ${f.previousZonals.join(', ')} (${f.previousDate || 'Viaje anterior'})\n`;
+            text += `• 🚨 TRAZABILIDAD: Daño originado en Zonal previa: ${f.previousZonals.join(', ')} (${f.previousDate || 'Viaje anterior'})\n`;
           } else if (f.currentZonals && f.currentZonals.length > 0) {
-            text += `   • Zonal asignada en este despacho: ${f.currentZonals.join(', ')}\n`;
+            text += `• Zonal asignada en este despacho: ${f.currentZonals.join(', ')}\n`;
           }
         }
 
         if (f.comment) {
-          text += `   • Detalle / Observación: ${f.comment}\n`;
+          text += `• Detalle / Observación: ${f.comment}\n`;
         }
-        if (f.photos && f.photos.length > 0) {
-          text += `   • Evidencias Fotográficas: ${f.photos.length} foto(s) registradas en plataforma Nexus Pallets\n`;
+        
+        const photoCount = f.photos?.length || 0;
+        text += `• Evidencias Fotográficas: ${photoCount} foto(s) registradas en plataforma Nexus Outbound.\n\n`;
+
+        if (photoCount > 0) {
+          text += ` (Evidencias fotográficas registradas: ${photoCount} foto(s) adjuntas)\n\n`;
         }
-        text += `\n`;
       });
     }
 
     text += `═══════════════════════════════════════════════\n`;
     text += `Favor coordinar las acciones correctivas con la sucursal zonal y el equipo de rampas.\n\n`;
-    text += `Saludos cordiales,\n`;
-    text += `${supervisorName || user?.email || 'Control de Despachos'}\n`;
-    text += `Control Unidades Logísticas — CIAL Alimentos`;
+    text += `Saludos cordiales,`;
     return text;
   };
 
@@ -10961,6 +10957,21 @@ export default function App({ user }: { user: any }) {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* VISTA PREVIA DEL CORREO FORMATEADO */}
+              <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 space-y-2 select-text shadow-inner">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
+                    <span>✉️ Formato Oficial del Correo:</span>
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-mono">
+                    Listo para enviar o copiar
+                  </span>
+                </div>
+                <pre className="font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-slate-200 select-all overflow-x-auto max-h-48">
+                  {buildFailureReportPlainText(failureAlertModal)}
+                </pre>
               </div>
 
               {/* VISTA PREVIA DEL ASUNTO */}
