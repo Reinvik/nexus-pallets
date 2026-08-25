@@ -138,6 +138,7 @@ interface TruckDraft {
   selectedZonals: ZonalDetail[];
   photos: string[];
   createdAt: string;
+  updatedAt?: string;
   supervisorName?: string;
   createdBy?: string;
 }
@@ -426,6 +427,7 @@ export default function App({ user }: { user: any }) {
   const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus>('idle');
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
   const [autoSaveRetries, setAutoSaveRetries] = useState(0);
+  const isHydratingDraftRef = useRef(false);
   // ── Alerta de Fallas en Camiones y Rampas (Aviso por Correo / Reporte) ──
   interface FailureAlertItem {
     itemKey: string;
@@ -1357,27 +1359,32 @@ export default function App({ user }: { user: any }) {
   const [truckDrafts, setTruckDrafts] = useState<TruckDraft[]>([]);
   const [activeDraftId, setActiveDraftId] = useState<string>('');
 
-  const createEmptyDraft = (id?: string): TruckDraft => ({
-    id: id || `draft_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    truckNumber: '',
-    truckPlate: '',
-    truckAnden: '',
-    positionsOccupied: 26,
-    observations: '',
-    temp1er: 0,
-    temp2do: 0,
-    temp3er: 0,
-    closeTime: '',
-    truckKilos: '',
-    checklist: { ...INITIAL_CHECKLIST },
-    selectedZonals: [],
-    photos: [],
-    createdAt: new Date().toISOString(),
-    supervisorName: supervisorName || '',
-    createdBy: user?.email || ''
-  });
+  const createEmptyDraft = (id?: string): TruckDraft => {
+    const nowIso = new Date().toISOString();
+    return {
+      id: id || `draft_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      truckNumber: '',
+      truckPlate: '',
+      truckAnden: '',
+      positionsOccupied: 26,
+      observations: '',
+      temp1er: 0,
+      temp2do: 0,
+      temp3er: 0,
+      closeTime: '',
+      truckKilos: '',
+      checklist: { ...INITIAL_CHECKLIST },
+      selectedZonals: [],
+      photos: [],
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      supervisorName: supervisorName || '',
+      createdBy: user?.email || ''
+    };
+  };
 
   const loadDraftIntoState = (draft: TruckDraft) => {
+    isHydratingDraftRef.current = true;
     setTruckNumber(draft.truckNumber || '');
     setTruckPlate(draft.truckPlate || '');
     setTruckAnden(draft.truckAnden || '');
@@ -1395,6 +1402,21 @@ export default function App({ user }: { user: any }) {
     setColchonetasComment((draft.checklist as any)?.colchonetas_comment || '');
     setSelectedZonals(draft.selectedZonals || []);
     setPhotos(draft.photos || []);
+
+    const savedIso = draft.updatedAt || draft.createdAt;
+    if (savedIso) {
+      const parsedDate = new Date(savedIso);
+      if (!isNaN(parsedDate.getTime())) {
+        setLastAutoSaveTime(parsedDate);
+        setDraftSaveStatus('saved');
+      }
+    } else {
+      setDraftSaveStatus('idle');
+    }
+
+    setTimeout(() => {
+      isHydratingDraftRef.current = false;
+    }, 150);
   };
 
   // Persistencia de Respaldo Local en LocalStorage para prevenir pérdida de datos
@@ -1446,6 +1468,7 @@ export default function App({ user }: { user: any }) {
           selectedZonals: d.selected_zonals || [],
           photos: d.photos || [],
           createdAt: d.created_at,
+          updatedAt: d.updated_at || d.created_at || new Date().toISOString(),
           supervisorName: d.supervisor_name || '',
           createdBy: d.created_by || ''
         }));
@@ -1501,6 +1524,7 @@ export default function App({ user }: { user: any }) {
 
   const syncDraftToSupabase = async (draft: TruckDraft) => {
     if (!draft || !draft.id) return;
+    const nowIso = new Date().toISOString();
     try {
       await supabase.from('active_truck_drafts').upsert([{
         id: draft.id,
@@ -1519,7 +1543,7 @@ export default function App({ user }: { user: any }) {
         photos: draft.photos || [],
         supervisor_name: draft.supervisorName ? draft.supervisorName : (supervisorName || ''),
         created_by: draft.createdBy ? draft.createdBy : (user?.email || ''),
-        updated_at: new Date().toISOString()
+        updated_at: draft.updatedAt || nowIso
       }], { onConflict: 'id' });
     } catch (e) {
       console.error('Error sincronizando borrador en Supabase:', e);
@@ -1676,6 +1700,7 @@ export default function App({ user }: { user: any }) {
     if (!activeDraftId) return;
 
     setSaveProgressLoading(true);
+    setDraftSaveStatus('saving');
     try {
       const fullChecklist = {
         ...checklist,
@@ -1700,6 +1725,7 @@ export default function App({ user }: { user: any }) {
         }
       }
 
+      const nowIso = new Date().toISOString();
       const currentDraft: TruckDraft = {
         id: targetId,
         truckNumber: truckNumber || '',
@@ -1716,14 +1742,25 @@ export default function App({ user }: { user: any }) {
         selectedZonals,
         photos,
         createdAt: new Date().toISOString(),
+        updatedAt: nowIso,
         supervisorName: supervisorName || '',
         createdBy: user?.email || ''
       };
 
       await syncDraftToSupabase(currentDraft);
-      await fetchActiveDraftsFromSupabase(false);
 
-      const timeStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      // Actualizar borradores locales y persistencia
+      setTruckDrafts(prev => {
+        const updated = prev.map(d => d.id === targetId ? currentDraft : d);
+        saveBackupDraftsToLocalStorage(updated);
+        return updated;
+      });
+
+      const now = new Date();
+      setLastAutoSaveTime(now);
+      setDraftSaveStatus('saved');
+
+      const timeStr = now.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setSaveProgressToast(`Avance guardado a las ${timeStr} hrs. Disponible en el Historial como "EN CARGA".`);
 
       setTimeout(() => {
@@ -1731,6 +1768,7 @@ export default function App({ user }: { user: any }) {
       }, 5000);
     } catch (err) {
       console.error('Error al guardar avance:', err);
+      setDraftSaveStatus('error');
       alert('Ocurrió un error al guardar el avance.');
     } finally {
       setSaveProgressLoading(false);
@@ -1750,7 +1788,7 @@ export default function App({ user }: { user: any }) {
         luces_encendidas:    (checklist as any).luces_encendidas,
         separador_termico:   (checklist as any).separador_termico,
         lingas_camion:       (checklist as any).lingas_camion,
-        colchonetas_comment: lingasComment,
+        colchonetas_comment: colchonetasComment,
         lingas_comment:      lingasComment,
         // fotos explícitamente excluidas para mantener payload liviano
       };
@@ -1760,6 +1798,8 @@ export default function App({ user }: { user: any }) {
         const { photos: _p, ...rest } = z;
         return rest;
       });
+
+      const nowIso = new Date().toISOString();
 
       await supabase.from('active_truck_drafts').upsert([{
         id: activeDraftId,
@@ -1778,8 +1818,15 @@ export default function App({ user }: { user: any }) {
         photos:             [], // sin fotos globales en auto-save
         supervisor_name:    supervisorName || '',
         created_by:         user?.email || '',
-        updated_at:         new Date().toISOString()
+        updated_at:         nowIso
       }], { onConflict: 'id' });
+
+      // Actualizar updatedAt en la copia local
+      setTruckDrafts(prev => {
+        const updated = prev.map(d => d.id === activeDraftId ? { ...d, updatedAt: nowIso } : d);
+        saveBackupDraftsToLocalStorage(updated);
+        return updated;
+      });
 
       setAutoSaveRetries(0);
       return true;
@@ -1811,14 +1858,15 @@ export default function App({ user }: { user: any }) {
     }
   }, [user]);
 
-  // ── B: Marcar como "unsaved" cuando cambia cualquier dato del formulario ──
+  // ── B: Marcar como "unsaved" cuando el usuario cambia datos del formulario ──
   useEffect(() => {
-    if (!activeDraftId) return;
+    if (!activeDraftId || isHydratingDraftRef.current) return;
     setDraftSaveStatus('unsaved');
   }, [
     truckNumber, truckPlate, truckAnden, positionsOccupied, observations,
     temp1er, temp2do, temp3er, closeTime, truckKilos,
-    checklist, selectedZonals, activeDraftId
+    checklist, lingasPhotos, lingasComment, colchonetasPhotos, colchonetasComment,
+    selectedZonals, photos, activeDraftId
   ]);
 
   // ── A: Auto-guardado cada 5 minutos (sin fotos) + C: reintentos ──────────
@@ -3550,13 +3598,9 @@ export default function App({ user }: { user: any }) {
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     type="button"
-                    onClick={async () => {
-                      await handleSaveProgress();
-                      setDraftSaveStatus('saved');
-                      setLastAutoSaveTime(new Date());
-                    }}
+                    onClick={handleSaveProgress}
                     disabled={saveProgressLoading}
-                    className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
+                    className="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
                     title="Guarda tu avance en la nube sin salir del formulario"
                   >
                     {saveProgressLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
@@ -3566,8 +3610,9 @@ export default function App({ user }: { user: any }) {
                   {/* ── B: Badge de estado del guardado ── */}
                   {activeDraftId && (() => {
                     if (draftSaveStatus === 'saving') return (
-                      <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg animate-pulse select-none">
-                        <RefreshCw className="w-3 h-3 animate-spin" /> Guardando...
+                      <span className="flex items-center gap-1.5 text-[11px] font-black text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-1.5 rounded-xl animate-pulse select-none shadow-2xs">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-700" />
+                        <span>Guardando...</span>
                       </span>
                     );
                     if (draftSaveStatus === 'error') return (
@@ -3580,18 +3625,30 @@ export default function App({ user }: { user: any }) {
                           if (ok) { setLastAutoSaveTime(new Date()); setDraftSaveStatus('saved'); }
                           else setDraftSaveStatus('error');
                         }}
-                        className="flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-300 px-2 py-1 rounded-lg cursor-pointer hover:bg-rose-100 transition-all select-none"
+                        className="flex items-center gap-1.5 text-[11px] font-black text-rose-800 bg-rose-50 border border-rose-300 px-2.5 py-1.5 rounded-xl cursor-pointer hover:bg-rose-100 transition-all select-none shadow-2xs"
                       >
-                        ⚠️ Error{autoSaveRetries > 0 ? ` (intento ${autoSaveRetries}/3)` : ''} · Reintentar
+                        <span>⚠️ Error{autoSaveRetries > 0 ? ` (intento ${autoSaveRetries}/3)` : ''} · Reintentar</span>
                       </button>
                     );
-                    if (draftSaveStatus === 'saved' && lastAutoSaveTime) return (
-                      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg select-none">
-                        ✅ Guardado {lastAutoSaveTime.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    );
+                    if (lastAutoSaveTime) {
+                      const timeStr = lastAutoSaveTime.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+                      if (draftSaveStatus === 'saved' || draftSaveStatus === 'idle') {
+                        return (
+                          <span className="flex items-center gap-1.5 text-[11px] font-black text-emerald-900 bg-emerald-100 border border-emerald-300 px-2.5 py-1.5 rounded-xl select-none shadow-2xs" title={`Último avance guardado con éxito a las ${timeStr} hrs`}>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>Guardado {timeStr} hrs</span>
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="flex items-center gap-1.5 text-[11px] font-black text-amber-900 bg-amber-100/90 border border-amber-300 px-2.5 py-1.5 rounded-xl select-none shadow-2xs" title={`Hay cambios sin guardar. Último guardado registrado: ${timeStr} hrs`}>
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                          <span>Último guardado: {timeStr} hrs</span>
+                        </span>
+                      );
+                    }
                     if (draftSaveStatus === 'unsaved') return (
-                      <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg select-none">
+                      <span className="flex items-center gap-1.5 text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-xl select-none">
                         🟡 Sin guardar
                       </span>
                     );
