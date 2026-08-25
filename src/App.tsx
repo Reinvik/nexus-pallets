@@ -3044,6 +3044,68 @@ export default function App({ user }: { user: any }) {
     setTimeout(() => setAlertCopiedToast(false), 3000);
   };
 
+  const handleDownloadAllFailurePhotos = () => {
+    if (!failureAlertModal) return;
+    let count = 0;
+    const plateClean = (failureAlertModal.plate || 'Camion').replace(/[^a-zA-Z0-9]/g, '_');
+    failureAlertModal.failures.forEach((f) => {
+      (f.photos || []).forEach((photoUrl, pIdx) => {
+        count++;
+        const a = document.createElement('a');
+        a.href = photoUrl;
+        const itemClean = (f.itemKey || 'evidencia').replace(/[^a-zA-Z0-9]/g, '_');
+        a.download = `Evidencia_${plateClean}_${itemClean}_${pIdx + 1}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      });
+    });
+    if (count === 0) {
+      alert('No hay fotos de evidencia registradas para esta patente.');
+    }
+  };
+
+  const handleCopyImageToClipboard = async (photoUrl: string) => {
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = photoUrl;
+      await new Promise((resolve, reject) => {
+        img.onload = () => resolve(true);
+        img.onerror = () => reject(new Error('Error al cargar imagen'));
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(async (blob) => {
+          if (blob && navigator.clipboard && (window as any).ClipboardItem) {
+            await navigator.clipboard.write([
+              new ClipboardItem({ 'image/png': blob })
+            ]);
+            alert('¡Foto copiada al portapapeles! Puedes pegarla directamente en tu correo con Ctrl + V.');
+          } else {
+            const a = document.createElement('a');
+            a.href = photoUrl;
+            a.download = 'foto_evidencia.jpg';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }
+        }, 'image/png');
+      }
+    } catch (e) {
+      const a = document.createElement('a');
+      a.href = photoUrl;
+      a.download = 'foto_evidencia.jpg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  };
+
   const getMissingDispatchData = (): string[] => {
     const missing: string[] = [];
 
@@ -10935,20 +10997,50 @@ export default function App({ user }: { user: any }) {
 
                         {/* MINIATURAS DE FOTOS DE EVIDENCIA ASOCIADAS */}
                         {f.photos && f.photos.length > 0 && (
-                          <div className="space-y-1 pt-1">
-                            <span className="text-[10px] font-black uppercase tracking-wider block opacity-90">
-                              📷 Fotos de Evidencia ({f.photos.length}):
-                            </span>
-                            <div className="flex items-center gap-2 flex-wrap">
+                          <div className="space-y-1.5 pt-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black uppercase tracking-wider block opacity-90">
+                                📷 Fotos de Evidencia ({f.photos.length}):
+                              </span>
+                              <span className="text-[9px] text-slate-500 font-bold">
+                                Clic en "Copiar" para pegar en el correo con Ctrl+V
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2.5 flex-wrap">
                               {f.photos.map((pUrl, pIdx) => (
-                                <img
-                                  key={pIdx}
-                                  src={pUrl}
-                                  alt={`Evidencia ${pIdx + 1}`}
-                                  className="w-16 h-16 rounded-xl object-cover border-2 border-rose-400 cursor-pointer hover:scale-105 transition-transform shadow-xs bg-white"
-                                  onClick={() => openPhotoGallery(f.photos, pIdx)}
-                                  title="Clic para ampliar foto"
-                                />
+                                <div key={pIdx} className="relative group bg-white rounded-xl border border-slate-300 p-1 shadow-2xs">
+                                  <img
+                                    src={pUrl}
+                                    alt={`Evidencia ${pIdx + 1}`}
+                                    className="w-16 h-16 rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                    onClick={() => openPhotoGallery(f.photos, pIdx)}
+                                    title="Clic para ampliar foto"
+                                  />
+                                  <div className="flex items-center justify-between gap-1 mt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyImageToClipboard(pUrl)}
+                                      className="text-[8.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded transition-all cursor-pointer flex items-center gap-0.5"
+                                      title="Copiar imagen al portapapeles para pegar con Ctrl+V en Outlook"
+                                    >
+                                      <Copy className="w-2.5 h-2.5" />
+                                      <span>Copiar</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const a = document.createElement('a');
+                                        a.href = pUrl;
+                                        a.download = `Evidencia_${failureAlertModal.plate}_${pIdx + 1}.jpg`;
+                                        a.click();
+                                      }}
+                                      className="text-[8.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded transition-all cursor-pointer"
+                                      title="Descargar esta foto"
+                                    >
+                                      ⬇️
+                                    </button>
+                                  </div>
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -10974,6 +11066,18 @@ export default function App({ user }: { user: any }) {
                 </pre>
               </div>
 
+              {/* GUÍA DE ADJUNTO DE FOTOS EN OUTLOOK */}
+              <div className="bg-sky-50 border border-sky-200 p-3 rounded-2xl text-[11px] space-y-1 text-sky-950">
+                <strong className="block font-black text-sky-900">💡 ¿Cómo adjuntar las fotos al correo?</strong>
+                <p className="text-sky-800 text-[10.5px]">
+                  Por restricciones de seguridad de los navegadores y de Outlook/Gmail, ningún sitio web puede adjuntar archivos locales automáticamente.
+                  <br />
+                  • <strong>Opción 1:</strong> Presiona <strong>"Copiar"</strong> en cualquier foto arriba y pégala con <strong>Ctrl + V</strong> directamente dentro del cuerpo de tu correo.
+                  <br />
+                  • <strong>Opción 2:</strong> Presiona <strong>"Descargar Todas las Fotos"</strong> abajo y arrastra los archivos descargados a tu mensaje.
+                </p>
+              </div>
+
               {/* VISTA PREVIA DEL ASUNTO */}
               <div className="bg-slate-100 p-3 rounded-xl border border-slate-200 text-slate-700 text-[11px]">
                 <strong className="text-slate-900 block font-black mb-0.5">Asunto del Correo:</strong>
@@ -10984,15 +11088,29 @@ export default function App({ user }: { user: any }) {
 
             {/* BOTONES DE ACCIÓN FOOTER */}
             <div className="bg-slate-50 p-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0">
-              <button
-                type="button"
-                onClick={handleCopyFailureReport}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
-                title="Copiar texto formateado para pegar en WhatsApp o Teams"
-              >
-                <Copy className="w-4 h-4 text-slate-500" />
-                <span>Copiar Reporte</span>
-              </button>
+              <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleCopyFailureReport}
+                  className="px-3.5 py-2.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
+                  title="Copiar texto formateado para pegar en WhatsApp o Teams"
+                >
+                  <Copy className="w-4 h-4 text-slate-500" />
+                  <span>Copiar Reporte</span>
+                </button>
+
+                {failureAlertModal.failures.some(f => f.photos && f.photos.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadAllFailurePhotos}
+                    className="px-3.5 py-2.5 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
+                    title="Descarga todas las fotos de evidencia al computador para adjuntarlas a Outlook"
+                  >
+                    <FileDown className="w-4 h-4 text-amber-700" />
+                    <span>📥 Descargar Todas las Fotos ({failureAlertModal.failures.reduce((s, f) => s + (f.photos?.length || 0), 0)})</span>
+                  </button>
+                )}
+              </div>
 
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button
