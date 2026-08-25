@@ -3409,9 +3409,9 @@ export default function App({ user }: { user: any }) {
               className="w-12 h-12 object-contain bg-white rounded-lg p-0.5 shadow-sm" 
             />
             <div>
-              <h1 className="text-lg font-black tracking-wider leading-none">CONTROL DESPACHO</h1>
+              <h1 className="text-lg font-black tracking-wider leading-none">CONTROL OUTBOUND</h1>
               <span className="text-[10px] text-emerald-300 font-bold tracking-widest uppercase">
-                Control de Despacho Táctil
+                Control de Despacho Táctil — Outbound
               </span>
             </div>
           </div>
@@ -11106,7 +11106,7 @@ export default function App({ user }: { user: any }) {
       )}
 
       <footer className="bg-slate-100 border-t border-slate-200 text-slate-400 py-4 text-center text-[10px] font-semibold uppercase tracking-wider shrink-0 mt-auto">
-        CIAL Alimentos — Control Despacho v1.1.0 (2026)
+        CIAL Alimentos — Control Outbound v1.1.0 (2026)
       </footer>
 
     </div>
