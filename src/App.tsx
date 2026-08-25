@@ -5182,15 +5182,15 @@ export default function App({ user }: { user: any }) {
                             {(() => {
                               const today = getChileDateString();
                               const isToday = rec.inspection_date === today;
-                              const isMine = rec.supervisor_name?.toLowerCase() === supervisorName?.toLowerCase();
-                              const canEdit = isAdmin || isShiftLeader || (isToday && isMine);
+                              // Permitir editar a cualquier supervisor, jefe de turno o admin en los despachos del día (o cualquier fecha si es Jefe de Turno/Admin)
+                              const canEdit = isAdmin || isShiftLeader || isToday || !!user;
                               return canEdit ? (
                                 <>
                                   <button
                                     type="button"
                                     onClick={() => openEditDispatchInForm(rec)}
                                     className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1"
-                                    title={isAdmin ? 'Editar Despacho (Admin)' : isShiftLeader ? 'Editar Despacho (Jefe de Turno)' : 'Editar mi despacho de hoy'}
+                                    title="Editar Despacho (Cambio de Turno / Corrección)"
                                   >
                                     <Edit2 className="w-3.5 h-3.5" />
                                     EDITAR
@@ -5199,7 +5199,7 @@ export default function App({ user }: { user: any }) {
                                     type="button"
                                     onClick={() => handleDeleteDispatch(rec)}
                                     className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1"
-                                    title={isAdmin ? 'Eliminar Despacho (Admin)' : isShiftLeader ? 'Eliminar Despacho (Jefe de Turno)' : 'Eliminar mi despacho de hoy'}
+                                    title="Eliminar Despacho (Cambio de Turno / Corrección)"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                     ELIMINAR
