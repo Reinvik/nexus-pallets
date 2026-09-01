@@ -2629,6 +2629,13 @@ export default function App({ user }: { user: any }) {
 
   // Cargar un despacho guardado desde el historial directamente a la pantalla de Despacho Camión para reeditarlo
   const openEditDispatchInForm = async (rec: DispatchRecord) => {
+    const today = getChileDateString();
+    const isToday = rec.inspection_date === today;
+    if (!isAdmin && !isToday) {
+      alert("⚠️ Acción no permitida:\n\nLos supervisores y jefes de turno solo pueden editar despachos del mismo día en horario de Chile.\n\nSolo los administradores pueden modificar registros históricos de días anteriores.");
+      return;
+    }
+
     let fullRec = rec;
     const clCheck = (rec.checklist as any) || {};
     if (!clCheck.photos && !clCheck.colchonetas_photos && !clCheck.lingas_photos) {
@@ -2677,6 +2684,14 @@ export default function App({ user }: { user: any }) {
   const handleSaveEditDispatch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingDispatchRecord) return;
+
+    const today = getChileDateString();
+    const isToday = editingDispatchRecord.inspection_date === today;
+    if (!isAdmin && !isToday) {
+      alert("⚠️ Solo los administradores pueden guardar modificaciones en despachos de días anteriores.");
+      return;
+    }
+
     setEditingSaveLoading(true);
 
     try {
@@ -2748,8 +2763,15 @@ export default function App({ user }: { user: any }) {
     setEditingZonalsDetail(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Eliminar despacho (Admin, Jefe de Turno o Supervisor creador de hoy)
+  // Eliminar despacho (Admin para cualquier fecha, Supervisores/Jefes de Turno solo para el mismo día en horario Chile)
   const handleDeleteDispatch = async (rec: DispatchRecord) => {
+    const today = getChileDateString();
+    const isToday = rec.inspection_date === today;
+    if (!isAdmin && !isToday) {
+      alert("⚠️ Acción no permitida:\n\nLos supervisores y jefes de turno solo pueden eliminar despachos del mismo día en horario de Chile.\n\nSolo los administradores pueden eliminar registros históricos de días anteriores.");
+      return;
+    }
+
     const confirmMsg = `¿Estás seguro de eliminar permanentemente el despacho de ${rec.supervisor_name} (Camión: ${rec.truck_number}, Patente: ${rec.truck_plate})?\n\nEsta acción eliminará el registro y recalculará los saldos y monitores de salida.`;
     if (!window.confirm(confirmMsg)) return;
 
@@ -5082,14 +5104,16 @@ export default function App({ user }: { user: any }) {
                                     <span className={`font-mono font-black ${rec.close_time ? 'text-brand-primary' : 'text-slate-400 italic'}`}>
                                       {rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}
                                     </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: rec.close_time || '' }))}
-                                      className="text-slate-400 hover:text-brand-primary p-0.5 cursor-pointer"
-                                      title="Editar Hora de Cierre"
-                                    >
-                                      <Edit2 className="w-3 h-3" />
-                                    </button>
+                                    {(isAdmin || rec.inspection_date === getChileDateString()) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: rec.close_time || '' }))}
+                                        className="text-slate-400 hover:text-brand-primary p-0.5 cursor-pointer"
+                                        title="Editar Hora de Cierre"
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -5182,15 +5206,15 @@ export default function App({ user }: { user: any }) {
                             {(() => {
                               const today = getChileDateString();
                               const isToday = rec.inspection_date === today;
-                              // Permitir editar a cualquier supervisor, jefe de turno o admin en los despachos del día (o cualquier fecha si es Jefe de Turno/Admin)
-                              const canEdit = isAdmin || isShiftLeader || isToday || !!user;
+                              // Supervisores y Jefes de Turno SOLO pueden editar/eliminar despachos del MISMO DÍA (Horario Chile). Solo Administradores pueden modificar días pasados.
+                              const canEdit = isAdmin || isToday;
                               return canEdit ? (
                                 <>
                                   <button
                                     type="button"
                                     onClick={() => openEditDispatchInForm(rec)}
                                     className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1"
-                                    title="Editar Despacho (Cambio de Turno / Corrección)"
+                                    title={isAdmin ? "Editar Despacho (Modo Admin)" : "Editar Despacho de Hoy (Horario Chile)"}
                                   >
                                     <Edit2 className="w-3.5 h-3.5" />
                                     EDITAR
@@ -5199,7 +5223,7 @@ export default function App({ user }: { user: any }) {
                                     type="button"
                                     onClick={() => handleDeleteDispatch(rec)}
                                     className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1"
-                                    title="Eliminar Despacho (Cambio de Turno / Corrección)"
+                                    title={isAdmin ? "Eliminar Despacho (Modo Admin)" : "Eliminar Despacho de Hoy (Horario Chile)"}
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                     ELIMINAR
