@@ -4084,24 +4084,72 @@ export default function App({ user }: { user: any }) {
                 {/* Columna Derecha: Posiciones, Kilos y Fotos Lingas */}
                 <div className="space-y-4">
                   {/* POSICIONES OCUPADAS DENTRO DEL CAMIÓN */}
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold text-slate-500 uppercase">Posiciones Ocupadas dentro del Camión</label>
-                    <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="space-y-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-black text-slate-700 uppercase tracking-wide">
+                        Posiciones del Camión (Capacidad)
+                      </label>
+                      <span className="text-[10px] font-mono font-bold text-slate-500">
+                        Total bases: {totals.bases} / {positionsOccupied}
+                      </span>
+                    </div>
+
+                    {/* Botones Rápidos de Capacidad Estándar CIAL */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[9.5px] font-bold text-slate-400 uppercase mr-1">Rápido:</span>
+                      {[14, 24, 26, 28, 30, 32].map((pos) => (
+                        <button
+                          key={pos}
+                          type="button"
+                          onClick={() => setPositionsOccupied(pos)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-black font-mono transition-all cursor-pointer ${
+                            positionsOccupied === pos
+                              ? 'bg-brand-primary text-white shadow-xs scale-105 ring-2 ring-emerald-400/40'
+                              : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          {pos}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs mt-1">
                       <button 
                         type="button"
                         onClick={() => setPositionsOccupied(Math.max(1, positionsOccupied - 1))}
-                        className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg active:scale-95 transition-all shadow-sm cursor-pointer"
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 w-9 h-9 rounded-lg flex items-center justify-center font-bold text-lg active:scale-95 transition-all cursor-pointer border border-slate-200"
+                        title="Disminuir 1 posición"
                       >
                         <Minus className="w-4 h-4" />
                       </button>
-                      <div className="flex-1 text-center">
-                        <span className="text-3xl font-black text-brand-primary font-mono">{positionsOccupied}</span>
-                        <span className="text-[10px] text-slate-400 block font-bold mt-0.5">POSICIONES</span>
+                      
+                      <div className="flex-1 text-center flex items-center justify-center gap-1.5">
+                        <input
+                          type="number"
+                          min={1}
+                          max={40}
+                          value={positionsOccupied}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            if (!isNaN(val) && val >= 1) {
+                              setPositionsOccupied(Math.min(40, val));
+                            } else if (e.target.value === '') {
+                              setPositionsOccupied(0);
+                            }
+                          }}
+                          onBlur={() => {
+                            if (positionsOccupied < 1) setPositionsOccupied(26);
+                          }}
+                          className="w-16 text-center text-2xl font-black text-brand-primary font-mono bg-slate-50 border border-slate-200 rounded-lg py-0.5 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:bg-white"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">POS</span>
                       </div>
+
                       <button 
                         type="button"
-                        onClick={() => setPositionsOccupied(Math.min(30, positionsOccupied + 1))}
-                        className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg active:scale-95 transition-all shadow-sm cursor-pointer"
+                        onClick={() => setPositionsOccupied(Math.min(40, positionsOccupied + 1))}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 w-9 h-9 rounded-lg flex items-center justify-center font-bold text-lg active:scale-95 transition-all cursor-pointer border border-slate-200"
+                        title="Aumentar 1 posición"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
@@ -9645,7 +9693,7 @@ export default function App({ user }: { user: any }) {
                       onChange={(e) => setEditingPositions(Number(e.target.value))}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
                       min={0}
-                      max={30}
+                      max={40}
                     />
                   </div>
                   <div>
