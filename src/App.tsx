@@ -1113,39 +1113,25 @@ export default function App({ user }: { user: any }) {
     setStorageLoading(true);
     setCleanupDone(false);
     try {
-      const { data, error } = await supabase
-        .from('pallet_dispatches')
-        .select('id, inspection_date, supervisor_name, truck_number, zonals_detail')
-        .order('inspection_date', { ascending: false });
+      const { data, error } = await supabase.rpc('get_storage_analysis');
       if (error) throw error;
 
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 30);
-
-      const result: StorageRecord[] = (data || []).map(rec => {
-        const zonals = rec.zonals_detail || [];
-        let totalPhotos = 0;
-        let totalBytes = 0;
-        zonals.forEach((z: any) => {
-          const photos: string[] = z.photos || [];
-          totalPhotos += photos.length;
-          photos.forEach(p => { totalBytes += p.length * 0.75; }); // base64 → bytes
-        });
-        const recDate = new Date(rec.inspection_date);
-        return {
-          id: rec.id,
-          date: rec.inspection_date,
-          supervisor: rec.supervisor_name || '—',
-          truck: rec.truck_number || '—',
-          photoCount: totalPhotos,
-          sizeKB: Math.round(totalBytes / 1024),
-          isOld: recDate < cutoff,
-        };
-      }).filter(r => r.photoCount > 0);
+      const result: StorageRecord[] = (data || []).map((rec: any) => ({
+        id: rec.id,
+        date: rec.inspection_date,
+        supervisor: rec.supervisor_name || '—',
+        truck: rec.truck_number && rec.truck_number !== 'N/A' && rec.truck_number !== '—' 
+          ? rec.truck_number 
+          : (rec.truck_plate || '—'),
+        photoCount: rec.photo_count || 0,
+        sizeKB: rec.size_kb || 0,
+        isOld: !!rec.is_old,
+      }));
 
       setStorageRecords(result);
     } catch (err: any) {
-      alert('Error al analizar almacenamiento: ' + err.message);
+      console.error('Error al analizar almacenamiento:', err);
+      alert('Error al analizar almacenamiento: ' + (err.message || 'Error de conexión'));
     } finally {
       setStorageLoading(false);
     }
@@ -1155,26 +1141,20 @@ export default function App({ user }: { user: any }) {
     const oldRecords = storageRecords.filter(r => r.isOld);
     if (oldRecords.length === 0) { alert('No hay registros con fotos de más de 30 días.'); return; }
     const totalKB = oldRecords.reduce((sum, r) => sum + r.sizeKB, 0);
-    if (!window.confirm(`¿Eliminar fotos de ${oldRecords.length} despachos con más de 30 días?\n\nSe liberarán aprox. ${(totalKB / 1024).toFixed(1)} MB.\nLos registros de pallets se conservan, solo se borran las fotos.`)) return;
+    if (!window.confirm(`¿Eliminar fotos de ${oldRecords.length} despachos con más de 30 días?\n\nSe liberarán aprox. ${(totalKB / 1024).toFixed(1)} MB de base de datos.\nLos registros de pallets, zonales, horas y firmas se conservan al 100%, solo se borran las imágenes antiguas.`)) return;
 
     setCleanupLoading(true);
     try {
-      for (const rec of oldRecords) {
-        // Obtener los zonals_detail del registro y limpiar sus fotos
-        const { data } = await supabase
-          .from('pallet_dispatches')
-          .select('zonals_detail')
-          .eq('id', rec.id)
-          .single();
-        if (!data) continue;
-        const cleaned = (data.zonals_detail || []).map((z: any) => ({ ...z, photos: [] }));
-        await supabase.from('pallet_dispatches').update({ zonals_detail: cleaned }).eq('id', rec.id);
-      }
-      setSuccessMsg(`✅ Fotos eliminadas de ${oldRecords.length} despachos. Espacio liberado: ~${(totalKB / 1024).toFixed(1)} MB`);
+      const { data, error } = await supabase.rpc('clean_old_dispatch_photos', { days_threshold: 30 });
+      if (error) throw error;
+
+      const cleanedCount = data?.cleaned_dispatches || oldRecords.length;
+      setSuccessMsg(`✅ Fotos eliminadas de ${cleanedCount} despachos antiguos. Espacio liberado: ~${(totalKB / 1024).toFixed(1)} MB`);
       setCleanupDone(true);
       await analyzeStorage();
     } catch (err: any) {
-      alert('Error durante la limpieza: ' + err.message);
+      console.error('Error durante la limpieza:', err);
+      alert('Error durante la limpieza: ' + (err.message || 'Error de conexión'));
     } finally {
       setCleanupLoading(false);
     }
