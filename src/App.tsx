@@ -2852,6 +2852,14 @@ export default function App({ user }: { user: any }) {
     if (!rec.close_time || !rec.close_time.trim()) missing.push('Hora de Cierre del Camión');
     rec.zonals_detail?.forEach(z => {
       if (!z.sello || !String(z.sello).trim()) missing.push(`N° de Sello en Zonal "${z.zonal_name}"`);
+      const bCount = z.bandejas?.bandejas_count || 0;
+      const bPallets = (z.bandejas?.plastic_bases || 0) + 
+                       (z.bandejas?.wood_bases || 0) + 
+                       (z.bandejas?.plastic_extra || 0) + 
+                       (z.bandejas?.wood_extra || 0);
+      if (bCount === 0 && bPallets === 0) {
+        missing.push(`Sin Bandejas ingresadas en Zonal "${z.zonal_name}" (0 bandejas)`);
+      }
     });
     return missing;
   };
@@ -3135,6 +3143,16 @@ export default function App({ user }: { user: any }) {
     selectedZonals.forEach((z) => {
       if (!z.sello || !z.sello.trim()) {
         missing.push(`N° de Sello en Zonal "${z.zonal_name}"`);
+      }
+
+      // Validar si una zonal no tiene bandejas ingresadas
+      const bCount = z.bandejas?.bandejas_count || 0;
+      const bPallets = (z.bandejas?.plastic_bases || 0) + 
+                       (z.bandejas?.wood_bases || 0) + 
+                       (z.bandejas?.plastic_extra || 0) + 
+                       (z.bandejas?.wood_extra || 0);
+      if (bCount === 0 && bPallets === 0) {
+        missing.push(`Sin Bandejas ingresadas en Zonal "${z.zonal_name}" (0 bandejas / 0 pallets de bandejas)`);
       }
     });
 
@@ -4558,11 +4576,16 @@ export default function App({ user }: { user: any }) {
                                     {catName === 'bandejas' && (
                                       <div className="bg-slate-100/50 p-3 rounded-lg border border-slate-200/50 space-y-2">
                                         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-[10px] font-black text-slate-500 uppercase">Cantidad de Bandejas:</span>
                                             <span className="text-lg font-black text-brand-primary font-mono bg-white px-3 py-1 rounded border shadow-2xs">
                                               {catData.bandejas_count || 0}
                                             </span>
+                                            {(!catData.bandejas_count && !catData.plastic_bases && !catData.wood_bases) && (
+                                              <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded border border-amber-200">
+                                                ⚠️ Sin bandejas ingresadas
+                                              </span>
+                                            )}
                                           </div>
 
                                           <div className="flex items-center gap-2">
