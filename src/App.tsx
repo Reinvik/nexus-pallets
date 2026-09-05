@@ -2241,19 +2241,15 @@ export default function App({ user }: { user: any }) {
 
     let container: HTMLDivElement | null = null;
     try {
-      // Cargar la firma base64 y datos completos (incluyendo sellos) si no están presentes
-      const needsFullDetail = (rec.signed_by && !rec.signature_b64) ||
-        rec.zonals_detail?.some((z: any) => z.sello === undefined || z.sello === null);
-      if (needsFullDetail) {
-        const detail = await fetchFullDispatchDetail(rec.id);
-        if (detail) {
-          rec = {
-            ...rec,
-            signature_b64: detail.signature_b64 ?? rec.signature_b64,
-            // zonals_detail del registro completo incluye el sello y photos
-            zonals_detail: detail.zonals_detail ?? rec.zonals_detail,
-          };
-        }
+      // Cargar siempre el detalle completo con todas las fotos de zonales, colchonetas, lingas y firma
+      const detail = await fetchFullDispatchDetail(rec.id);
+      if (detail) {
+        rec = {
+          ...rec,
+          signature_b64: detail.signature_b64 ?? rec.signature_b64,
+          zonals_detail: detail.zonals_detail ?? rec.zonals_detail,
+          checklist: detail.checklist ?? rec.checklist
+        };
       }
 
       // Convertir el logo a Base64 para incrustación directa sin llamadas de red
@@ -2459,26 +2455,115 @@ export default function App({ user }: { user: any }) {
               </td>
             </tr>
             ${(() => {
-              const zonalPhotos = rec.zonals_detail.flatMap(z => z.photos || []);
-              const legacyPhotos = (rec.checklist as any)?.photos || [];
-              const allPhotos = [...zonalPhotos, ...legacyPhotos];
-              if (allPhotos.length === 0) return '';
+              const chk = (rec.checklist as any) || {};
+              const colchonetasPhotos: string[] = chk.colchonetas_photos || [];
+              const lingasPhotos: string[] = chk.lingas_photos || [];
+              const legacyPhotos: string[] = chk.photos || [];
 
-              // Tamaño dinámico balanceado de fotos para aprovechar el espacio de forma óptima
-              let photoHeight = '65px';
-              if (allPhotos.length > 8) {
-                photoHeight = '50px';
-              } else if (allPhotos.length > 4) {
-                photoHeight = '56px';
+              const zonalsWithInfo = rec.zonals_detail || [];
+              const totalPhotosCount = zonalsWithInfo.reduce((acc, z) => acc + (z.photos?.length || 0), 0) +
+                                       colchonetasPhotos.length + lingasPhotos.length + legacyPhotos.length;
+
+              const photoThumbStyle = "height: 48px; width: auto; max-width: 23%; object-fit: cover; border: 1px solid #222; border-radius: 3px;";
+
+              let sectionsHtml = '';
+
+              // 1. Fotos separadas por cada Zonal
+              zonalsWithInfo.forEach((z, idx) => {
+                const zPhotos = z.photos || [];
+                sectionsHtml += `
+                  <div style="margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px dashed #ccc;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px;">
+                      <span style="font-size: 7.5px; font-weight: 900; text-transform: uppercase; color: #111;">
+                        📍 ZONAL ${idx + 1}: ${z.zonal_name} <span style="font-size: 7px; color: #555; font-weight: normal;">(${z.lugar_camion})</span>
+                      </span>
+                      <span style="font-size: 7px; font-weight: bold; color: ${zPhotos.length > 0 ? '#047857' : '#888'};">
+                        ${zPhotos.length > 0 ? `${zPhotos.length} foto(s)` : 'Sin fotos registradas'}
+                      </span>
+                    </div>
+                    ${zPhotos.length > 0 ? `
+                      <div style="display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap; align-items: center;">
+                        ${zPhotos.map((pUrl: string) => `<img src="${pUrl}" style="${photoThumbStyle}" />`).join('')}
+                      </div>
+                    ` : `
+                      <div style="font-size: 7px; color: #777; font-style: italic; margin-top: 1px;">
+                        No hay fotos disponibles para esta zonal.
+                      </div>
+                    `}
+                  </div>
+                `;
+              });
+
+              // 2. Fotos de Separador Térmico / Colchonetas
+              sectionsHtml += `
+                <div style="margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px dashed #ccc;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px;">
+                    <span style="font-size: 7.5px; font-weight: 900; text-transform: uppercase; color: #111;">
+                      🛡️ SEPARADOR TÉRMICO / COLCHONETAS
+                    </span>
+                    <span style="font-size: 7px; font-weight: bold; color: ${colchonetasPhotos.length > 0 ? '#047857' : '#888'};">
+                      ${colchonetasPhotos.length > 0 ? `${colchonetasPhotos.length} foto(s)` : 'Sin fotos'}
+                    </span>
+                  </div>
+                  ${colchonetasPhotos.length > 0 ? `
+                    <div style="display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap; align-items: center;">
+                      ${colchonetasPhotos.map((pUrl: string) => `<img src="${pUrl}" style="${photoThumbStyle}" />`).join('')}
+                    </div>
+                  ` : `
+                    <div style="font-size: 7px; color: #777; font-style: italic; margin-top: 1px;">
+                      No hay fotos disponibles de separador térmico.
+                    </div>
+                  `}
+                  ${chk.colchonetas_comment ? `<div style="font-size: 7px; color: #444; margin-top: 1px; font-weight: 600;">Observación: ${chk.colchonetas_comment}</div>` : ''}
+                </div>
+              `;
+
+              // 3. Fotos de Eslingas / Lingas por Camión
+              sectionsHtml += `
+                <div style="margin-bottom: 3px; padding-bottom: 2px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px;">
+                    <span style="font-size: 7.5px; font-weight: 900; text-transform: uppercase; color: #111;">
+                      ⛓️ ESLINGAS / LINGAS POR CAMIÓN
+                    </span>
+                    <span style="font-size: 7px; font-weight: bold; color: ${lingasPhotos.length > 0 ? '#047857' : '#888'};">
+                      ${lingasPhotos.length > 0 ? `${lingasPhotos.length} foto(s)` : 'Sin fotos'}
+                    </span>
+                  </div>
+                  ${lingasPhotos.length > 0 ? `
+                    <div style="display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap; align-items: center;">
+                      ${lingasPhotos.map((pUrl: string) => `<img src="${pUrl}" style="${photoThumbStyle}" />`).join('')}
+                    </div>
+                  ` : `
+                    <div style="font-size: 7px; color: #777; font-style: italic; margin-top: 1px;">
+                      No hay fotos disponibles de eslingas.
+                    </div>
+                  `}
+                  ${chk.lingas_comment ? `<div style="font-size: 7px; color: #444; margin-top: 1px; font-weight: 600;">Observación: ${chk.lingas_comment}</div>` : ''}
+                </div>
+              `;
+
+              // 4. Otras Fotos si existieran
+              if (legacyPhotos.length > 0) {
+                sectionsHtml += `
+                  <div style="margin-top: 2px; padding-top: 2px; border-top: 1px dashed #ccc;">
+                    <span style="font-size: 7.5px; font-weight: 900; text-transform: uppercase; color: #111; display: block; margin-bottom: 1px;">
+                      📷 OTRAS FOTOS DE INSPECCIÓN (${legacyPhotos.length}):
+                    </span>
+                    <div style="display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap; align-items: center;">
+                      ${legacyPhotos.map((pUrl: string) => `<img src="${pUrl}" style="${photoThumbStyle}" />`).join('')}
+                    </div>
+                  </div>
+                `;
               }
 
               return `
                 <tr>
                   <td colspan="2" style="border: 1px solid #000; padding: 4px 6px; background-color: #fafafa;">
-                    <div style="font-size: 8px; font-weight: 900; text-transform: uppercase; margin-bottom: 3px; color: #111;">RESPALDOS FOTOGRÁFICOS (${allPhotos.length}):</div>
-                    <div style="display: flex; gap: 5px; margin-top: 2px; flex-wrap: wrap; align-items: center;">
-                      ${allPhotos.map((pUrl: string) => `<img src="${pUrl}" style="height: ${photoHeight}; width: auto; max-width: 24%; object-fit: cover; border: 1.5px solid #000; border-radius: 4px;" />`).join('')}
+                    <div style="font-size: 8px; font-weight: 900; text-transform: uppercase; margin-bottom: 3px; color: #111; display: flex; justify-content: space-between; border-bottom: 1px solid #000; padding-bottom: 2px;">
+                      <span>RESPALDOS FOTOGRÁFICOS POR ZONAL Y EQUIPAMIENTO:</span>
+                      <span style="font-family: monospace; font-weight: 900; font-size: 8px; color: #000;">${totalPhotosCount > 0 ? `${totalPhotosCount} foto(s) registradas` : 'Sin fotos registradas'}</span>
                     </div>
+                    ${sectionsHtml}
                   </td>
                 </tr>
               `;
