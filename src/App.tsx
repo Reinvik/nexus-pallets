@@ -2464,7 +2464,7 @@ export default function App({ user }: { user: any }) {
               const totalPhotosCount = zonalsWithInfo.reduce((acc, z) => acc + (z.photos?.length || 0), 0) +
                                        colchonetasPhotos.length + lingasPhotos.length + legacyPhotos.length;
 
-              const photoThumbStyle = "height: 42px; width: auto; max-width: 31%; object-fit: cover; border: 1px solid #333; border-radius: 2px;";
+              const photoThumbStyle = "height: 38px; width: auto; max-width: 30%; object-fit: cover; border: 1px solid #475569; border-radius: 2px; box-sizing: border-box;";
 
               // 1. Grilla 2x2 para Fotos de Zonales (2 columnas)
               const zonalsHtml = `
@@ -2472,22 +2472,22 @@ export default function App({ user }: { user: any }) {
                   ${zonalsWithInfo.map((z, idx) => {
                     const zPhotos = z.photos || [];
                     return `
-                      <div style="width: calc(50% - 2px); box-sizing: border-box; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2.5px 4px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px;">
-                          <span style="font-size: 7px; font-weight: 900; text-transform: uppercase; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%;">
-                            📍 ${idx + 1}. ${z.zonal_name} <span style="font-size: 6.5px; color: #64748b; font-weight: normal;">(${z.lugar_camion})</span>
+                      <div style="width: calc(50% - 2px); box-sizing: border-box; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2px 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; line-height: 1.2; margin-bottom: 2px;">
+                          <span style="font-size: 6.5px; font-weight: 800; text-transform: uppercase; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 76%; font-family: Arial, sans-serif;">
+                            <strong style="color: #2563eb;">•</strong> ${idx + 1}. ${z.zonal_name} <span style="font-size: 5.5px; color: #64748b; font-weight: normal;">(${z.lugar_camion})</span>
                           </span>
-                          <span style="font-size: 6.5px; font-weight: bold; color: ${zPhotos.length > 0 ? '#059669' : '#94a3b8'};">
+                          <span style="font-size: 6px; font-weight: 800; font-family: monospace; color: ${zPhotos.length > 0 ? '#059669' : '#94a3b8'};">
                             ${zPhotos.length > 0 ? `${zPhotos.length} foto(s)` : 'Sin fotos'}
                           </span>
                         </div>
                         ${zPhotos.length > 0 ? `
-                          <div style="display: flex; gap: 3px; margin-top: 1.5px; flex-wrap: wrap; align-items: center;">
+                          <div style="display: flex; gap: 3px; flex-wrap: wrap; align-items: center;">
                             ${zPhotos.map((pUrl: string) => `<img src="${pUrl}" style="${photoThumbStyle}" />`).join('')}
                           </div>
                         ` : `
-                          <div style="font-size: 6.5px; color: #94a3b8; font-style: italic; margin-top: 1px;">
-                            No hay fotos disponibles de esta zonal.
+                          <div style="font-size: 5.5px; color: #94a3b8; font-style: italic; padding: 1px 0;">
+                            No hay fotos disponibles para esta zonal.
                           </div>
                         `}
                       </div>
@@ -2501,47 +2501,47 @@ export default function App({ user }: { user: any }) {
                 <div style="display: flex; gap: 4px; width: 100%; margin-top: 3px; box-sizing: border-box;">
                   
                   <!-- Columna Separador Térmico -->
-                  <div style="width: calc(50% - 2px); box-sizing: border-box; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2.5px 4px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px;">
-                      <span style="font-size: 7px; font-weight: 900; text-transform: uppercase; color: #0f172a;">
-                        🛡️ SEPARADOR TÉRMICO
+                  <div style="width: calc(50% - 2px); box-sizing: border-box; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2px 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; line-height: 1.2; margin-bottom: 2px;">
+                      <span style="font-size: 6.5px; font-weight: 800; text-transform: uppercase; color: #0f172a; font-family: Arial, sans-serif;">
+                        <strong style="color: #2563eb;">•</strong> SEPARADOR TÉRMICO
                       </span>
-                      <span style="font-size: 6.5px; font-weight: bold; color: ${colchonetasPhotos.length > 0 ? '#059669' : '#94a3b8'};">
+                      <span style="font-size: 6px; font-weight: 800; font-family: monospace; color: ${colchonetasPhotos.length > 0 ? '#059669' : '#94a3b8'};">
                         ${colchonetasPhotos.length > 0 ? `${colchonetasPhotos.length} foto(s)` : 'Sin fotos'}
                       </span>
                     </div>
                     ${colchonetasPhotos.length > 0 ? `
-                      <div style="display: flex; gap: 3px; margin-top: 1.5px; flex-wrap: wrap; align-items: center;">
+                      <div style="display: flex; gap: 3px; flex-wrap: wrap; align-items: center;">
                         ${colchonetasPhotos.map((pUrl: string) => `<img src="${pUrl}" style="${photoThumbStyle}" />`).join('')}
                       </div>
                     ` : `
-                      <div style="font-size: 6.5px; color: #94a3b8; font-style: italic; margin-top: 1px;">
+                      <div style="font-size: 5.5px; color: #94a3b8; font-style: italic; padding: 1px 0;">
                         No hay fotos disponibles de separador térmico.
                       </div>
                     `}
-                    ${chk.colchonetas_comment ? `<div style="font-size: 6.5px; color: #475569; margin-top: 1px; font-weight: 600;">Obs: ${chk.colchonetas_comment}</div>` : ''}
+                    ${chk.colchonetas_comment ? `<div style="font-size: 5.5px; color: #475569; margin-top: 1.5px; font-weight: 600; line-height: 1.1;">Obs: ${chk.colchonetas_comment}</div>` : ''}
                   </div>
 
                   <!-- Columna Eslingas / Lingas -->
-                  <div style="width: calc(50% - 2px); box-sizing: border-box; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2.5px 4px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px;">
-                      <span style="font-size: 7px; font-weight: 900; text-transform: uppercase; color: #0f172a;">
-                        ⛓️ ESLINGAS / LINGAS
+                  <div style="width: calc(50% - 2px); box-sizing: border-box; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2px 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; line-height: 1.2; margin-bottom: 2px;">
+                      <span style="font-size: 6.5px; font-weight: 800; text-transform: uppercase; color: #0f172a; font-family: Arial, sans-serif;">
+                        <strong style="color: #2563eb;">•</strong> ESLINGAS / LINGAS
                       </span>
-                      <span style="font-size: 6.5px; font-weight: bold; color: ${lingasPhotos.length > 0 ? '#059669' : '#94a3b8'};">
+                      <span style="font-size: 6px; font-weight: 800; font-family: monospace; color: ${lingasPhotos.length > 0 ? '#059669' : '#94a3b8'};">
                         ${lingasPhotos.length > 0 ? `${lingasPhotos.length} foto(s)` : 'Sin fotos'}
                       </span>
                     </div>
                     ${lingasPhotos.length > 0 ? `
-                      <div style="display: flex; gap: 3px; margin-top: 1.5px; flex-wrap: wrap; align-items: center;">
+                      <div style="display: flex; gap: 3px; flex-wrap: wrap; align-items: center;">
                         ${lingasPhotos.map((pUrl: string) => `<img src="${pUrl}" style="${photoThumbStyle}" />`).join('')}
                       </div>
                     ` : `
-                      <div style="font-size: 6.5px; color: #94a3b8; font-style: italic; margin-top: 1px;">
+                      <div style="font-size: 5.5px; color: #94a3b8; font-style: italic; padding: 1px 0;">
                         No hay fotos disponibles de eslingas.
                       </div>
                     `}
-                    ${chk.lingas_comment ? `<div style="font-size: 6.5px; color: #475569; margin-top: 1px; font-weight: 600;">Obs: ${chk.lingas_comment}</div>` : ''}
+                    ${chk.lingas_comment ? `<div style="font-size: 5.5px; color: #475569; margin-top: 1.5px; font-weight: 600; line-height: 1.1;">Obs: ${chk.lingas_comment}</div>` : ''}
                   </div>
 
                 </div>
@@ -2552,10 +2552,10 @@ export default function App({ user }: { user: any }) {
               if (legacyPhotos.length > 0) {
                 legacyHtml = `
                   <div style="margin-top: 2px; padding-top: 2px; border-top: 1px dashed #cbd5e1;">
-                    <span style="font-size: 7px; font-weight: 900; text-transform: uppercase; color: #0f172a; display: block; margin-bottom: 1px;">
-                      📷 OTRAS FOTOS DE INSPECCIÓN (${legacyPhotos.length}):
+                    <span style="font-size: 6.5px; font-weight: 800; text-transform: uppercase; color: #0f172a; display: block; margin-bottom: 1px;">
+                      <strong style="color: #2563eb;">•</strong> OTRAS FOTOS DE INSPECCIÓN (${legacyPhotos.length}):
                     </span>
-                    <div style="display: flex; gap: 3px; margin-top: 1px; flex-wrap: wrap; align-items: center;">
+                    <div style="display: flex; gap: 3px; flex-wrap: wrap; align-items: center;">
                       ${legacyPhotos.map((pUrl: string) => `<img src="${pUrl}" style="${photoThumbStyle}" />`).join('')}
                     </div>
                   </div>
@@ -2564,10 +2564,14 @@ export default function App({ user }: { user: any }) {
 
               return `
                 <tr>
-                  <td colspan="2" style="border: 1px solid #000; padding: 3px 5px; background-color: #f8fafc;">
-                    <div style="font-size: 7.5px; font-weight: 900; text-transform: uppercase; margin-bottom: 2px; color: #0f172a; display: flex; justify-content: space-between; border-bottom: 1px solid #000; padding-bottom: 1.5px;">
-                      <span>RESPALDOS FOTOGRÁFICOS POR ZONAL Y EQUIPAMIENTO:</span>
-                      <span style="font-family: monospace; font-weight: 900; font-size: 7.5px; color: #000;">${totalPhotosCount > 0 ? `${totalPhotosCount} foto(s) registradas` : 'Sin fotos registradas'}</span>
+                  <td colspan="2" style="border: 1px solid #000; padding: 3px 4px; background-color: #f8fafc;">
+                    <div style="background-color: #e2e8f0; padding: 2px 4px; border-radius: 2px; margin-bottom: 3px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #cbd5e1; height: 16px; box-sizing: border-box;">
+                      <span style="font-size: 6.5px; font-weight: 900; text-transform: uppercase; color: #0f172a; letter-spacing: 0.3px;">
+                        RESPALDOS FOTOGRÁFICOS POR ZONAL Y EQUIPAMIENTO:
+                      </span>
+                      <span style="font-family: monospace; font-weight: 900; font-size: 6.5px; color: #0f172a;">
+                        ${totalPhotosCount > 0 ? `${totalPhotosCount} FOTO(S) REGISTRADAS` : 'SIN FOTOS REGISTRADAS'}
+                      </span>
                     </div>
                     ${zonalsHtml}
                     ${equipmentHtml}
