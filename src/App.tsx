@@ -2234,6 +2234,29 @@ export default function App({ user }: { user: any }) {
     }
   };
 
+  // Helper para formatear fecha y hora de firma en horario de Chile
+  const formatSignatureDateTime = (isoDate?: string | null): string => {
+    if (!isoDate) return '';
+    try {
+      const d = new Date(isoDate);
+      const datePart = d.toLocaleDateString('es-CL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        timeZone: 'America/Santiago'
+      });
+      const timePart = d.toLocaleTimeString('es-CL', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'America/Santiago'
+      });
+      return `${datePart} ${timePart} hrs`;
+    } catch {
+      return isoDate;
+    }
+  };
+
   // Generar, Previsualizar e Imprimir / Descargar PDF de Despacho usando html2canvas + jsPDF
   const handleProcessPDF = async (rec: DispatchRecord, mode: 'preview' | 'download' = 'preview') => {
     if (generatingPdfId) return;
@@ -2596,13 +2619,13 @@ export default function App({ user }: { user: any }) {
               <td style="width: 55%; border: 1px solid #000; padding: 4px 6px; vertical-align: top; height: 30px;">
                 <strong>SUP. ENCARGADO:</strong> <span style="font-weight: 900; text-transform: uppercase; font-size: 12.5px; color: #000;">${rec.supervisor_name}</span>
               </td>
-              <td rowspan="2" style="width: 45%; border: 1px solid #000; padding: 4px 6px; text-align: center; vertical-align: middle; height: 66px; background-color: #fafafa;">
+              <td rowspan="2" style="width: 45%; border: 1px solid #000; padding: 2px 5px; text-align: center; vertical-align: middle; height: 66px; background-color: #fafafa;">
                 ${rec.signature_b64 ? `
                   <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; box-sizing: border-box; padding: 1px;">
-                    <img src="${rec.signature_b64}" style="height: 34px; width: auto; max-width: 95%; object-fit: contain; margin-top: -2px; margin-bottom: 2px;" />
+                    <img src="${rec.signature_b64}" style="height: 32px; width: auto; max-width: 95%; object-fit: contain; margin-top: -2px; margin-bottom: 2px;" />
                     <div style="font-size: 8px; font-weight: 900; color: #000; text-transform: uppercase; line-height: 1;">${signerName}</div>
                     <div style="font-size: 7px; font-weight: 800; color: #333; text-transform: uppercase; line-height: 1.1; margin-top: 1px;">${signerTitle}</div>
-                    <div style="font-size: 6.5px; color: #666; margin-top: 1px; line-height: 1;">Firma Digital: ${rec.signed_at ? new Date(rec.signed_at).toLocaleDateString('es-CL') : ''}</div>
+                    <div style="font-size: 6.5px; font-weight: bold; color: #444; margin-top: 1.5px; line-height: 1.1;">Firma, Fecha y Hora: <span style="font-family: monospace; font-weight: 900; color: #000;">${formatSignatureDateTime(rec.signed_at)}</span></div>
                   </div>
                 ` : `
                   <div style="font-size: 7.5px; color: #555; font-weight: bold; text-transform: uppercase; margin-bottom: 22px; letter-spacing: 0.5px;">Timbre y Firma</div>
@@ -5415,7 +5438,7 @@ export default function App({ user }: { user: any }) {
 
                             {/* BOTÓN FIRMAR (Sujeto a permiso can_sign) */}
                             {rec.signed_by ? (
-                              <span className="px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 select-none" title={`Firmado por ${rec.signed_by} (${rec.signed_by_title || 'Supervisor'}) el ${rec.signed_at ? new Date(rec.signed_at).toLocaleString('es-CL') : ''}`}>
+                              <span className="px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 select-none" title={`Firmado por ${rec.signed_by} (${rec.signed_by_title || 'Supervisor'}) - Firma, Fecha y Hora: ${rec.signed_at ? formatSignatureDateTime(rec.signed_at) : ''}`}>
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 FIRMADO
                               </span>
@@ -10267,7 +10290,7 @@ export default function App({ user }: { user: any }) {
                       <div>
                         <img src={userSignature} alt="Mi firma" className="h-16 object-contain mb-2" />
                         <p className="text-sm font-black text-slate-800">{userDisplayName || supervisorName}</p>
-                        <p className="text-xs text-slate-500"><strong className="text-violet-700 font-extrabold">{userTitle || (isAdmin ? 'Administrador' : isShiftLeader ? 'Jefe de Turno' : 'Supervisor')}</strong> · {new Date().toLocaleDateString('es-CL')} {new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="text-xs text-slate-500"><strong className="text-violet-700 font-extrabold">{userTitle || (isAdmin ? 'Administrador' : isShiftLeader ? 'Jefe de Turno' : 'Supervisor')}</strong> · Firma, Fecha y Hora: {new Date().toLocaleDateString('es-CL')} {new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} hrs</p>
                       </div>
                       <button
                         type="button"
