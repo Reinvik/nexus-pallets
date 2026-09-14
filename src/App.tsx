@@ -415,6 +415,8 @@ export default function App({ user }: { user: any }) {
   const [bitacoraCategoryFilter, setBitacoraCategoryFilter] = useState<string>('todos');
   const [bitacoraStatusFilter, setBitacoraStatusFilter] = useState<string>('todos');
   const [selectedBitacoraWeekKey, setSelectedBitacoraWeekKey] = useState<string | null>(null);
+  const [showBitacoraChart, setShowBitacoraChart] = useState<boolean>(false);
+  const [hoveredBitacoraWeekKey, setHoveredBitacoraWeekKey] = useState<string | null>(null);
 
   // Estado para Modal de Edición de Justificación de Atraso
   const [editingDelayModal, setEditingDelayModal] = useState<{ logItem: ZonalDepartureLog; delayEntry?: DelayLogEntry } | null>(null);
@@ -8202,235 +8204,342 @@ export default function App({ user }: { user: any }) {
                   }
                 });
 
+                const latestWeek = chartWeeks[chartWeeks.length - 1];
+
                 return (
-                  <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-                    {/* ENCABEZADO: VALOR ACTUAL Y META */}
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                      <div>
-                        <div className="flex items-baseline gap-3">
-                          <span className="text-4xl sm:text-5xl font-black text-slate-900 font-mono tracking-tight">
-                            {activeWeek.late}
-                          </span>
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-black border ${
-                            pctVsFirst > 0
-                              ? 'bg-rose-50 text-rose-600 border-rose-200'
-                              : pctVsFirst < 0
-                              ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
-                          }`}>
-                            {pctVsFirst > 0 ? `+${pctVsFirst}%` : `${pctVsFirst}%`} vs inicio
-                          </span>
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden transition-all">
+                    {/* CABECERA COLAPSIBLE: EXPANDIR / OCULTAR */}
+                    <button
+                      type="button"
+                      onClick={() => setShowBitacoraChart(prev => !prev)}
+                      className="w-full p-4 sm:p-5 flex items-center justify-between gap-4 text-left hover:bg-slate-50/90 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-2xl flex items-center justify-center transition-colors ${showBitacoraChart ? 'bg-rose-100 text-rose-700' : 'bg-rose-50 text-rose-600'}`}>
+                          <TrendingDown className="w-5 h-5" />
                         </div>
-                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider mt-1">
-                          VALOR ACTUAL (META: MINIMIZAR ≤ 1)
-                        </p>
-                      </div>
-
-                      {/* DETALLE SEMANA SELECCIONADA Y ACCESO RÁPIDO */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl font-mono">
-                          {activeWeek.label} ({getFormatDate(activeWeek.startStr)} - {getFormatDate(activeWeek.endStr)})
-                        </span>
-                        {selectedBitacoraWeekKey && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedBitacoraWeekKey(null)}
-                            className="text-[11px] font-bold text-rose-600 hover:text-rose-700 underline cursor-pointer"
-                          >
-                            Ver última semana
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* CONTENEDOR DEL GRÁFICO SVG RESPONSIVE */}
-                    <div className="w-full overflow-x-auto">
-                      <div className="min-w-[680px]">
-                        <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto select-none overflow-visible">
-                          <defs>
-                            <linearGradient id="lateGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.28" />
-                              <stop offset="85%" stopColor="#f43f5e" stopOpacity="0.03" />
-                              <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-                            </linearGradient>
-                          </defs>
-
-                          {/* Líneas horizontales de cuadrícula (Eje Y) */}
-                          {yTicks.map(val => {
-                            const yPos = bottomM - (val / maxVal) * innerHeight;
-                            return (
-                              <g key={val}>
-                                <line
-                                  x1={leftM}
-                                  y1={yPos}
-                                  x2={rightM}
-                                  y2={yPos}
-                                  stroke="#f1f5f9"
-                                  strokeWidth="1"
-                                />
-                                <text
-                                  x={leftM - 8}
-                                  y={yPos + 3}
-                                  textAnchor="end"
-                                  fontSize="9.5"
-                                  fill="#94a3b8"
-                                  fontFamily="monospace"
-                                  fontWeight="bold"
-                                >
-                                  {val}
-                                </text>
-                              </g>
-                            );
-                          })}
-
-                          {/* Línea horizontal de Meta ≤ 1 */}
-                          <line
-                            x1={leftM}
-                            y1={yMeta}
-                            x2={rightM}
-                            y2={yMeta}
-                            stroke="#f59e0b"
-                            strokeWidth="1.5"
-                            strokeDasharray="4 4"
-                          />
-                          <text
-                            x={rightM + 6}
-                            y={yMeta + 3}
-                            fill="#d97706"
-                            fontSize="9.5"
-                            fontWeight="bold"
-                            fontFamily="sans-serif"
-                          >
-                            Meta
-                          </text>
-
-                          {/* Área degradada bajo la curva */}
-                          {areaPath && (
-                            <path d={areaPath} fill="url(#lateGradient)" />
-                          )}
-
-                          {/* Curva continua de atrasos (Spline) */}
-                          {curvePath && (
-                            <path
-                              d={curvePath}
-                              fill="none"
-                              stroke="#e11d48"
-                              strokeWidth="3"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          )}
-
-                          {/* Puntos / Nodos circulares en cada semana */}
-                          {points.map((pt) => {
-                            const isSelected = activeWeek.key === pt.week.key;
-                            return (
-                              <g
-                                key={pt.week.key}
-                                className="cursor-pointer group"
-                                onClick={() => setSelectedBitacoraWeekKey(pt.week.key)}
-                              >
-                                {isSelected && (
-                                  <circle
-                                    cx={pt.x}
-                                    cy={pt.y}
-                                    r="8"
-                                    fill="#f43f5e"
-                                    opacity="0.2"
-                                    className="animate-pulse"
-                                  />
-                                )}
-                                <circle
-                                  cx={pt.x}
-                                  cy={pt.y}
-                                  r={isSelected ? 6 : 4}
-                                  fill={isSelected ? '#ffffff' : '#e11d48'}
-                                  stroke="#e11d48"
-                                  strokeWidth={isSelected ? 3 : 2}
-                                  className="transition-all hover:scale-125"
-                                />
-                                {/* Ticks Eje X (Nombre de la semana) */}
-                                <text
-                                  x={pt.x}
-                                  y={bottomM + 16}
-                                  textAnchor="middle"
-                                  fontSize="9.5"
-                                  fontWeight={isSelected ? '900' : 'bold'}
-                                  fill={isSelected ? '#e11d48' : '#64748b'}
-                                  fontFamily="sans-serif"
-                                >
-                                  {pt.week.label}
-                                </text>
-                                <title>{`${pt.week.label}: ${pt.week.late} atrasos (${getFormatDate(pt.week.startStr)} al ${getFormatDate(pt.week.endStr)})`}</title>
-                              </g>
-                            );
-                          })}
-                        </svg>
-                      </div>
-                    </div>
-
-                    {/* LEYENDA DEL GRÁFICO */}
-                    <div className="flex justify-center">
-                      <div className="inline-flex items-center gap-2 bg-rose-50 border border-rose-200/80 px-4 py-1.5 rounded-full text-xs font-black text-rose-700 shadow-2xs">
-                        <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Seguimiento de Atrasos semanales (Meta: ≤ 1)</span>
-                      </div>
-                    </div>
-
-                    {/* RESUMEN DESCRIPTIVO Y CAUSAS DE LA SEMANA SELECCIONADA */}
-                    <div className="border-t border-slate-200/80 pt-4 mt-2 space-y-2.5">
-                      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
-                        <h4 className="text-sm sm:text-base font-black text-slate-900">
-                          {activeWeek.label}: <span className="text-rose-600">{activeWeek.late} atrasos</span>,
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setBitacoraStartDate(activeWeek.startStr);
-                            setBitacoraEndDate(activeWeek.endStr);
-                            setBitacoraPeriod('personalizado');
-                          }}
-                          className="text-xs font-bold text-slate-600 hover:text-rose-600 flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <Search className="w-3.5 h-3.5" />
-                          <span>Ver estos {activeWeek.late} atrasos en la tabla inferior</span>
-                        </button>
-                      </div>
-
-                      {/* DESGLOSE POR CATEGORÍAS Y MOTIVOS */}
-                      <div className="space-y-1.5 pl-1">
-                        {Object.entries(activeWeek.categories).filter(([_, count]) => count > 0).length === 0 && activeWeek.late === 0 ? (
-                          <p className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            <span>¡Semana sin ningún atraso registrado! Cumplimiento perfecto de la meta.</span>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-sm sm:text-base font-black text-slate-900">
+                              Gráfico de Tendencia de Atrasos Semanales
+                            </h3>
+                            <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-extrabold px-2 py-0.5 rounded-full">
+                              Meta ≤ 1
+                            </span>
+                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full font-mono border ${
+                              latestWeek.late <= 1 
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}>
+                              {latestWeek.label}: {latestWeek.late} {latestWeek.late === 1 ? 'atraso' : 'atrasos'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {showBitacoraChart
+                              ? 'Haz clic aquí para contraer y ocultar el gráfico'
+                              : 'Haz clic para expandir el gráfico interactivo, ver la curva histórica y desglose causal'}
                           </p>
-                        ) : (
-                          <>
-                            {Object.entries(activeWeek.categories)
-                              .filter(([_, count]) => count > 0)
-                              .map(([cat, count]) => {
-                                const reasons = catGroupedReasons[cat] || [];
-                                const reasonsText = reasons.length > 0 ? reasons.slice(0, 3).join(', ') : 'Sin detalle específico registrado';
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          {showBitacoraChart ? 'Ocultar gráfico' : 'Expandir gráfico'}
+                        </span>
+                        <div className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                          {showBitacoraChart ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* CONTENIDO DEL GRÁFICO (EXPANDIDO) */}
+                    {showBitacoraChart && (
+                      <div className="p-5 sm:p-6 pt-3 border-t border-slate-100 space-y-4">
+                        {/* ENCABEZADO: VALOR ACTUAL Y META */}
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-baseline gap-3">
+                              <span className="text-4xl sm:text-5xl font-black text-slate-900 font-mono tracking-tight">
+                                {activeWeek.late}
+                              </span>
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-black border ${
+                                pctVsFirst > 0
+                                  ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                  : pctVsFirst < 0
+                                  ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}>
+                                {pctVsFirst > 0 ? `+${pctVsFirst}%` : `${pctVsFirst}%`} vs inicio
+                              </span>
+                            </div>
+                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider mt-1">
+                              VALOR ACTUAL (META: MINIMIZAR ≤ 1)
+                            </p>
+                          </div>
+
+                          {/* DETALLE SEMANA SELECCIONADA Y ACCESO RÁPIDO */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl font-mono">
+                              {activeWeek.label} ({getFormatDate(activeWeek.startStr)} - {getFormatDate(activeWeek.endStr)})
+                            </span>
+                            {selectedBitacoraWeekKey && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedBitacoraWeekKey(null)}
+                                className="text-[11px] font-bold text-rose-600 hover:text-rose-700 underline cursor-pointer"
+                              >
+                                Ver última semana
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* CONTENEDOR DEL GRÁFICO SVG RESPONSIVE */}
+                        <div className="w-full overflow-x-auto">
+                          <div className="min-w-[680px]">
+                            <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto select-none overflow-visible">
+                              <defs>
+                                <linearGradient id="lateGradient" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.28" />
+                                  <stop offset="85%" stopColor="#f43f5e" stopOpacity="0.03" />
+                                  <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                                </linearGradient>
+                              </defs>
+
+                              {/* Líneas horizontales de cuadrícula (Eje Y) */}
+                              {yTicks.map(val => {
+                                const yPos = bottomM - (val / maxVal) * innerHeight;
                                 return (
-                                  <p key={cat} className="text-xs font-medium text-slate-700">
-                                    <strong className="font-extrabold text-slate-900">{cat === 'Operación' ? 'Operativos' : cat}:</strong>{' '}
-                                    <span className="font-bold text-slate-800">{count} {count === 1 ? 'Evento' : 'Eventos'} con atraso</span>
-                                    {reasons.length > 0 && <span> por {reasonsText}</span>}
-                                    .
-                                  </p>
+                                  <g key={val}>
+                                    <line
+                                      x1={leftM}
+                                      y1={yPos}
+                                      x2={rightM}
+                                      y2={yPos}
+                                      stroke="#f1f5f9"
+                                      strokeWidth="1"
+                                    />
+                                    <text
+                                      x={leftM - 8}
+                                      y={yPos + 3}
+                                      textAnchor="end"
+                                      fontSize="9.5"
+                                      fill="#94a3b8"
+                                      fontFamily="monospace"
+                                      fontWeight="bold"
+                                    >
+                                      {val}
+                                    </text>
+                                  </g>
                                 );
                               })}
 
-                            {activeWeek.unjustifiedCount > 0 && (
-                              <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">
-                                <span>⚠️</span>
-                                <span>{activeWeek.unjustifiedCount} {activeWeek.unjustifiedCount === 1 ? 'evento pendiente' : 'eventos pendientes'} de ingresar justificación en bitácora.</span>
+                              {/* Línea horizontal de Meta ≤ 1 */}
+                              <line
+                                x1={leftM}
+                                y1={yMeta}
+                                x2={rightM}
+                                y2={yMeta}
+                                stroke="#f59e0b"
+                                strokeWidth="1.5"
+                                strokeDasharray="4 4"
+                              />
+                              <text
+                                x={rightM + 6}
+                                y={yMeta + 3}
+                                fill="#d97706"
+                                fontSize="9.5"
+                                fontWeight="bold"
+                                fontFamily="sans-serif"
+                              >
+                                Meta
+                              </text>
+
+                              {/* Área degradada bajo la curva */}
+                              {areaPath && (
+                                <path d={areaPath} fill="url(#lateGradient)" />
+                              )}
+
+                              {/* Curva continua de atrasos (Spline) */}
+                              {curvePath && (
+                                <path
+                                  d={curvePath}
+                                  fill="none"
+                                  stroke="#e11d48"
+                                  strokeWidth="3"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              )}
+
+                              {/* Puntos y guías por cada semana con hover suave y estable */}
+                              {points.map((pt) => {
+                                const isSelected = activeWeek.key === pt.week.key;
+                                const isHovered = hoveredBitacoraWeekKey === pt.week.key;
+                                const colWidth = chartWeeks.length > 1 ? innerWidth / (chartWeeks.length - 1) : 60;
+                                const hitX = pt.x - colWidth / 2;
+
+                                return (
+                                  <g key={pt.week.key}>
+                                    {/* Línea vertical guía */}
+                                    <line
+                                      x1={pt.x}
+                                      y1={topM - 5}
+                                      x2={pt.x}
+                                      y2={bottomM}
+                                      stroke={isSelected ? '#e11d48' : '#cbd5e1'}
+                                      strokeWidth={isSelected ? '1.5' : '1'}
+                                      strokeDasharray="3 3"
+                                      opacity={isSelected || isHovered ? (isSelected ? 0.6 : 0.4) : 0}
+                                      className="pointer-events-none"
+                                    />
+
+                                    {/* Halo exterior circular */}
+                                    {(isSelected || isHovered) && (
+                                      <circle
+                                        cx={pt.x}
+                                        cy={pt.y}
+                                        r={isSelected ? 9 : 7}
+                                        fill="#f43f5e"
+                                        opacity={isSelected ? 0.25 : 0.15}
+                                        className="pointer-events-none"
+                                      />
+                                    )}
+
+                                    {/* Círculo del nodo (sin scale CSS para evitar saltos raros) */}
+                                    <circle
+                                      cx={pt.x}
+                                      cy={pt.y}
+                                      r={isSelected ? 6 : (isHovered ? 5 : 3.5)}
+                                      fill={isSelected ? '#ffffff' : (isHovered ? '#be123c' : '#e11d48')}
+                                      stroke={isSelected ? '#e11d48' : '#ffffff'}
+                                      strokeWidth={isSelected ? 3 : 1.5}
+                                      className="pointer-events-none"
+                                    />
+
+                                    {/* Ticks Eje X (Nombre de la semana) */}
+                                    <text
+                                      x={pt.x}
+                                      y={bottomM + 16}
+                                      textAnchor="middle"
+                                      fontSize="9.5"
+                                      fontWeight={isSelected || isHovered ? '900' : '600'}
+                                      fill={isSelected ? '#e11d48' : (isHovered ? '#0f172a' : '#64748b')}
+                                      fontFamily="sans-serif"
+                                      className="pointer-events-none"
+                                    >
+                                      {pt.week.label}
+                                    </text>
+
+                                    {/* Tooltip flotante limpio en SVG al pasar el mouse */}
+                                    {isHovered && !isSelected && (
+                                      <g className="pointer-events-none">
+                                        <rect
+                                          x={Math.max(leftM, Math.min(rightM - 75, pt.x - 37))}
+                                          y={Math.max(5, pt.y - 28)}
+                                          width="74"
+                                          height="20"
+                                          rx="5"
+                                          fill="#0f172a"
+                                          opacity="0.9"
+                                        />
+                                        <text
+                                          x={Math.max(leftM, Math.min(rightM - 75, pt.x - 37)) + 37}
+                                          y={Math.max(5, pt.y - 28) + 13}
+                                          textAnchor="middle"
+                                          fill="#ffffff"
+                                          fontSize="9"
+                                          fontWeight="bold"
+                                          fontFamily="sans-serif"
+                                        >
+                                          {pt.week.late} {pt.week.late === 1 ? 'atraso' : 'atrasos'}
+                                        </text>
+                                      </g>
+                                    )}
+
+                                    {/* Hitbox invisible amplio para interacción fluida */}
+                                    <rect
+                                      x={hitX}
+                                      y={topM - 10}
+                                      width={colWidth}
+                                      height={innerHeight + 35}
+                                      fill="transparent"
+                                      className="cursor-pointer"
+                                      onMouseEnter={() => setHoveredBitacoraWeekKey(pt.week.key)}
+                                      onMouseLeave={() => setHoveredBitacoraWeekKey(null)}
+                                      onClick={() => setSelectedBitacoraWeekKey(pt.week.key)}
+                                    />
+                                  </g>
+                                );
+                              })}
+                            </svg>
+                          </div>
+                        </div>
+
+                        {/* LEYENDA DEL GRÁFICO */}
+                        <div className="flex justify-center">
+                          <div className="inline-flex items-center gap-2 bg-rose-50 border border-rose-200/80 px-4 py-1.5 rounded-full text-xs font-black text-rose-700 shadow-2xs">
+                            <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Seguimiento de Atrasos semanales (Meta: ≤ 1)</span>
+                          </div>
+                        </div>
+
+                        {/* RESUMEN DESCRIPTIVO Y CAUSAS DE LA SEMANA SELECCIONADA */}
+                        <div className="border-t border-slate-200/80 pt-4 mt-2 space-y-2.5">
+                          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+                            <h4 className="text-sm sm:text-base font-black text-slate-900">
+                              {activeWeek.label}: <span className="text-rose-600">{activeWeek.late} atrasos</span>,
+                            </h4>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBitacoraStartDate(activeWeek.startStr);
+                                setBitacoraEndDate(activeWeek.endStr);
+                                setBitacoraPeriod('personalizado');
+                              }}
+                              className="text-xs font-bold text-slate-600 hover:text-rose-600 flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Search className="w-3.5 h-3.5" />
+                              <span>Ver estos {activeWeek.late} atrasos en la tabla inferior</span>
+                            </button>
+                          </div>
+
+                          {/* DESGLOSE POR CATEGORÍAS Y MOTIVOS */}
+                          <div className="space-y-1.5 pl-1">
+                            {Object.entries(activeWeek.categories).filter(([_, count]) => count > 0).length === 0 && activeWeek.late === 0 ? (
+                              <p className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                <span>¡Semana sin ningún atraso registrado! Cumplimiento perfecto de la meta.</span>
                               </p>
+                            ) : (
+                              <>
+                                {Object.entries(activeWeek.categories)
+                                  .filter(([_, count]) => count > 0)
+                                  .map(([cat, count]) => {
+                                    const reasons = catGroupedReasons[cat] || [];
+                                    const reasonsText = reasons.length > 0 ? reasons.slice(0, 3).join(', ') : 'Sin detalle específico registrado';
+                                    return (
+                                      <p key={cat} className="text-xs font-medium text-slate-700">
+                                        <strong className="font-extrabold text-slate-900">{cat === 'Operación' ? 'Operativos' : cat}:</strong>{' '}
+                                        <span className="font-bold text-slate-800">{count} {count === 1 ? 'Evento' : 'Eventos'} con atraso</span>
+                                        {reasons.length > 0 && <span> por {reasonsText}</span>}
+                                        .
+                                      </p>
+                                    );
+                                  })}
+
+                                {activeWeek.unjustifiedCount > 0 && (
+                                  <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">
+                                    <span>⚠️</span>
+                                    <span>{activeWeek.unjustifiedCount} {activeWeek.unjustifiedCount === 1 ? 'evento pendiente' : 'eventos pendientes'} de ingresar justificación en bitácora.</span>
+                                  </p>
+                                )}
+                              </>
                             )}
-                          </>
-                        )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 );
               })()}
