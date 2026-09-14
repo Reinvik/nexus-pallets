@@ -417,6 +417,7 @@ export default function App({ user }: { user: any }) {
   const [selectedBitacoraWeekKey, setSelectedBitacoraWeekKey] = useState<string | null>(null);
   const [showBitacoraChart, setShowBitacoraChart] = useState<boolean>(false);
   const [hoveredBitacoraWeekKey, setHoveredBitacoraWeekKey] = useState<string | null>(null);
+  const [showSignPendingReminderModal, setShowSignPendingReminderModal] = useState<boolean>(false);
 
   // Estado para Modal de Edición de Justificación de Atraso
   const [editingDelayModal, setEditingDelayModal] = useState<{ logItem: ZonalDepartureLog; delayEntry?: DelayLogEntry } | null>(null);
@@ -1111,6 +1112,32 @@ export default function App({ user }: { user: any }) {
     }
   };
 
+  // Contar salidas con atraso que están pendientes de justificación en la bitácora
+  const getPendingDelaysCount = () => {
+    return zonalDepartureLogs.filter(log => {
+      if (log.is_on_time) return false;
+      const baseZonal = getBaseZonalName(log.zonal_name).toUpperCase();
+      const viajeNum = log.viaje_numero || 1;
+      const matchedEntry = delayLogs.find(d => 
+        d.departure_log_id === log.id || 
+        (getBaseZonalName(d.zonal_name).toUpperCase() === baseZonal && (d.viaje_numero || 1) === viajeNum && d.inspection_date === log.inspection_date)
+      );
+      return !matchedEntry || !matchedEntry.justification || !matchedEntry.justification.trim();
+    }).length;
+  };
+
+  // Navegar a la bitácora filtrada directamente por salidas pendientes de justificar
+  const goToBitacoraPending = () => {
+    setActiveTab('bitacora_atrasos');
+    setBitacoraStatusFilter('pendiente');
+    setBitacoraPeriod('todo');
+    setBitacoraCategoryFilter('todos');
+    setBitacoraSearchQuery('');
+    setSelectedBitacoraWeekKey(null);
+    fetchZonalDepartureLogs();
+    fetchDelayLogbook();
+  };
+
   // Estampar firma en despacho
   const handleSignDispatch = async () => {
     if (!signPreviewRecord || !userSignature) return;
@@ -1146,6 +1173,12 @@ export default function App({ user }: { user: any }) {
       ));
       setSignPreviewRecord(null);
       setSuccessMsg(`✅ Despacho firmado correctamente por ${userDisplayName || supervisorName} (${signedTitle}).`);
+
+      // Si existen atrasos pendientes de justificación en la bitácora, mostrar recordatorio modal
+      const pendingCount = getPendingDelaysCount();
+      if (pendingCount > 0) {
+        setShowSignPendingReminderModal(true);
+      }
     } catch (err: any) {
       alert('Error al firmar: ' + err.message);
     } finally {
@@ -7972,7 +8005,7 @@ export default function App({ user }: { user: any }) {
             };
           });
 
-          const justifiedCount = mappedDelays.filter(m => !!m.entry).length;
+          const justifiedCount = mappedDelays.filter(m => !!m.entry && !!m.entry.justification && !!m.entry.justification.trim()).length;
           const justifiedRate = totalLateCount > 0 ? Math.round((justifiedCount / totalLateCount) * 100) : 100;
           const avgDelayMinutes = totalLateCount > 0 ? Math.round(lateDepartureLogs.reduce((acc, l) => acc + (l.diff_minutes || 0), 0) / totalLateCount) : 0;
 
@@ -8006,10 +8039,11 @@ export default function App({ user }: { user: any }) {
             if (bitacoraCategoryFilter !== 'todos') {
               if (!entry || entry.category !== bitacoraCategoryFilter) return false;
             }
+            const isJustified = !!entry && !!entry.justification && !!entry.justification.trim();
             if (bitacoraStatusFilter === 'pendiente') {
-              if (!!entry) return false;
+              if (isJustified) return false;
             } else if (bitacoraStatusFilter === 'justificado') {
-              if (!entry) return false;
+              if (!isJustified) return false;
             }
 
             if (bitacoraSearchQuery.trim()) {
@@ -10773,6 +10807,40 @@ export default function App({ user }: { user: any }) {
                 })}
               </div>
 
+              {/* RECORDATORIO DE JUSTIFICACIONES PENDIENTES AL FIRMAR */}
+              {(() => {
+                const pCount = getPendingDelaysCount();
+                if (pCount === 0) return null;
+                return (
+                  <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl shrink-0 mt-0.5 sm:mt-0">
+                        <AlertTriangle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-black text-amber-900 leading-snug">
+                          Recordar que tiene pendiente justificaciones en la bitácora de hallazgos, favor validar
+                        </h4>
+                        <p className="text-[11px] font-bold text-amber-700 mt-0.5">
+                          Hay {pCount} {pCount === 1 ? 'evento de atraso pendiente' : 'eventos de atraso pendientes'} de justificar en la bitácora.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSignPreviewRecord(null);
+                        goToBitacoraPending();
+                      }}
+                      className="w-full sm:w-auto px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95 shrink-0"
+                    >
+                      <ClipboardList className="w-4 h-4" />
+                      <span>Ir a Bitácora con datos pendientes</span>
+                    </button>
+                  </div>
+                );
+              })()}
+
               {/* Separador */}
               <div className="border-t-2 border-dashed border-slate-200 pt-4">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3">Firma de aprobación</p>
@@ -10811,6 +10879,60 @@ export default function App({ user }: { user: any }) {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* MODAL RECORDATORIO AL FIRMAR: JUSTIFICACIONES PENDIENTES      */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {showSignPendingReminderModal && (
+        <div className="fixed inset-0 z-[99999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-7 space-y-5 border-2 border-amber-400 animate-fade-in">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-300 text-amber-600 flex items-center justify-center shrink-0 shadow-sm">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full mb-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Despacho Firmado Exitosamente
+                </span>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight mt-1 leading-snug">
+                  Recordar que tiene pendiente justificaciones en la bitácora de hallazgos, favor validar
+                </h3>
+              </div>
+            </div>
+
+            <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 text-xs font-semibold text-amber-900 space-y-1.5">
+              <p>
+                Actualmente existen <strong className="text-amber-950 font-black">{getPendingDelaysCount()} salidas con atraso</strong> que aún no cuentan con causa raíz o justificación registrada en la bitácora.
+              </p>
+              <p className="text-[11px] text-amber-700">
+                Favor ingresar a la bitácora para validar y completar los respaldos operacionales.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowSignPendingReminderModal(false)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-2xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 border border-slate-300"
+              >
+                Continuar en Historial
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSignPendingReminderModal(false);
+                  goToBitacoraPending();
+                }}
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-2xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-amber-500/20"
+              >
+                <ClipboardList className="w-4 h-4" />
+                <span>Ir a Bitácora con datos pendientes</span>
+              </button>
             </div>
           </div>
         </div>
