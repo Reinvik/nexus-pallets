@@ -34,6 +34,7 @@ import {
   Search,
   CheckCircle2,
   TrendingUp,
+  TrendingDown,
   Save,
   Mail,
   Copy,
@@ -234,6 +235,54 @@ export const getChileTimeString = (dateObj: Date = new Date()): string => {
   return formatter.format(dateObj);
 };
 
+/**
+ * Retorna la información de la semana ISO (año, semana, fechas inicio y fin) para una fecha YYYY-MM-DD.
+ */
+export const getISOWeekInfo = (dateStr: string) => {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const dayNum = d.getUTCDay() || 7;
+  const monday = new Date(d);
+  monday.setUTCDate(d.getUTCDate() - (dayNum - 1));
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+
+  const target = new Date(d);
+  target.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+
+  const formatD = (date: Date) => date.toISOString().slice(0, 10);
+  return {
+    year: target.getUTCFullYear(),
+    week: weekNo,
+    key: `${target.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`,
+    label: `Sem ${weekNo}`,
+    startStr: formatD(monday),
+    endStr: formatD(sunday)
+  };
+};
+
+/**
+ * Genera el path SVG en curva suave (Catmull-Rom spline) que une una lista de puntos { x, y }.
+ */
+export const getCatmullRomBezierPath = (pts: { x: number; y: number }[]): string => {
+  if (pts.length === 0) return '';
+  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = i > 0 ? pts[i - 1] : pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = i < pts.length - 2 ? pts[i + 2] : p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+};
+
 export const compareTimes = (actualTimeStr: string, targetTimeStr: string) => {
   const [aH, aM] = actualTimeStr.slice(0, 5).split(':').map(Number);
   const [tH, tM] = targetTimeStr.slice(0, 5).split(':').map(Number);
@@ -365,6 +414,7 @@ export default function App({ user }: { user: any }) {
   const [bitacoraSearchQuery, setBitacoraSearchQuery] = useState<string>('');
   const [bitacoraCategoryFilter, setBitacoraCategoryFilter] = useState<string>('todos');
   const [bitacoraStatusFilter, setBitacoraStatusFilter] = useState<string>('todos');
+  const [selectedBitacoraWeekKey, setSelectedBitacoraWeekKey] = useState<string | null>(null);
 
   // Estado para Modal de Edición de Justificación de Atraso
   const [editingDelayModal, setEditingDelayModal] = useState<{ logItem: ZonalDepartureLog; delayEntry?: DelayLogEntry } | null>(null);
@@ -8037,6 +8087,353 @@ export default function App({ user }: { user: any }) {
                   </button>
                 </div>
               </div>
+
+              {/* ══════════════════════════════════════════════════════════════ */}
+              {/* GRÁFICO SEMANAL DE ATRASOS (SEGUIMIENTO META ≤ 1)           */}
+              {/* ══════════════════════════════════════════════════════════════ */}
+              {(() => {
+                // 1. Agrupar la totalidad de salidas históricas por semana ISO
+                const allWeeksMap = new Map<string, {
+                  key: string;
+                  year: number;
+                  week: number;
+                  label: string;
+                  startStr: string;
+                  endStr: string;
+                  total: number;
+                  late: number;
+                  categories: { [key: string]: number };
+                  justifications: { category: string; text: string; zonal: string }[];
+                  unjustifiedCount: number;
+                }>();
+
+                zonalDepartureLogs.forEach(log => {
+                  const info = getISOWeekInfo(log.inspection_date);
+                  if (!allWeeksMap.has(info.key)) {
+                    allWeeksMap.set(info.key, {
+                      ...info,
+                      total: 0,
+                      late: 0,
+                      categories: { 'Operación': 0, 'Transporte': 0, 'Facturación': 0, 'Planificación': 0, 'Otro': 0 },
+                      justifications: [],
+                      unjustifiedCount: 0
+                    });
+                  }
+                  const w = allWeeksMap.get(info.key)!;
+                  w.total++;
+                  if (!log.is_on_time) {
+                    w.late++;
+                    const baseZonal = getBaseZonalName(log.zonal_name).toUpperCase();
+                    const viajeNum = log.viaje_numero || 1;
+                    const match = delayLogs.find(d =>
+                      d.departure_log_id === log.id ||
+                      (d.inspection_date === log.inspection_date && getBaseZonalName(d.zonal_name).toUpperCase() === baseZonal && (d.viaje_numero || 1) === viajeNum)
+                    );
+                    if (match && match.category) {
+                      w.categories[match.category] = (w.categories[match.category] || 0) + 1;
+                      if (match.justification && match.justification.trim()) {
+                        w.justifications.push({
+                          category: match.category,
+                          text: match.justification.trim(),
+                          zonal: baseZonal
+                        });
+                      }
+                    } else {
+                      w.unjustifiedCount++;
+                    }
+                  }
+                });
+
+                // Orden cronológico de semanas
+                const sortedAllWeeks = Array.from(allWeeksMap.values()).sort((a, b) => a.key.localeCompare(b.key));
+                // Mostrar hasta las últimas 14 semanas para un gráfico panorámico y claro
+                const chartWeeks = sortedAllWeeks.slice(-14);
+
+                if (chartWeeks.length === 0) return null;
+
+                // Semana activa seleccionada (por defecto la última registrada)
+                const activeWeek = (selectedBitacoraWeekKey ? chartWeeks.find(w => w.key === selectedBitacoraWeekKey) : null) || chartWeeks[chartWeeks.length - 1];
+
+                // Cálculo de variación porcentual vs inicio de la serie mostrada
+                const firstWeek = chartWeeks[0];
+                let pctVsFirst = 0;
+                if (firstWeek && firstWeek.late > 0) {
+                  pctVsFirst = Math.round(((activeWeek.late - firstWeek.late) / firstWeek.late) * 100);
+                } else if (firstWeek && firstWeek.late === 0 && activeWeek.late > 0) {
+                  pctVsFirst = activeWeek.late * 100;
+                }
+
+                // Cálculo de puntos para el SVG
+                const svgWidth = 840;
+                const svgHeight = 220;
+                const leftM = 35;
+                const rightM = 785;
+                const topM = 25;
+                const bottomM = 180;
+                const innerWidth = rightM - leftM;
+                const innerHeight = bottomM - topM;
+
+                const maxLate = Math.max(16, ...chartWeeks.map(w => w.late));
+                // Redondear maxVal al múltiplo de 4 superior para tener escala 0, 4, 8, 12, 16...
+                const maxVal = Math.ceil(maxLate / 4) * 4;
+
+                const points = chartWeeks.map((w, idx) => {
+                  const x = chartWeeks.length === 1 ? (leftM + rightM) / 2 : leftM + (idx / (chartWeeks.length - 1)) * innerWidth;
+                  const y = bottomM - (w.late / maxVal) * innerHeight;
+                  return { x, y, week: w };
+                });
+
+                const curvePath = getCatmullRomBezierPath(points.map(p => ({ x: p.x, y: p.y })));
+                const areaPath = points.length > 0 ? `${curvePath} L ${points[points.length - 1].x} ${bottomM} L ${points[0].x} ${bottomM} Z` : '';
+
+                // Altura Y de la Meta ≤ 1
+                const yMeta = bottomM - (1 / maxVal) * innerHeight;
+
+                // Ticks del eje Y (0, 4, 8, 12, 16...)
+                const yTicks = [0, 4, 8, 12, 16].filter(t => t <= maxVal);
+                if (!yTicks.includes(maxVal) && maxVal > 16) yTicks.push(maxVal);
+
+                // Desglose de motivos agrupados por categoría para la semana activa
+                const catGroupedReasons: { [cat: string]: string[] } = {};
+                activeWeek.justifications.forEach(j => {
+                  if (!catGroupedReasons[j.category]) catGroupedReasons[j.category] = [];
+                  if (!catGroupedReasons[j.category].includes(j.text)) {
+                    catGroupedReasons[j.category].push(j.text);
+                  }
+                });
+
+                return (
+                  <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                    {/* ENCABEZADO: VALOR ACTUAL Y META */}
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-baseline gap-3">
+                          <span className="text-4xl sm:text-5xl font-black text-slate-900 font-mono tracking-tight">
+                            {activeWeek.late}
+                          </span>
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-black border ${
+                            pctVsFirst > 0
+                              ? 'bg-rose-50 text-rose-600 border-rose-200'
+                              : pctVsFirst < 0
+                              ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {pctVsFirst > 0 ? `+${pctVsFirst}%` : `${pctVsFirst}%`} vs inicio
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider mt-1">
+                          VALOR ACTUAL (META: MINIMIZAR ≤ 1)
+                        </p>
+                      </div>
+
+                      {/* DETALLE SEMANA SELECCIONADA Y ACCESO RÁPIDO */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl font-mono">
+                          {activeWeek.label} ({getFormatDate(activeWeek.startStr)} - {getFormatDate(activeWeek.endStr)})
+                        </span>
+                        {selectedBitacoraWeekKey && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBitacoraWeekKey(null)}
+                            className="text-[11px] font-bold text-rose-600 hover:text-rose-700 underline cursor-pointer"
+                          >
+                            Ver última semana
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* CONTENEDOR DEL GRÁFICO SVG RESPONSIVE */}
+                    <div className="w-full overflow-x-auto">
+                      <div className="min-w-[680px]">
+                        <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto select-none overflow-visible">
+                          <defs>
+                            <linearGradient id="lateGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.28" />
+                              <stop offset="85%" stopColor="#f43f5e" stopOpacity="0.03" />
+                              <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                            </linearGradient>
+                          </defs>
+
+                          {/* Líneas horizontales de cuadrícula (Eje Y) */}
+                          {yTicks.map(val => {
+                            const yPos = bottomM - (val / maxVal) * innerHeight;
+                            return (
+                              <g key={val}>
+                                <line
+                                  x1={leftM}
+                                  y1={yPos}
+                                  x2={rightM}
+                                  y2={yPos}
+                                  stroke="#f1f5f9"
+                                  strokeWidth="1"
+                                />
+                                <text
+                                  x={leftM - 8}
+                                  y={yPos + 3}
+                                  textAnchor="end"
+                                  fontSize="9.5"
+                                  fill="#94a3b8"
+                                  fontFamily="monospace"
+                                  fontWeight="bold"
+                                >
+                                  {val}
+                                </text>
+                              </g>
+                            );
+                          })}
+
+                          {/* Línea horizontal de Meta ≤ 1 */}
+                          <line
+                            x1={leftM}
+                            y1={yMeta}
+                            x2={rightM}
+                            y2={yMeta}
+                            stroke="#f59e0b"
+                            strokeWidth="1.5"
+                            strokeDasharray="4 4"
+                          />
+                          <text
+                            x={rightM + 6}
+                            y={yMeta + 3}
+                            fill="#d97706"
+                            fontSize="9.5"
+                            fontWeight="bold"
+                            fontFamily="sans-serif"
+                          >
+                            Meta
+                          </text>
+
+                          {/* Área degradada bajo la curva */}
+                          {areaPath && (
+                            <path d={areaPath} fill="url(#lateGradient)" />
+                          )}
+
+                          {/* Curva continua de atrasos (Spline) */}
+                          {curvePath && (
+                            <path
+                              d={curvePath}
+                              fill="none"
+                              stroke="#e11d48"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          )}
+
+                          {/* Puntos / Nodos circulares en cada semana */}
+                          {points.map((pt) => {
+                            const isSelected = activeWeek.key === pt.week.key;
+                            return (
+                              <g
+                                key={pt.week.key}
+                                className="cursor-pointer group"
+                                onClick={() => setSelectedBitacoraWeekKey(pt.week.key)}
+                              >
+                                {isSelected && (
+                                  <circle
+                                    cx={pt.x}
+                                    cy={pt.y}
+                                    r="8"
+                                    fill="#f43f5e"
+                                    opacity="0.2"
+                                    className="animate-pulse"
+                                  />
+                                )}
+                                <circle
+                                  cx={pt.x}
+                                  cy={pt.y}
+                                  r={isSelected ? 6 : 4}
+                                  fill={isSelected ? '#ffffff' : '#e11d48'}
+                                  stroke="#e11d48"
+                                  strokeWidth={isSelected ? 3 : 2}
+                                  className="transition-all hover:scale-125"
+                                />
+                                {/* Ticks Eje X (Nombre de la semana) */}
+                                <text
+                                  x={pt.x}
+                                  y={bottomM + 16}
+                                  textAnchor="middle"
+                                  fontSize="9.5"
+                                  fontWeight={isSelected ? '900' : 'bold'}
+                                  fill={isSelected ? '#e11d48' : '#64748b'}
+                                  fontFamily="sans-serif"
+                                >
+                                  {pt.week.label}
+                                </text>
+                                <title>{`${pt.week.label}: ${pt.week.late} atrasos (${getFormatDate(pt.week.startStr)} al ${getFormatDate(pt.week.endStr)})`}</title>
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* LEYENDA DEL GRÁFICO */}
+                    <div className="flex justify-center">
+                      <div className="inline-flex items-center gap-2 bg-rose-50 border border-rose-200/80 px-4 py-1.5 rounded-full text-xs font-black text-rose-700 shadow-2xs">
+                        <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Seguimiento de Atrasos semanales (Meta: ≤ 1)</span>
+                      </div>
+                    </div>
+
+                    {/* RESUMEN DESCRIPTIVO Y CAUSAS DE LA SEMANA SELECCIONADA */}
+                    <div className="border-t border-slate-200/80 pt-4 mt-2 space-y-2.5">
+                      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+                        <h4 className="text-sm sm:text-base font-black text-slate-900">
+                          {activeWeek.label}: <span className="text-rose-600">{activeWeek.late} atrasos</span>,
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBitacoraStartDate(activeWeek.startStr);
+                            setBitacoraEndDate(activeWeek.endStr);
+                            setBitacoraPeriod('personalizado');
+                          }}
+                          className="text-xs font-bold text-slate-600 hover:text-rose-600 flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                          <span>Ver estos {activeWeek.late} atrasos en la tabla inferior</span>
+                        </button>
+                      </div>
+
+                      {/* DESGLOSE POR CATEGORÍAS Y MOTIVOS */}
+                      <div className="space-y-1.5 pl-1">
+                        {Object.entries(activeWeek.categories).filter(([_, count]) => count > 0).length === 0 && activeWeek.late === 0 ? (
+                          <p className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span>¡Semana sin ningún atraso registrado! Cumplimiento perfecto de la meta.</span>
+                          </p>
+                        ) : (
+                          <>
+                            {Object.entries(activeWeek.categories)
+                              .filter(([_, count]) => count > 0)
+                              .map(([cat, count]) => {
+                                const reasons = catGroupedReasons[cat] || [];
+                                const reasonsText = reasons.length > 0 ? reasons.slice(0, 3).join(', ') : 'Sin detalle específico registrado';
+                                return (
+                                  <p key={cat} className="text-xs font-medium text-slate-700">
+                                    <strong className="font-extrabold text-slate-900">{cat === 'Operación' ? 'Operativos' : cat}:</strong>{' '}
+                                    <span className="font-bold text-slate-800">{count} {count === 1 ? 'Evento' : 'Eventos'} con atraso</span>
+                                    {reasons.length > 0 && <span> por {reasonsText}</span>}
+                                    .
+                                  </p>
+                                );
+                              })}
+
+                            {activeWeek.unjustifiedCount > 0 && (
+                              <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">
+                                <span>⚠️</span>
+                                <span>{activeWeek.unjustifiedCount} {activeWeek.unjustifiedCount === 1 ? 'evento pendiente' : 'eventos pendientes'} de ingresar justificación en bitácora.</span>
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* TARJETAS RESUMEN / INFORME SEMANAL */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
