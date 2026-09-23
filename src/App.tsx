@@ -545,6 +545,7 @@ export default function App({ user }: { user: any }) {
     return (user?.user_metadata?.role || user?.app_metadata?.role || '').toLowerCase().trim();
   });
   const [isUserActive, setIsUserActive] = useState<boolean>(true);
+  const [userProfileLoading, setUserProfileLoading] = useState<boolean>(true);
 
   // Determinación de roles 100% dinámica gobernada por la base de datos (pallet_users):
   const currentDbUser = palletUsers.find(u => (u.email || '').toLowerCase().trim() === currentUserEmail);
@@ -851,6 +852,47 @@ export default function App({ user }: { user: any }) {
     }
   };
 
+  const handleQuickApproveUser = async (u: PalletUser, role: 'supervisor' | 'jefe_turno' | 'admin' = 'supervisor') => {
+    try {
+      const { error } = await supabase
+        .from('pallet_users')
+        .update({
+          is_active: true,
+          role: role,
+          can_sign: true,
+          notes: role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : 'Supervisor de Despacho',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', u.id);
+
+      if (error) throw error;
+
+      setPalletUsers(prev => prev.map(p => p.id === u.id ? { ...p, is_active: true, role, can_sign: true, notes: role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : 'Supervisor de Despacho' } : p));
+      setSuccessMsg(`✅ Acceso aprobado para ${u.display_name} (${u.email}) con rol ${role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : 'Supervisor'}.`);
+    } catch (err: any) {
+      console.error('Error al aprobar usuario:', err);
+      alert('Error al aprobar usuario: ' + (err.message || 'Error de conexión'));
+    }
+  };
+
+  const handleDeleteUser = async (u: PalletUser) => {
+    if (!window.confirm(`¿Estás seguro de que deseas rechazar/eliminar el registro de ${u.display_name} (${u.email})?`)) return;
+    try {
+      const { error } = await supabase
+        .from('pallet_users')
+        .delete()
+        .eq('id', u.id);
+
+      if (error) throw error;
+
+      setPalletUsers(prev => prev.filter(p => p.id !== u.id));
+      setSuccessMsg(`Registro de ${u.display_name} eliminado.`);
+    } catch (err: any) {
+      console.error('Error al eliminar usuario:', err);
+      alert('Error al eliminar usuario: ' + (err.message || 'Error de conexión'));
+    }
+  };
+
   // Sub-tab dentro del módulo Usuarios
   const [adminSubTab, setAdminSubTab] = useState<'usuarios' | 'almacenamiento'>('usuarios');
 
@@ -874,7 +916,10 @@ export default function App({ user }: { user: any }) {
 
   // Cargar firma y perfil del usuario actual desde BD (con auto-creación al iniciar sesión)
   const loadUserProfile = async () => {
-    if (!user?.email) return;
+    if (!user?.email) {
+      setUserProfileLoading(false);
+      return;
+    }
     const userEmail = (user.email || '').toLowerCase().trim();
     try {
       const { data } = await supabase
@@ -894,7 +939,8 @@ export default function App({ user }: { user: any }) {
         if (data.is_active !== undefined) setIsUserActive(data.is_active !== false);
         setUserCanSign(data.can_sign !== false);
       } else if (userEmail.endsWith('@cial.cl')) {
-        // Auto-registra el usuario en pallet_users solo si pertenece al dominio @cial.cl
+        // Auto-registra el usuario en pallet_users en estado PENDIENTE DE APROBACIÓN (is_active: false, can_sign: false)
+        const isOwner = userEmail === 'ariel.mella@cial.cl';
         const meta = user.user_metadata || {};
         const fallbackName = meta.full_name || meta.name || userEmail.split('@')[0].split('.').map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
         
@@ -903,24 +949,26 @@ export default function App({ user }: { user: any }) {
           .insert({
             email: userEmail,
             display_name: fallbackName,
-            role: 'supervisor',
-            is_active: true,
-            can_sign: true,
-            notes: ''
+            role: isOwner ? 'admin' : 'supervisor',
+            is_active: isOwner ? true : false,
+            can_sign: isOwner ? true : false,
+            notes: isOwner ? 'Administrador' : 'Pendiente de aprobación'
           })
           .select()
           .single();
 
         if (newUser) {
           setUserDisplayName(newUser.display_name);
-          setUserTitle('Supervisor');
-          setCurrentUserRole('supervisor');
-          setIsUserActive(true);
-          setUserCanSign(true);
+          setUserTitle(isOwner ? 'Administrador' : 'Pendiente de aprobación');
+          setCurrentUserRole(newUser.role);
+          setIsUserActive(newUser.is_active !== false);
+          setUserCanSign(newUser.can_sign !== false);
         }
       }
     } catch (err) {
       console.error('Error cargando/auto-registrando perfil:', err);
+    } finally {
+      setUserProfileLoading(false);
     }
   };
 
@@ -3899,6 +3947,81 @@ export default function App({ user }: { user: any }) {
   const totals = getCamionTotals();
   const balances = getZonalBalances();
 
+  // PANTALLA DE CARGA INICIAL DE AUTORIZACIONES
+  if (userProfileLoading) {
+    return (
+      <div className="min-h-screen bg-brand-primary flex items-center justify-center font-sans select-none">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+          <p className="text-white/80 text-xs font-semibold tracking-wider uppercase">Verificando autorizaciones...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // PANTALLA DE BLOQUEO / ESPERA DE APROBACIÓN POR EL ADMINISTRADOR
+  if (!userIsActive && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4 font-sans select-none">
+        <div className="max-w-md w-full bg-slate-800/95 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6 animate-fade-in">
+          <div className="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto border border-amber-500/30 shadow-inner">
+            <Clock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-black text-white uppercase tracking-wider">
+              Acceso Pendiente de Aprobación
+            </h2>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Hola, <strong>{userDisplayName || formatSupervisorName(user?.email)}</strong>. Tu cuenta corporativa ha sido registrada, pero requiere la autorización previa del <strong>Administrador de Nexus Pallets</strong> para poder operar en la planta.
+            </p>
+          </div>
+          <div className="bg-slate-950/70 rounded-2xl p-4 text-xs text-slate-400 border border-slate-800 text-left space-y-2 font-mono shadow-inner">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Correo:</span>
+              <span className="text-slate-200 font-bold">{user?.email}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Estado:</span>
+              <span className="text-amber-400 font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                En espera de autorización
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Fecha de solicitud:</span>
+              <span className="text-slate-300">{new Date().toLocaleDateString('es-CL')}</span>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Comunícate con el Administrador o Jefe de Turno para que active tu acceso desde el módulo de Usuarios.
+          </p>
+          <div className="flex flex-col gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={async () => {
+                setUserProfileLoading(true);
+                await loadUserProfile();
+                await fetchPalletUsers();
+              }}
+              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-3 rounded-xl transition-all cursor-pointer text-xs shadow-md active:scale-95 flex items-center justify-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Comprobar si ya fui aprobado</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => supabase.auth.signOut()}
+              className="w-full bg-white/10 hover:bg-white/20 text-slate-300 font-bold py-2.5 rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Cerrar Sesión</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f1f5f9] text-slate-800 flex flex-col font-sans antialiased">
       
@@ -4032,11 +4155,16 @@ export default function App({ user }: { user: any }) {
           {isSuperAdmin && (
             <button
               onClick={() => { setActiveTab('usuarios'); fetchPalletUsers(); }}
-              className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'usuarios' ? 'border-amber-500 text-amber-600 bg-amber-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+              className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer relative ${activeTab === 'usuarios' ? 'border-amber-500 text-amber-600 bg-amber-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
             >
               <span className="flex items-center justify-center gap-2">
                 <Users className="w-4.5 h-4.5" />
                 Usuarios
+                {palletUsers.filter(u => !u.is_active).length > 0 && (
+                  <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full animate-pulse shadow-xs">
+                    {palletUsers.filter(u => !u.is_active).length}
+                  </span>
+                )}
               </span>
             </button>
           )}
@@ -6916,7 +7044,64 @@ export default function App({ user }: { user: any }) {
                 <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Cargando usuarios...
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-4">
+                {/* SOLICITUDES PENDIENTES DE APROBACIÓN */}
+                {palletUsers.filter(u => !u.is_active).length > 0 && (
+                  <div className="bg-amber-50/80 border-2 border-amber-300 rounded-2xl p-4 space-y-3 shadow-sm animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+                        <h3 className="text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>🔔</span> Solicitudes Pendientes de Aprobación ({palletUsers.filter(u => !u.is_active).length})
+                        </h3>
+                      </div>
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-200/70 px-2 py-0.5 rounded-full">
+                        Requieren Aprobación
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      Nuevos usuarios que iniciaron sesión con correo @cial.cl. Aprueba su rol o rechaza la solicitud para habilitar o denegar su acceso al sistema:
+                    </p>
+                    <div className="space-y-2">
+                      {palletUsers.filter(u => !u.is_active).map(pu => (
+                        <div key={pu.id} className="bg-white border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap shadow-2xs">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-slate-800 text-xs">{pu.display_name}</span>
+                              <span className="text-[9px] bg-amber-100 text-amber-800 font-extrabold px-1.5 py-0.2 rounded uppercase">PENDIENTE</span>
+                            </div>
+                            <span className="text-[11px] text-slate-500 font-mono">{pu.email}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickApproveUser(pu, 'supervisor')}
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black cursor-pointer shadow-xs active:scale-95 flex items-center gap-1"
+                            >
+                              <ShieldCheck className="w-3 h-3" /> Aprobar Supervisor
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleQuickApproveUser(pu, 'jefe_turno')}
+                              className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-black cursor-pointer shadow-xs active:scale-95 flex items-center gap-1"
+                            >
+                              <ShieldCheck className="w-3 h-3" /> Aprobar Jefe Turno
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(pu)}
+                              className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-[10px] font-black cursor-pointer active:scale-95 flex items-center gap-1"
+                              title="Rechazar solicitud y eliminar registro"
+                            >
+                              <Trash2 className="w-3 h-3" /> Rechazar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Buscador de usuarios y Leyenda de roles */}
                 <div className="space-y-2 select-none">
                   <div className="relative">
@@ -7073,6 +7258,16 @@ export default function App({ user }: { user: any }) {
                           >
                             {u.is_active ? <><ShieldCheck className="w-3 h-3" /> Activo</> : <><ShieldCheck className="w-3 h-3" /> Activar</>}
                           </button>
+                          {!u.is_active && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(u)}
+                              className="px-2 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-[10px] font-black cursor-pointer active:scale-95 flex items-center gap-1"
+                              title="Rechazar y eliminar registro"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
