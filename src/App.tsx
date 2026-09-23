@@ -313,37 +313,7 @@ export const getBaseZonalName = (zonalName: string): string => {
   return zonalName.replace(/(\s+\d+)+$/i, '').trim();
 };
 
-const ADMIN_EMAILS = [
-  'ariel.mella@cial.cl',
-  'euro.velasquez@cial.cl',
-  'francisco.lara@cial.cl',
-  'admin@cial.cl'
-];
 
-const checkIsAdmin = (user: any): boolean => {
-  if (!user) return false;
-  const email = (user.email || '').toLowerCase();
-  const role = (user.user_metadata?.role || user.app_metadata?.role || '').toLowerCase();
-  if (['admin', 'superadmin'].includes(role)) return true;
-  return ADMIN_EMAILS.includes(email);
-};
-
-// Emails de Jefes de Turno con acceso de edición sobre todos los despachos
-const SHIFT_LEADER_EMAILS = [
-  'francisco.lara@cial.cl',
-  'euro.velasquez@cial.cl',
-  'alejandro.ureta@cial.cl',
-];
-
-// Jefes de Turno y Administradores tienen permisos de edición sobre todos los despachos
-const checkIsShiftLeaderOrAdmin = (user: any): boolean => {
-  if (!user) return false;
-  if (checkIsAdmin(user)) return true;
-  const email = (user.email || '').toLowerCase();
-  if (SHIFT_LEADER_EMAILS.includes(email)) return true;
-  const role = (user.user_metadata?.role || user.app_metadata?.role || '').toLowerCase();
-  return ['jefe', 'jefe_turno', 'supervisor_jefe'].includes(role);
-};
 
 export default function App({ user }: { user: any }) {
   const [activeTab, setActiveTab] = useState<'nuevo' | 'historial' | 'zonales' | 'salidas' | 'kpi_salidas' | 'bitacora_atrasos' | 'inspeccion_reporte' | 'usuarios'>('salidas');
@@ -568,10 +538,24 @@ export default function App({ user }: { user: any }) {
   const [truckKilos, setTruckKilos] = useState<string>('');
   const [truckAnden, setTruckAnden] = useState<string>('');
 
-  const isAdmin = checkIsAdmin(user);
-  const isShiftLeader = checkIsShiftLeaderOrAdmin(user);
-  const isSuperAdmin = (user?.email || '').toLowerCase() === 'ariel.mella@cial.cl';
   const currentUserEmail = (user?.email || '').toLowerCase().trim();
+  type PalletUser = { id: string; email: string; display_name: string; role: string; is_active: boolean; can_sign?: boolean; notes: string; };
+  const [palletUsers, setPalletUsers] = useState<PalletUser[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<string>(() => {
+    return (user?.user_metadata?.role || user?.app_metadata?.role || '').toLowerCase().trim();
+  });
+  const [isUserActive, setIsUserActive] = useState<boolean>(true);
+
+  // Determinación de roles 100% dinámica gobernada por la base de datos (pallet_users):
+  const currentDbUser = palletUsers.find(u => (u.email || '').toLowerCase().trim() === currentUserEmail);
+  const resolvedRole = (currentDbUser?.role || currentUserRole || user?.user_metadata?.role || user?.app_metadata?.role || '').toLowerCase().trim();
+  const userIsActive = currentDbUser ? currentDbUser.is_active !== false : isUserActive;
+
+  // Administrador: Rol 'admin' o 'superadmin' en base de datos (o cuenta de bootstrap para Ariel)
+  const isAdmin = userIsActive && (resolvedRole === 'admin' || resolvedRole === 'superadmin' || currentUserEmail === 'ariel.mella@cial.cl');
+  // Jefe de Turno: Rol 'jefe_turno', 'jefe', 'supervisor_jefe' o Administrador
+  const isShiftLeader = userIsActive && (isAdmin || ['jefe', 'jefe_turno', 'supervisor_jefe'].includes(resolvedRole));
+  const isSuperAdmin = isAdmin;
 
   // Permiso para editar un despacho guardado en historial:
   // 1. Días anteriores: ÚNICAMENTE Administrador puede modificar registros históricos
@@ -751,8 +735,6 @@ export default function App({ user }: { user: any }) {
   };
 
   // Estado módulo gestión de usuarios
-  type PalletUser = { id: string; email: string; display_name: string; role: string; is_active: boolean; can_sign?: boolean; notes: string; };
-  const [palletUsers, setPalletUsers] = useState<PalletUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [editingUser, setEditingUser] = useState<PalletUser | null>(null);
   const [showNewUserForm, setShowNewUserForm] = useState(false);
@@ -803,6 +785,8 @@ export default function App({ user }: { user: any }) {
         setUserTitle(u.notes?.trim() || null);
         setUserDisplayName(u.display_name);
         setUserCanSign(canSignVal);
+        if (u.role) setCurrentUserRole(u.role.toLowerCase());
+        setIsUserActive(u.is_active !== false);
       }
       setEditingUser(null);
       setSuccessMsg(`Usuario ${u.display_name} actualizado.`);
@@ -895,7 +879,7 @@ export default function App({ user }: { user: any }) {
     try {
       const { data } = await supabase
         .from('pallet_users')
-        .select('signature_b64, notes, display_name, role, can_sign')
+        .select('signature_b64, notes, display_name, role, can_sign, is_active')
         .eq('email', userEmail)
         .maybeSingle();
 
@@ -906,6 +890,8 @@ export default function App({ user }: { user: any }) {
           setUserTitle(data.role === 'admin' ? 'Administrador' : data.role === 'jefe_turno' ? 'Jefe de Turno' : 'Supervisor');
         }
         if (data.display_name) setUserDisplayName(data.display_name);
+        if (data.role) setCurrentUserRole(data.role.toLowerCase());
+        if (data.is_active !== undefined) setIsUserActive(data.is_active !== false);
         setUserCanSign(data.can_sign !== false);
       } else if (userEmail.endsWith('@cial.cl')) {
         // Auto-registra el usuario en pallet_users solo si pertenece al dominio @cial.cl
@@ -928,6 +914,8 @@ export default function App({ user }: { user: any }) {
         if (newUser) {
           setUserDisplayName(newUser.display_name);
           setUserTitle('Supervisor');
+          setCurrentUserRole('supervisor');
+          setIsUserActive(true);
           setUserCanSign(true);
         }
       }
