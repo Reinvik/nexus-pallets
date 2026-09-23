@@ -574,13 +574,16 @@ export default function App({ user }: { user: any }) {
   const currentUserEmail = (user?.email || '').toLowerCase().trim();
 
   // Permiso para editar un despacho guardado en historial:
-  // 1. Si está firmado: ÚNICAMENTE Administrador puede modificarlo
-  // 2. Si no está firmado: solo durante el mismo día (horario Chile) por el supervisor creador (o supervisor receptor vía Cambio de Turno) o Administrador
+  // 1. Días anteriores: ÚNICAMENTE Administrador puede modificar registros históricos
+  // 2. Mismo día (horario Chile): Supervisor creador, supervisor receptor (vía Cambio de Turno), Jefe de Turno o Administrador
+  //    (Nota: si el despacho ya fue firmado, al guardar los cambios la firma previa se anula para requerir nueva validación)
   const canUserEditDispatch = (rec: DispatchRecord): boolean => {
     if (isAdmin) return true;
-    if (rec.signed_by) return false;
     const today = getChileDateString();
     if (rec.inspection_date !== today) return false;
+
+    // Durante la jornada actual, Jefes de Turno pueden editar
+    if (isShiftLeader) return true;
 
     const creatorEmail = (rec.created_by || '').toLowerCase().trim();
     const sharedEmail = (rec.shared_with || '').toLowerCase().trim();
@@ -589,16 +592,17 @@ export default function App({ user }: { user: any }) {
     if (sharedEmail && sharedEmail === currentUserEmail) return true;
 
     // Fallback retroactivo para registros que no tenían created_by
-    if (!creatorEmail && rec.supervisor_name) {
+    if (rec.supervisor_name) {
       const userDisp = (userDisplayName || formatSupervisorName(user?.email)).toLowerCase().trim();
-      if (rec.supervisor_name.toLowerCase().trim() === userDisp) return true;
+      const recSup = rec.supervisor_name.toLowerCase().trim();
+      if (recSup === userDisp || recSup === formatSupervisorName(currentUserEmail).toLowerCase().trim()) return true;
     }
     return false;
   };
 
   // Permiso para eliminar un despacho:
   // 1. Si está firmado: los usuarios y jefes de turno NO PUEDEN eliminarlo. Solo Administrador.
-  // 2. Si no está firmado: solo durante el mismo día por el supervisor creador (o Administrador)
+  // 2. Si no está firmado: solo durante el mismo día por el supervisor creador, jefe de turno o Administrador
   const canUserDeleteDispatch = (rec: DispatchRecord): boolean => {
     if (rec.signed_by) return isAdmin;
     if (isAdmin) return true;
@@ -606,52 +610,68 @@ export default function App({ user }: { user: any }) {
     const today = getChileDateString();
     if (rec.inspection_date !== today) return false;
 
+    if (isShiftLeader) return true;
+
     const creatorEmail = (rec.created_by || '').toLowerCase().trim();
     if (creatorEmail && creatorEmail === currentUserEmail) return true;
     if (!creatorEmail && rec.supervisor_name) {
       const userDisp = (userDisplayName || formatSupervisorName(user?.email)).toLowerCase().trim();
-      if (rec.supervisor_name.toLowerCase().trim() === userDisp) return true;
+      const recSup = rec.supervisor_name.toLowerCase().trim();
+      if (recSup === userDisp || recSup === formatSupervisorName(currentUserEmail).toLowerCase().trim()) return true;
     }
     return false;
   };
 
   // Permiso para botón "Cambio de Turno" en un despacho del historial:
-  // Solo el supervisor creador (o Administrador), y solo si no está firmado y es del mismo día
+  // Solo durante el mismo día por el supervisor creador, jefe de turno o Administrador
   const canUserHandoverDispatch = (rec: DispatchRecord): boolean => {
-    if (rec.signed_by) return false;
     const today = getChileDateString();
     if (rec.inspection_date !== today && !isAdmin) return false;
-    if (isAdmin) return true;
+    if (isAdmin || isShiftLeader) return true;
 
     const creatorEmail = (rec.created_by || '').toLowerCase().trim();
     if (creatorEmail && creatorEmail === currentUserEmail) return true;
     if (!creatorEmail && rec.supervisor_name) {
       const userDisp = (userDisplayName || formatSupervisorName(user?.email)).toLowerCase().trim();
-      if (rec.supervisor_name.toLowerCase().trim() === userDisp) return true;
+      const recSup = rec.supervisor_name.toLowerCase().trim();
+      if (recSup === userDisp || recSup === formatSupervisorName(currentUserEmail).toLowerCase().trim()) return true;
     }
     return false;
   };
 
   // Permiso para editar un borrador de camión (draft en carga):
-  // Solo el supervisor creador, el supervisor receptor vía Cambio de Turno, o Administrador
+  // Solo el supervisor creador, el supervisor receptor vía Cambio de Turno, Jefe de Turno o Administrador
   const canUserEditDraft = (draft: TruckDraft): boolean => {
-    if (isAdmin) return true;
+    if (isAdmin || isShiftLeader) return true;
     const creatorEmail = (draft.createdBy || '').toLowerCase().trim();
     const sharedEmail = (draft.sharedWith || '').toLowerCase().trim();
 
     if (!creatorEmail) return true; // borrador nuevo local aún no guardado
     if (creatorEmail === currentUserEmail) return true;
     if (sharedEmail && sharedEmail === currentUserEmail) return true;
+
+    if (draft.supervisorName) {
+      const userDisp = (userDisplayName || formatSupervisorName(user?.email)).toLowerCase().trim();
+      const draftSup = draft.supervisorName.toLowerCase().trim();
+      if (draftSup === userDisp || draftSup === formatSupervisorName(currentUserEmail).toLowerCase().trim()) return true;
+    }
+
     return false;
   };
 
   // Permiso para realizar cambio de turno sobre un camión en carga:
-  // Solo el supervisor creador (o Administrador)
+  // Solo el supervisor creador, Jefe de Turno o Administrador
   const canUserHandoverDraft = (draft: TruckDraft): boolean => {
-    if (isAdmin) return true;
+    if (isAdmin || isShiftLeader) return true;
     const creatorEmail = (draft.createdBy || '').toLowerCase().trim();
     if (!creatorEmail) return true;
-    return creatorEmail === currentUserEmail;
+    if (creatorEmail === currentUserEmail) return true;
+    if (draft.supervisorName) {
+      const userDisp = (userDisplayName || formatSupervisorName(user?.email)).toLowerCase().trim();
+      const draftSup = draft.supervisorName.toLowerCase().trim();
+      if (draftSup === userDisp || draftSup === formatSupervisorName(currentUserEmail).toLowerCase().trim()) return true;
+    }
+    return false;
   };
 
   // Estado y handler para Modal "Cambio de Turno"
@@ -1611,8 +1631,8 @@ export default function App({ user }: { user: any }) {
       photos: [],
       createdAt: nowIso,
       updatedAt: nowIso,
-      supervisorName: supervisorName || '',
-      createdBy: (user?.email || '').toLowerCase().trim(),
+      supervisorName: supervisorName || userDisplayName || formatSupervisorName(user?.email || currentUserEmail),
+      createdBy: currentUserEmail || (user?.email || '').toLowerCase().trim(),
       sharedWith: null,
       sharedWithName: null,
       shiftHandoverAt: null
@@ -1719,10 +1739,31 @@ export default function App({ user }: { user: any }) {
         setActiveDraftId(prevId => {
           const exists = prevId && remoteDrafts.some(rd => rd.id === prevId);
           if (isInitialLoad || !exists) {
-            const nextId = exists ? prevId : remoteDrafts[0].id;
-            const target = remoteDrafts.find(rd => rd.id === nextId) || remoteDrafts[0];
-            loadDraftIntoState(target);
-            return nextId;
+            // 1. Priorizar SIEMPRE un borrador propio del usuario (creado por él o transferido por cambio de turno)
+            const myDraft = remoteDrafts.find(rd => 
+              (rd.createdBy && rd.createdBy.toLowerCase() === currentUserEmail) ||
+              (rd.sharedWith && rd.sharedWith.toLowerCase() === currentUserEmail) ||
+              (rd.supervisorName && (userDisplayName ? rd.supervisorName.toLowerCase() === userDisplayName.toLowerCase() : false))
+            );
+
+            if (myDraft) {
+              loadDraftIntoState(myDraft);
+              return myDraft.id;
+            }
+
+            // 2. Si el usuario ya estaba trabajando en un borrador local que aún se está sincronizando, conservarlo
+            if (prevId && !exists) {
+              return prevId;
+            }
+
+            // 3. Si ningún borrador de la nube pertenece a este usuario:
+            // NUNCA forzarlo a iniciar en el borrador en modo solo lectura de otro supervisor.
+            // Creamos un borrador limpio propio para que pueda ingresar su camión inmediatamente sin bloqueos.
+            const newOwnDraft = createEmptyDraft();
+            setTruckDrafts([...remoteDrafts, newOwnDraft]);
+            loadDraftIntoState(newOwnDraft);
+            syncDraftToSupabase(newOwnDraft);
+            return newOwnDraft.id;
           }
           return prevId;
         });
@@ -3018,13 +3059,7 @@ export default function App({ user }: { user: any }) {
 
   // Cargar un despacho guardado desde el historial directamente a la pantalla de Despacho Camión para reeditarlo
   const openEditDispatchInForm = async (rec: DispatchRecord) => {
-    // 1. Si está firmado, solo administrador puede modificar
-    if (rec.signed_by && !isAdmin) {
-      alert("⚠️ Acción no permitida:\n\nEste despacho ya ha sido firmado digitalmente y no puede ser modificado por usuarios ni jefes de turno.\n\nSolo un Administrador puede modificar un despacho firmado.");
-      return;
-    }
-
-    // 2. Si no es del mismo día y no es admin, denegar
+    // 1. Si no es del mismo día y no es admin, denegar
     const today = getChileDateString();
     const isToday = rec.inspection_date === today;
     if (!isAdmin && !isToday) {
@@ -3032,10 +3067,18 @@ export default function App({ user }: { user: any }) {
       return;
     }
 
-    // 3. Solo el supervisor que lo creó o al que se le compartió vía Cambio de Turno (o admin)
+    // 2. Solo el supervisor que lo creó o al que se le compartió vía Cambio de Turno, Jefe de Turno o Admin
     if (!canUserEditDispatch(rec)) {
-      alert("⚠️ Acción no permitida:\n\nSolo el supervisor creador de este despacho (o el supervisor asignado vía Cambio de Turno) puede editarlo.");
+      alert("⚠️ Acción no permitida:\n\nSolo el supervisor creador de este despacho, el supervisor receptor vía Cambio de Turno o el Jefe de Turno pueden editarlo.");
       return;
+    }
+
+    // 3. Si ya estaba firmado digitalmente, advertir al usuario que al guardar la firma se anulará para requerir re-validación
+    if (rec.signed_by && !isAdmin) {
+      const confirmEdit = window.confirm(
+        `ℹ️ Despacho Previamente Firmado:\n\nEste despacho ya cuenta con la firma del jefe de turno (${getSignerName(rec, palletUsers) || rec.signed_by}).\n\nSi realizas cambios y guardas, la firma anterior quedará anulada automáticamente para solicitar una nueva firma digital de validación.\n\n¿Deseas continuar y editar el despacho?`
+      );
+      if (!confirmEdit) return;
     }
 
     let fullRec = rec;
@@ -3685,6 +3728,7 @@ export default function App({ user }: { user: any }) {
             close_time: closeTime || null,
             truck_kilos: truckKilos || null,
             anden_number: truckAnden || null,
+            created_by: targetRecord?.created_by || currentUserEmail,
             // Al modificar el contenido de un despacho, se anula la firma previa para requerir nueva firma
             signed_by: null,
             signed_at: null,
@@ -3700,7 +3744,7 @@ export default function App({ user }: { user: any }) {
       } else {
         // MODO NUEVO DESPACHO (SIEMPRE INSERT NUEVO E INDEPENDIENTE)
         const activeDraftObj = truckDrafts.find(d => d.id === activeDraftId);
-        const originalCreator = activeDraftObj?.createdBy || currentUserEmail;
+        const originalCreator = (activeDraftObj?.createdBy || currentUserEmail || user?.email || '').toLowerCase().trim();
         const sharedWithVal = activeDraftObj?.sharedWith || null;
         const sharedWithNameVal = activeDraftObj?.sharedWithName || null;
         const handoverAtVal = activeDraftObj?.shiftHandoverAt || null;
@@ -4252,9 +4296,25 @@ export default function App({ user }: { user: any }) {
                           🔒 Despacho Protegido (Modo Solo Lectura)
                         </span>
                         <p className="font-medium mt-0.5">
-                          {targetRec.signed_by
-                            ? 'Este despacho ya está firmado digitalmente. Solo un Administrador puede modificar registros firmados.'
-                            : `Este despacho fue creado por ${targetRec.supervisor_name}. Solo el supervisor creador puede modificarlo durante el día.`}
+                          {targetRec.inspection_date !== getChileDateString() && !isAdmin
+                            ? 'Este despacho corresponde a una fecha anterior. Solo un Administrador puede modificar registros históricos.'
+                            : `Este despacho fue creado por ${targetRec.supervisor_name}. Solo el supervisor creador o el jefe de turno pueden modificarlo.`}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (targetRec && targetRec.signed_by) {
+                  return (
+                    <div className="bg-amber-50 border-2 border-amber-400 text-amber-950 p-4 rounded-2xl flex items-center gap-3 select-none shadow-xs">
+                      <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
+                      <div className="text-xs">
+                        <span className="font-black uppercase tracking-wider text-amber-900 block">
+                          ⚠️ Despacho Previamente Firmado
+                        </span>
+                        <p className="font-medium mt-0.5 text-amber-800">
+                          Este despacho ya cuenta con la firma del jefe de turno ({getSignerName(targetRec, palletUsers) || targetRec.signed_by}). Al guardar cualquier cambio en este formulario, la firma anterior quedará anulada automáticamente para solicitar una nueva validación digital.
                         </p>
                       </div>
                     </div>
