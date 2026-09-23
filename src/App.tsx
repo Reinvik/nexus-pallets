@@ -38,7 +38,9 @@ import {
   Save,
   Mail,
   Copy,
-  Send
+  Send,
+  Lock,
+  ArrowRightLeft
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -112,6 +114,10 @@ interface DispatchRecord {
   signed_at?: string | null;
   signature_b64?: string | null;
   signed_by_title?: string | null;
+  created_by?: string | null;
+  shared_with?: string | null;
+  shared_with_name?: string | null;
+  shift_handover_at?: string | null;
 }
 
 interface PalletReturnRecord {
@@ -142,6 +148,9 @@ interface TruckDraft {
   updatedAt?: string;
   supervisorName?: string;
   createdBy?: string;
+  sharedWith?: string | null;
+  sharedWithName?: string | null;
+  shiftHandoverAt?: string | null;
 }
 
 const INITIAL_CHECKLIST = {
@@ -562,6 +571,164 @@ export default function App({ user }: { user: any }) {
   const isAdmin = checkIsAdmin(user);
   const isShiftLeader = checkIsShiftLeaderOrAdmin(user);
   const isSuperAdmin = (user?.email || '').toLowerCase() === 'ariel.mella@cial.cl';
+  const currentUserEmail = (user?.email || '').toLowerCase().trim();
+
+  // Permiso para editar un despacho guardado en historial:
+  // 1. Si está firmado: ÚNICAMENTE Administrador puede modificarlo
+  // 2. Si no está firmado: solo durante el mismo día (horario Chile) por el supervisor creador (o supervisor receptor vía Cambio de Turno) o Administrador
+  const canUserEditDispatch = (rec: DispatchRecord): boolean => {
+    if (isAdmin) return true;
+    if (rec.signed_by) return false;
+    const today = getChileDateString();
+    if (rec.inspection_date !== today) return false;
+
+    const creatorEmail = (rec.created_by || '').toLowerCase().trim();
+    const sharedEmail = (rec.shared_with || '').toLowerCase().trim();
+
+    if (creatorEmail && creatorEmail === currentUserEmail) return true;
+    if (sharedEmail && sharedEmail === currentUserEmail) return true;
+
+    // Fallback retroactivo para registros que no tenían created_by
+    if (!creatorEmail && rec.supervisor_name) {
+      const userDisp = (userDisplayName || formatSupervisorName(user?.email)).toLowerCase().trim();
+      if (rec.supervisor_name.toLowerCase().trim() === userDisp) return true;
+    }
+    return false;
+  };
+
+  // Permiso para eliminar un despacho:
+  // 1. Si está firmado: los usuarios y jefes de turno NO PUEDEN eliminarlo. Solo Administrador.
+  // 2. Si no está firmado: solo durante el mismo día por el supervisor creador (o Administrador)
+  const canUserDeleteDispatch = (rec: DispatchRecord): boolean => {
+    if (rec.signed_by) return isAdmin;
+    if (isAdmin) return true;
+
+    const today = getChileDateString();
+    if (rec.inspection_date !== today) return false;
+
+    const creatorEmail = (rec.created_by || '').toLowerCase().trim();
+    if (creatorEmail && creatorEmail === currentUserEmail) return true;
+    if (!creatorEmail && rec.supervisor_name) {
+      const userDisp = (userDisplayName || formatSupervisorName(user?.email)).toLowerCase().trim();
+      if (rec.supervisor_name.toLowerCase().trim() === userDisp) return true;
+    }
+    return false;
+  };
+
+  // Permiso para botón "Cambio de Turno" en un despacho del historial:
+  // Solo el supervisor creador (o Administrador), y solo si no está firmado y es del mismo día
+  const canUserHandoverDispatch = (rec: DispatchRecord): boolean => {
+    if (rec.signed_by) return false;
+    const today = getChileDateString();
+    if (rec.inspection_date !== today && !isAdmin) return false;
+    if (isAdmin) return true;
+
+    const creatorEmail = (rec.created_by || '').toLowerCase().trim();
+    if (creatorEmail && creatorEmail === currentUserEmail) return true;
+    if (!creatorEmail && rec.supervisor_name) {
+      const userDisp = (userDisplayName || formatSupervisorName(user?.email)).toLowerCase().trim();
+      if (rec.supervisor_name.toLowerCase().trim() === userDisp) return true;
+    }
+    return false;
+  };
+
+  // Permiso para editar un borrador de camión (draft en carga):
+  // Solo el supervisor creador, el supervisor receptor vía Cambio de Turno, o Administrador
+  const canUserEditDraft = (draft: TruckDraft): boolean => {
+    if (isAdmin) return true;
+    const creatorEmail = (draft.createdBy || '').toLowerCase().trim();
+    const sharedEmail = (draft.sharedWith || '').toLowerCase().trim();
+
+    if (!creatorEmail) return true; // borrador nuevo local aún no guardado
+    if (creatorEmail === currentUserEmail) return true;
+    if (sharedEmail && sharedEmail === currentUserEmail) return true;
+    return false;
+  };
+
+  // Permiso para realizar cambio de turno sobre un camión en carga:
+  // Solo el supervisor creador (o Administrador)
+  const canUserHandoverDraft = (draft: TruckDraft): boolean => {
+    if (isAdmin) return true;
+    const creatorEmail = (draft.createdBy || '').toLowerCase().trim();
+    if (!creatorEmail) return true;
+    return creatorEmail === currentUserEmail;
+  };
+
+  // Estado y handler para Modal "Cambio de Turno"
+  interface ShiftHandoverTarget {
+    type: 'draft' | 'dispatch';
+    id: string;
+    truckNumber: string;
+    truckPlate: string;
+    currentCreatorEmail: string;
+    currentCreatorName: string;
+    currentSharedWith?: string | null;
+    currentSharedWithName?: string | null;
+  }
+  const [shiftHandoverModal, setShiftHandoverModal] = useState<ShiftHandoverTarget | null>(null);
+  const [selectedTargetSupervisorEmail, setSelectedTargetSupervisorEmail] = useState<string>('');
+  const [handoverLoading, setHandoverLoading] = useState(false);
+
+  const handleConfirmShiftHandover = async () => {
+    if (!shiftHandoverModal || !selectedTargetSupervisorEmail) {
+      alert('Por favor selecciona el supervisor al que deseas transferir el turno.');
+      return;
+    }
+    const targetUser = palletUsers.find(u => (u.email || '').toLowerCase() === selectedTargetSupervisorEmail.toLowerCase());
+    const targetName = targetUser?.display_name || formatSupervisorName(selectedTargetSupervisorEmail);
+    const nowIso = new Date().toISOString();
+
+    setHandoverLoading(true);
+    try {
+      if (shiftHandoverModal.type === 'draft') {
+        const { error } = await supabase
+          .from('active_truck_drafts')
+          .update({
+            shared_with: selectedTargetSupervisorEmail.toLowerCase(),
+            shared_with_name: targetName,
+            shift_handover_at: nowIso,
+            updated_at: nowIso
+          })
+          .eq('id', shiftHandoverModal.id);
+
+        if (error) throw error;
+
+        setTruckDrafts(prev => prev.map(d => 
+          d.id === shiftHandoverModal.id 
+            ? { ...d, sharedWith: selectedTargetSupervisorEmail.toLowerCase(), sharedWithName: targetName, shiftHandoverAt: nowIso, updatedAt: nowIso }
+            : d
+        ));
+
+        setSuccessMsg(`🔄 Turno transferido con éxito a ${targetName} para el Camión #${shiftHandoverModal.truckNumber || 'S/N'}. Ahora tiene acceso exclusivo para terminar el trabajo.`);
+      } else {
+        const { error } = await supabase
+          .from('pallet_dispatches')
+          .update({
+            shared_with: selectedTargetSupervisorEmail.toLowerCase(),
+            shared_with_name: targetName,
+            shift_handover_at: nowIso
+          })
+          .eq('id', shiftHandoverModal.id);
+
+        if (error) throw error;
+
+        setRecords(prev => prev.map(r => 
+          r.id === shiftHandoverModal.id 
+            ? { ...r, shared_with: selectedTargetSupervisorEmail.toLowerCase(), shared_with_name: targetName, shift_handover_at: nowIso }
+            : r
+        ));
+
+        setSuccessMsg(`🔄 Turno transferido con éxito a ${targetName} para el Despacho #${shiftHandoverModal.truckNumber || 'S/N'}.`);
+      }
+      setShiftHandoverModal(null);
+      setSelectedTargetSupervisorEmail('');
+    } catch (err: any) {
+      console.error('Error al transferir turno:', err);
+      alert('Error al transferir turno: ' + (err.message || 'Error de conexión'));
+    } finally {
+      setHandoverLoading(false);
+    }
+  };
 
   // Estado módulo gestión de usuarios
   type PalletUser = { id: string; email: string; display_name: string; role: string; is_active: boolean; can_sign?: boolean; notes: string; };
@@ -1035,6 +1202,7 @@ export default function App({ user }: { user: any }) {
   useEffect(() => {
     if (user?.email) {
       loadUserProfile();
+      fetchPalletUsers();
     }
     fetchZonalTargetTimes();
     const timer = setInterval(() => {
@@ -1444,7 +1612,10 @@ export default function App({ user }: { user: any }) {
       createdAt: nowIso,
       updatedAt: nowIso,
       supervisorName: supervisorName || '',
-      createdBy: user?.email || ''
+      createdBy: (user?.email || '').toLowerCase().trim(),
+      sharedWith: null,
+      sharedWithName: null,
+      shiftHandoverAt: null
     };
   };
 
@@ -1535,7 +1706,10 @@ export default function App({ user }: { user: any }) {
           createdAt: d.created_at,
           updatedAt: d.updated_at || d.created_at || new Date().toISOString(),
           supervisorName: d.supervisor_name || '',
-          createdBy: d.created_by || ''
+          createdBy: d.created_by || '',
+          sharedWith: d.shared_with || null,
+          sharedWithName: d.shared_with_name || null,
+          shiftHandoverAt: d.shift_handover_at || null
         }));
 
         setTruckDrafts(remoteDrafts);
@@ -1607,7 +1781,10 @@ export default function App({ user }: { user: any }) {
         selected_zonals: draft.selectedZonals || [],
         photos: draft.photos || [],
         supervisor_name: draft.supervisorName ? draft.supervisorName : (supervisorName || ''),
-        created_by: draft.createdBy ? draft.createdBy : (user?.email || ''),
+        created_by: draft.createdBy ? draft.createdBy : (user?.email || '').toLowerCase().trim(),
+        shared_with: draft.sharedWith || null,
+        shared_with_name: draft.sharedWithName || null,
+        shift_handover_at: draft.shiftHandoverAt || null,
         updated_at: draft.updatedAt || nowIso
       }], { onConflict: 'id' });
     } catch (e) {
@@ -1672,7 +1849,10 @@ export default function App({ user }: { user: any }) {
             selectedZonals,
             photos,
             supervisorName: d.supervisorName ? d.supervisorName : (supervisorName || ''),
-            createdBy: d.createdBy ? d.createdBy : (user?.email || '')
+            createdBy: d.createdBy ? d.createdBy : (user?.email || '').toLowerCase().trim(),
+            sharedWith: d.sharedWith || null,
+            sharedWithName: d.sharedWithName || null,
+            shiftHandoverAt: d.shiftHandoverAt || null
           };
           syncDraftToSupabase(updatedDraft);
           return updatedDraft;
@@ -1791,6 +1971,7 @@ export default function App({ user }: { user: any }) {
       }
 
       const nowIso = new Date().toISOString();
+      const existingDraft = truckDrafts.find(d => d.id === targetId);
       const currentDraft: TruckDraft = {
         id: targetId,
         truckNumber: truckNumber || '',
@@ -1806,10 +1987,13 @@ export default function App({ user }: { user: any }) {
         checklist: fullChecklist,
         selectedZonals,
         photos,
-        createdAt: new Date().toISOString(),
+        createdAt: existingDraft?.createdAt || new Date().toISOString(),
         updatedAt: nowIso,
         supervisorName: supervisorName || '',
-        createdBy: user?.email || ''
+        createdBy: existingDraft?.createdBy || (user?.email || '').toLowerCase().trim(),
+        sharedWith: existingDraft?.sharedWith || null,
+        sharedWithName: existingDraft?.sharedWithName || null,
+        shiftHandoverAt: existingDraft?.shiftHandoverAt || null
       };
 
       await syncDraftToSupabase(currentDraft);
@@ -1865,6 +2049,11 @@ export default function App({ user }: { user: any }) {
       });
 
       const nowIso = new Date().toISOString();
+      const currentDraftObj = truckDrafts.find(d => d.id === activeDraftId);
+      const draftCreatedBy = currentDraftObj?.createdBy || (user?.email || '').toLowerCase().trim();
+      const draftSharedWith = currentDraftObj?.sharedWith || null;
+      const draftSharedWithName = currentDraftObj?.sharedWithName || null;
+      const draftShiftHandoverAt = currentDraftObj?.shiftHandoverAt || null;
 
       await supabase.from('active_truck_drafts').upsert([{
         id: activeDraftId,
@@ -1882,7 +2071,10 @@ export default function App({ user }: { user: any }) {
         selected_zonals:    zonalsSinFotos,
         photos:             [], // sin fotos globales en auto-save
         supervisor_name:    supervisorName || '',
-        created_by:         user?.email || '',
+        created_by:         draftCreatedBy,
+        shared_with:        draftSharedWith,
+        shared_with_name:   draftSharedWithName,
+        shift_handover_at:  draftShiftHandoverAt,
         updated_at:         nowIso
       }], { onConflict: 'id' });
 
@@ -2826,10 +3018,23 @@ export default function App({ user }: { user: any }) {
 
   // Cargar un despacho guardado desde el historial directamente a la pantalla de Despacho Camión para reeditarlo
   const openEditDispatchInForm = async (rec: DispatchRecord) => {
+    // 1. Si está firmado, solo administrador puede modificar
+    if (rec.signed_by && !isAdmin) {
+      alert("⚠️ Acción no permitida:\n\nEste despacho ya ha sido firmado digitalmente y no puede ser modificado por usuarios ni jefes de turno.\n\nSolo un Administrador puede modificar un despacho firmado.");
+      return;
+    }
+
+    // 2. Si no es del mismo día y no es admin, denegar
     const today = getChileDateString();
     const isToday = rec.inspection_date === today;
     if (!isAdmin && !isToday) {
-      alert("⚠️ Acción no permitida:\n\nLos supervisores y jefes de turno solo pueden editar despachos del mismo día en horario de Chile.\n\nSolo los administradores pueden modificar registros históricos de días anteriores.");
+      alert("⚠️ Acción no permitida:\n\nLos supervisores solo pueden editar despachos del mismo día en horario de Chile.\n\nSolo los administradores pueden modificar registros históricos de días anteriores.");
+      return;
+    }
+
+    // 3. Solo el supervisor que lo creó o al que se le compartió vía Cambio de Turno (o admin)
+    if (!canUserEditDispatch(rec)) {
+      alert("⚠️ Acción no permitida:\n\nSolo el supervisor creador de este despacho (o el supervisor asignado vía Cambio de Turno) puede editarlo.");
       return;
     }
 
@@ -2960,12 +3165,25 @@ export default function App({ user }: { user: any }) {
     setEditingZonalsDetail(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Eliminar despacho (Admin para cualquier fecha, Supervisores/Jefes de Turno solo para el mismo día en horario Chile)
+  // Eliminar despacho (Una vez firmado, no se puede eliminar por usuarios o jefes; solo Administrador. Si no está firmado, solo el creador durante el mismo día en horario Chile o Admin)
   const handleDeleteDispatch = async (rec: DispatchRecord) => {
+    // 1. Si está firmado, usuarios y jefes NO pueden eliminarlo
+    if (rec.signed_by && !isAdmin) {
+      alert("⚠️ Acción denegada:\n\nEste despacho ya ha sido firmado digitalmente y no puede ser eliminado por usuarios ni jefes de turno.\n\nSolo un Administrador tiene autorización para eliminar registros firmados.");
+      return;
+    }
+
+    // 2. Si no es del mismo día y no es admin, denegar
     const today = getChileDateString();
     const isToday = rec.inspection_date === today;
     if (!isAdmin && !isToday) {
-      alert("⚠️ Acción no permitida:\n\nLos supervisores y jefes de turno solo pueden eliminar despachos del mismo día en horario de Chile.\n\nSolo los administradores pueden eliminar registros históricos de días anteriores.");
+      alert("⚠️ Acción no permitida:\n\nLos supervisores solo pueden eliminar despachos del mismo día en horario de Chile.\n\nSolo los administradores pueden eliminar registros históricos de días anteriores.");
+      return;
+    }
+
+    // 3. Si no es el creador y no es admin, denegar
+    if (!isAdmin && !canUserDeleteDispatch(rec)) {
+      alert("⚠️ Acción no permitida:\n\nSolo el supervisor creador de este despacho tiene autorización para eliminarlo.");
       return;
     }
 
@@ -3438,6 +3656,12 @@ export default function App({ user }: { user: any }) {
 
       if (editingDispatchId) {
         // MODO EDICIÓN EXPLÍCITA (El usuario vino de EDITAR en el historial)
+        const targetRecord = records.find(r => r.id === editingDispatchId);
+        if (targetRecord && !canUserEditDispatch(targetRecord)) {
+          alert("⚠️ No tienes permisos para guardar modificaciones en este despacho.");
+          return;
+        }
+
         const { data: updatedData, error } = await supabase
           .from('pallet_dispatches')
           .update({
@@ -3475,6 +3699,12 @@ export default function App({ user }: { user: any }) {
         setSuccessMsg(`¡Despacho Camión #${truckNumber || ''} actualizado correctamente! (Requiere nueva firma)`);
       } else {
         // MODO NUEVO DESPACHO (SIEMPRE INSERT NUEVO E INDEPENDIENTE)
+        const activeDraftObj = truckDrafts.find(d => d.id === activeDraftId);
+        const originalCreator = activeDraftObj?.createdBy || currentUserEmail;
+        const sharedWithVal = activeDraftObj?.sharedWith || null;
+        const sharedWithNameVal = activeDraftObj?.sharedWithName || null;
+        const handoverAtVal = activeDraftObj?.shiftHandoverAt || null;
+
         const { data: insertedData, error } = await supabase
           .from('pallet_dispatches')
           .insert([{
@@ -3500,7 +3730,11 @@ export default function App({ user }: { user: any }) {
             temp_3er: temp3er,
             close_time: closeTime || null,
             truck_kilos: truckKilos || null,
-            anden_number: truckAnden || null
+            anden_number: truckAnden || null,
+            created_by: originalCreator,
+            shared_with: sharedWithVal,
+            shared_with_name: sharedWithNameVal,
+            shift_handover_at: handoverAtVal
           }])
           .select();
 
@@ -3861,6 +4095,34 @@ export default function App({ user }: { user: any }) {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
+                  {/* Botón CAMBIO DE TURNO para el creador del camión activo */}
+                  {(() => {
+                    const curDraft = truckDrafts.find(d => d.id === activeDraftId);
+                    if (!curDraft || !canUserHandoverDraft(curDraft)) return null;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShiftHandoverModal({
+                            type: 'draft',
+                            id: curDraft.id,
+                            truckNumber: curDraft.truckNumber,
+                            truckPlate: curDraft.truckPlate,
+                            currentCreatorEmail: curDraft.createdBy || currentUserEmail,
+                            currentCreatorName: curDraft.supervisorName || formatSupervisorName(curDraft.createdBy),
+                            currentSharedWith: curDraft.sharedWith,
+                            currentSharedWithName: curDraft.sharedWithName
+                          });
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center gap-1.5 flex-1 sm:flex-none border border-indigo-500"
+                        title="Cambio de Turno: Transferir la edición de este camión a otro supervisor"
+                      >
+                        <ArrowRightLeft className="w-3.5 h-3.5" />
+                        <span>CAMBIO DE TURNO</span>
+                      </button>
+                    );
+                  })()}
+
                   <button
                     type="button"
                     onClick={handleSaveProgress}
@@ -3976,6 +4238,69 @@ export default function App({ user }: { user: any }) {
                 })}
               </div>
             </div>
+
+            {/* AVISOS DE ESTADO DE AUTORÍA / RELEVO DE TURNO EN CAMIÓN ACTIVO */}
+            {(() => {
+              if (editingDispatchId) {
+                const targetRec = records.find(r => r.id === editingDispatchId);
+                if (targetRec && !canUserEditDispatch(targetRec)) {
+                  return (
+                    <div className="bg-rose-50 border-2 border-rose-300 text-rose-900 p-4 rounded-2xl flex items-center gap-3 select-none">
+                      <Lock className="w-6 h-6 text-rose-600 shrink-0" />
+                      <div className="text-xs">
+                        <span className="font-black uppercase tracking-wider text-rose-800 block">
+                          🔒 Despacho Protegido (Modo Solo Lectura)
+                        </span>
+                        <p className="font-medium mt-0.5">
+                          {targetRec.signed_by
+                            ? 'Este despacho ya está firmado digitalmente. Solo un Administrador puede modificar registros firmados.'
+                            : `Este despacho fue creado por ${targetRec.supervisor_name}. Solo el supervisor creador puede modificarlo durante el día.`}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              }
+
+              const curDraft = truckDrafts.find(d => d.id === activeDraftId);
+              if (!curDraft) return null;
+              const isEditable = canUserEditDraft(curDraft);
+
+              if (!isEditable) {
+                return (
+                  <div className="bg-amber-50 border-2 border-amber-400 text-amber-950 p-4 rounded-2xl flex items-center gap-3 select-none shadow-xs">
+                    <Lock className="w-6 h-6 text-amber-600 shrink-0" />
+                    <div className="text-xs">
+                      <span className="font-black uppercase tracking-wider text-amber-900 block">
+                        🔒 Camión en Modo Solo Lectura (Creado por otro supervisor)
+                      </span>
+                      <p className="font-medium mt-0.5 text-amber-800">
+                        Este camión fue iniciado por <strong>{curDraft.supervisorName || curDraft.createdBy}</strong>. Solo el supervisor creador puede editarlo, o puede pulsar <strong>"Cambio de Turno"</strong> para transferirte el acceso y que puedas terminar el trabajo.
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (curDraft.sharedWith && curDraft.sharedWith.toLowerCase() === currentUserEmail) {
+                return (
+                  <div className="bg-indigo-50 border-2 border-indigo-300 text-indigo-950 p-3.5 rounded-2xl flex items-center gap-3 select-none shadow-xs">
+                    <ArrowRightLeft className="w-5 h-5 text-indigo-600 shrink-0" />
+                    <div className="text-xs">
+                      <span className="font-black uppercase tracking-wide text-indigo-800 block">
+                        🔄 Turno Recibido por Relevo
+                      </span>
+                      <p className="font-medium text-indigo-700">
+                        Recibiste este camión de <strong>{curDraft.supervisorName || curDraft.createdBy}</strong>. Tienes autorización exclusiva para continuar la carga y confirmar el despacho.
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              return null;
+            })()}
             
             {/* CARD 1: DATOS DEL SUPERVISOR Y CAMIÓN */}
             <section className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4">
@@ -5054,48 +5379,61 @@ export default function App({ user }: { user: any }) {
                 <div className="flex-1 text-xs text-slate-400 font-semibold">
                   Al presionar <span className="text-emerald-400 font-bold">{editingDispatchId ? '"Guardar Cambios de Despacho"' : '"Confirmar Despacho"'}</span>, se confirmará la salida del camión. Para guardar sin despachar, usa <span className="text-amber-400 font-bold">"Guardar Avance"</span>.
                 </div>
-                <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={handleSaveProgress}
-                    disabled={saveProgressLoading}
-                    className="w-full sm:w-auto px-6 py-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md bg-amber-500 hover:bg-amber-600 text-white cursor-pointer"
-                    title="Guarda tu avance actual sin confirmar el despacho"
-                  >
-                    {saveProgressLoading ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <>
-                        <Save className="w-5 h-5" />
-                        <span>GUARDAR AVANCE</span>
-                      </>
-                    )}
-                  </button>
+                {(() => {
+                  const curDraft = truckDrafts.find(d => d.id === activeDraftId);
+                  const isAllowedToSave = editingDispatchId
+                    ? (() => {
+                        const tr = records.find(r => r.id === editingDispatchId);
+                        return tr ? canUserEditDispatch(tr) : true;
+                      })()
+                    : curDraft ? canUserEditDraft(curDraft) : true;
 
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className={`w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg disabled:opacity-50 cursor-pointer ${
-                      editingDispatchId
-                        ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                        : 'bg-brand-emerald hover:bg-emerald-600 text-white'
-                    }`}
-                  >
-                    {loading ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                    ) : editingDispatchId ? (
-                      <>
-                        <Edit2 className="w-5 h-5" />
-                        GUARDAR CAMBIOS DE DESPACHO
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-5 h-5" />
-                        CONFIRMAR DESPACHO
-                      </>
-                    )}
-                  </button>
-                </div>
+                  return (
+                    <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={handleSaveProgress}
+                        disabled={saveProgressLoading || !isAllowedToSave}
+                        className="w-full sm:w-auto px-6 py-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white cursor-pointer"
+                        title={isAllowedToSave ? "Guarda tu avance actual sin confirmar el despacho" : "No tienes permisos de edición para este camión"}
+                      >
+                        {saveProgressLoading ? (
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <>
+                            <Save className="w-5 h-5" />
+                            <span>GUARDAR AVANCE</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={loading || !isAllowedToSave}
+                        className={`w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer ${
+                          editingDispatchId
+                            ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                            : 'bg-brand-emerald hover:bg-emerald-600 text-white'
+                        }`}
+                        title={isAllowedToSave ? undefined : "No tienes permisos para confirmar el despacho de este camión"}
+                      >
+                        {loading ? (
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                        ) : editingDispatchId ? (
+                          <>
+                            <Edit2 className="w-5 h-5" />
+                            GUARDAR CAMBIOS DE DESPACHO
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-5 h-5" />
+                            CONFIRMAR DESPACHO
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             </section>
 
@@ -5237,6 +5575,11 @@ export default function App({ user }: { user: any }) {
                               <div className="text-[11px] text-slate-600 font-bold flex items-center gap-3 flex-wrap pt-0.5">
                                 <span>Supervisor: <strong className="text-slate-800">{draft.supervisorName || 'S/I'}</strong></span>
                                 <span>Zonales: <strong className="text-amber-900">{(draft.selectedZonals || []).map(z => z.zonal_name).join(', ') || 'Sin Zonales'}</strong></span>
+                                {draft.sharedWithName && (
+                                  <span className="text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 flex items-center gap-1">
+                                    <ArrowRightLeft className="w-3 h-3" /> Turno transferido: {draft.sharedWithName}
+                                  </span>
+                                )}
                                 {draft.photos && draft.photos.length > 0 && (
                                   <span className="text-emerald-700 font-mono">📷 {draft.photos.length} fotos</span>
                                 )}
@@ -5244,25 +5587,59 @@ export default function App({ user }: { user: any }) {
                             </div>
 
                             <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveTab('nuevo');
-                                  switchActiveDraft(draft.id);
-                                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                                }}
-                                className="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 flex items-center gap-1.5"
-                              >
-                                <span>✏️ Recuperar / Editar</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => deleteTruckDraft(draft.id)}
-                                className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-200"
-                                title="Descartar borrador de avance"
-                              >
-                                <span>✕ Descartar</span>
-                              </button>
+                              {/* Botón Cambio de Turno para el creador del avance */}
+                              {canUserHandoverDraft(draft) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShiftHandoverModal({
+                                      type: 'draft',
+                                      id: draft.id,
+                                      truckNumber: draft.truckNumber,
+                                      truckPlate: draft.truckPlate,
+                                      currentCreatorEmail: draft.createdBy || currentUserEmail,
+                                      currentCreatorName: draft.supervisorName || formatSupervisorName(draft.createdBy),
+                                      currentSharedWith: draft.sharedWith,
+                                      currentSharedWithName: draft.sharedWithName
+                                    });
+                                  }}
+                                  className="bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                                  title="Cambio de Turno: Compartir edición con otro supervisor"
+                                >
+                                  <ArrowRightLeft className="w-3.5 h-3.5" />
+                                  <span>Cambio de Turno</span>
+                                </button>
+                              )}
+
+                              {canUserEditDraft(draft) ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveTab('nuevo');
+                                    switchActiveDraft(draft.id);
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                  }}
+                                  className="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 flex items-center gap-1.5"
+                                >
+                                  <span>✏️ Recuperar / Editar</span>
+                                </button>
+                              ) : (
+                                <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-xl flex items-center gap-1 border border-slate-200" title="Solo el creador o a quien le transfiera el turno puede editar este camión">
+                                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>Solo Lectura</span>
+                                </span>
+                              )}
+
+                              {canUserHandoverDraft(draft) && (
+                                <button
+                                  type="button"
+                                  onClick={() => deleteTruckDraft(draft.id)}
+                                  className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-200"
+                                  title="Descartar borrador de avance"
+                                >
+                                  <span>✕ Descartar</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -5303,6 +5680,11 @@ export default function App({ user }: { user: any }) {
                               <span className="text-[10px] font-black bg-emerald-50 text-brand-primary border border-emerald-100 px-2 py-0.5 rounded-md uppercase tracking-wider">
                                 SUPERVISOR: {rec.supervisor_name}
                               </span>
+                              {rec.shared_with && (
+                                <span className="text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-md flex items-center gap-1" title={`Turno transferido a ${rec.shared_with_name || rec.shared_with}`}>
+                                  <ArrowRightLeft className="w-3 h-3" /> Turno transferido: {rec.shared_with_name || formatSupervisorName(rec.shared_with)}
+                                </span>
+                              )}
                               <span className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
                                 <Truck className="w-4 h-4 text-slate-400" />
                                 N° Camión: {rec.truck_number !== 'N/A' ? rec.truck_number : 'S/A'} 
@@ -5472,33 +5854,61 @@ export default function App({ user }: { user: any }) {
                             </button>
 
                             {(() => {
-                              const today = getChileDateString();
-                              const isToday = rec.inspection_date === today;
-                              // Supervisores y Jefes de Turno SOLO pueden editar/eliminar despachos del MISMO DÍA (Horario Chile). Solo Administradores pueden modificar días pasados.
-                              const canEdit = isAdmin || isToday;
-                              return canEdit ? (
+                              const canEdit = canUserEditDispatch(rec);
+                              const canDelete = canUserDeleteDispatch(rec);
+                              const canHandover = canUserHandoverDispatch(rec);
+
+                              return (
                                 <>
-                                  <button
-                                    type="button"
-                                    onClick={() => openEditDispatchInForm(rec)}
-                                    className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1"
-                                    title={isAdmin ? "Editar Despacho (Modo Admin)" : "Editar Despacho de Hoy (Horario Chile)"}
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                    EDITAR
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteDispatch(rec)}
-                                    className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1"
-                                    title={isAdmin ? "Eliminar Despacho (Modo Admin)" : "Eliminar Despacho de Hoy (Horario Chile)"}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                    ELIMINAR
-                                  </button>
+                                  {canHandover && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setShiftHandoverModal({
+                                          type: 'dispatch',
+                                          id: rec.id,
+                                          truckNumber: rec.truck_number,
+                                          truckPlate: rec.truck_plate,
+                                          currentCreatorEmail: rec.created_by || currentUserEmail,
+                                          currentCreatorName: rec.supervisor_name,
+                                          currentSharedWith: rec.shared_with,
+                                          currentSharedWithName: rec.shared_with_name
+                                        });
+                                      }}
+                                      className="px-2.5 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 flex items-center gap-1"
+                                      title="Cambio de Turno: Compartir edición con otro supervisor"
+                                    >
+                                      <ArrowRightLeft className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Cambio de Turno</span>
+                                    </button>
+                                  )}
+
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditDispatchInForm(rec)}
+                                      className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-amber-500 bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1"
+                                      title={isAdmin ? "Editar Despacho (Modo Admin)" : "Editar Despacho de Hoy (Horario Chile)"}
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                      EDITAR
+                                    </button>
+                                  )}
+
+                                  {canDelete && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteDispatch(rec)}
+                                      className="px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm border border-rose-600 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1"
+                                      title={isAdmin ? "Eliminar Despacho (Modo Admin)" : "Eliminar Despacho de Hoy (Horario Chile)"}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      ELIMINAR
+                                    </button>
+                                  )}
                                 </>
-                                ) : null;
-                              })()}
+                              );
+                            })()}
 
                             {/* BOTÓN REPORTE DE FALLAS A RAMPAS SI HAY OBSERVACIONES */}
                             {(() => {
@@ -11628,6 +12038,117 @@ export default function App({ user }: { user: any }) {
                 className="w-full h-full rounded-xl border border-slate-800 bg-white"
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* MODAL: CAMBIO DE TURNO (DELEGAR EDICIÓN A OTRO SUPERVISOR)   */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {shiftHandoverModal && (
+        <div className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border-2 border-indigo-400 flex flex-col max-h-[92vh] animate-fade-in">
+            
+            {/* CABECERA MODAL */}
+            <div className="bg-slate-900 text-white p-4 sm:p-5 flex items-center justify-between gap-3 shrink-0 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-600 rounded-2xl text-white shadow-md">
+                  <ArrowRightLeft className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black uppercase tracking-wider text-white">
+                    Cambio de Turno
+                  </h3>
+                  <p className="text-xs text-indigo-300 font-medium">
+                    {shiftHandoverModal.type === 'draft' ? 'Transferir camión en carga a supervisor de relevo' : 'Transferir despacho guardado para finalizar edición'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShiftHandoverModal(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* CUERPO MODAL */}
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {/* FICHA RESUMEN DEL CAMIÓN */}
+              <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2 border-b border-indigo-100 pb-2">
+                  <span className="text-xs font-black text-indigo-900 uppercase">
+                    🚚 Camión #{shiftHandoverModal.truckNumber || 'S/N'} {shiftHandoverModal.truckPlate ? `(${shiftHandoverModal.truckPlate})` : ''}
+                  </span>
+                  <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2.5 py-0.5 rounded-full border border-indigo-300">
+                    {shiftHandoverModal.type === 'draft' ? 'Borrador en Carga' : 'Despacho Registrado'}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-700 space-y-1">
+                  <p>
+                    <span className="text-slate-500 font-medium">Supervisor creador:</span>{' '}
+                    <strong className="text-slate-900">{shiftHandoverModal.currentCreatorName}</strong> ({shiftHandoverModal.currentCreatorEmail})
+                  </p>
+                  {shiftHandoverModal.currentSharedWith && (
+                    <p className="text-amber-800 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 text-[11px]">
+                      ⚠️ Actualmente compartido con:{' '}
+                      <strong>{shiftHandoverModal.currentSharedWithName || shiftHandoverModal.currentSharedWith}</strong>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* SELECTOR DE SUPERVISOR */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+                  Seleccionar Supervisor Relevo (Destino)
+                </label>
+                <select
+                  value={selectedTargetSupervisorEmail}
+                  onChange={(e) => setSelectedTargetSupervisorEmail(e.target.value)}
+                  className="w-full bg-slate-50 border-2 border-slate-300 rounded-xl p-3 text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
+                >
+                  <option value="">-- Elige el supervisor entrante --</option>
+                  {palletUsers
+                    .filter(u => u.is_active !== false && (u.email || '').toLowerCase() !== currentUserEmail)
+                    .map(u => (
+                      <option key={u.id} value={u.email}>
+                        {u.display_name} ({u.email}) - {u.role === 'admin' ? 'Administrador' : u.role === 'jefe_turno' ? 'Jefe de Turno' : 'Supervisor'}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  El supervisor seleccionado tendrá permisos exclusivos para terminar el trabajo, agregar zonales, completar fotos y realizar el despacho oficial.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-600 font-medium leading-relaxed">
+                ℹ️ <strong>Nota de relevo:</strong> Al transferir, el nuevo supervisor podrá abrir este camión desde su cuenta para terminar la carga. Tu nombre permanecerá registrado en la auditoría del sistema como el creador original.
+              </div>
+            </div>
+
+            {/* ACCIONES MODAL */}
+            <div className="bg-slate-50 border-t border-slate-200 p-4 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShiftHandoverModal(null)}
+                disabled={handoverLoading}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmShiftHandover}
+                disabled={handoverLoading || !selectedTargetSupervisorEmail}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black text-xs transition-all flex items-center gap-2 cursor-pointer shadow-md active:scale-95"
+              >
+                {handoverLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowRightLeft className="w-4 h-4" />}
+                <span>Confirmar Traspaso</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}
