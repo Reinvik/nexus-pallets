@@ -55,8 +55,13 @@ export default function LoginPage() {
       return;
     }
 
-    if (password.length < 4) {
-      setError('La contraseña debe tener al menos 4 caracteres.');
+    if (password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres según la política de seguridad CIAL.');
+      return;
+    }
+
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      setError('La contraseña debe ser alfanumérica (contener al menos una letra y un número).');
       return;
     }
 
@@ -296,7 +301,7 @@ export default function LoginPage() {
                     onChange={setPassword}
                     show={showPassword}
                     onToggle={() => setShowPassword(!showPassword)}
-                    placeholder="Contraseña (mínimo 4 caracteres)"
+                    placeholder="Contraseña (mínimo 8 caracteres alfanuméricos)"
                     disabled={loading}
                   />
                   <div className="relative">
@@ -507,17 +512,34 @@ function PasswordField({
 }
 
 function PasswordStrength({ password }: { password: string }) {
-  const isOk = password.length >= 4;
+  const hasMinLen = password.length >= 8;
+  const hasLetter = /[a-zA-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const isOk = hasMinLen && hasLetter && hasNumber;
 
   return (
-    <div className="flex items-center justify-between text-[11px] font-semibold pt-1">
-      <span className={`flex items-center gap-1 ${isOk ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
-        <CheckCircle2 className="w-3 h-3" />
-        Mínimo 4 caracteres
-      </span>
-      {isOk && (
-        <span className="text-emerald-600 font-extrabold">Válida</span>
-      )}
+    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5 text-[11px] font-semibold">
+      <div className="flex items-center justify-between">
+        <span className="text-slate-500 uppercase text-[9px] font-bold tracking-wider">Seguridad CIAL</span>
+        {isOk ? (
+          <span className="text-emerald-600 font-extrabold flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Contraseña Segura
+          </span>
+        ) : (
+          <span className="text-amber-600 font-bold">Requisitos pendientes</span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 pt-0.5 text-[10px]">
+        <span className={`flex items-center gap-1 ${hasMinLen ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+          <CheckCircle2 className="w-3 h-3 shrink-0" /> Mínimo 8 caracteres
+        </span>
+        <span className={`flex items-center gap-1 ${hasLetter ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+          <CheckCircle2 className="w-3 h-3 shrink-0" /> Al menos 1 letra
+        </span>
+        <span className={`flex items-center gap-1 ${hasNumber ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+          <CheckCircle2 className="w-3 h-3 shrink-0" /> Al menos 1 número
+        </span>
+      </div>
     </div>
   );
 }

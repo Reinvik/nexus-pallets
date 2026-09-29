@@ -40,6 +40,8 @@ import {
   Copy,
   Send,
   Lock,
+  EyeOff,
+  KeyRound,
   ArrowRightLeft
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
@@ -539,13 +541,31 @@ export default function App({ user }: { user: any }) {
   const [truckAnden, setTruckAnden] = useState<string>('');
 
   const currentUserEmail = (user?.email || '').toLowerCase().trim();
-  type PalletUser = { id: string; email: string; display_name: string; role: string; is_active: boolean; can_sign?: boolean; notes: string; };
+  type PalletUser = { 
+    id: string; 
+    email: string; 
+    display_name: string; 
+    role: string; 
+    is_active: boolean; 
+    can_sign?: boolean; 
+    notes: string;
+    must_change_password?: boolean;
+    password_updated_at?: string | null;
+  };
   const [palletUsers, setPalletUsers] = useState<PalletUser[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<string>(() => {
     return (user?.user_metadata?.role || user?.app_metadata?.role || '').toLowerCase().trim();
   });
   const [isUserActive, setIsUserActive] = useState<boolean>(true);
   const [userProfileLoading, setUserProfileLoading] = useState<boolean>(true);
+
+  // Estados para pantalla bloqueante de cambio obligatorio de contraseña (Política TI CIAL)
+  const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
+  const [forceNewPassword, setForceNewPassword] = useState<string>('');
+  const [forceConfirmPassword, setForceConfirmPassword] = useState<string>('');
+  const [showForcePassword, setShowForcePassword] = useState<boolean>(false);
+  const [forcePasswordLoading, setForcePasswordLoading] = useState<boolean>(false);
+  const [forcePasswordError, setForcePasswordError] = useState<string | null>(null);
 
   // Determinación de roles 100% dinámica gobernada por la base de datos (pallet_users):
   const currentDbUser = palletUsers.find(u => (u.email || '').toLowerCase().trim() === currentUserEmail);
@@ -893,11 +913,85 @@ export default function App({ user }: { user: any }) {
     }
   };
 
+  // Manejo de actualización obligatoria de contraseña (Política de Seguridad TI CIAL)
+  const handleForcePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForcePasswordError(null);
+
+    if (forceNewPassword.length < 8) {
+      setForcePasswordError('La contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
+    if (!/[a-zA-Z]/.test(forceNewPassword)) {
+      setForcePasswordError('La contraseña debe contener al menos una letra (A-Z, a-z).');
+      return;
+    }
+    if (!/[0-9]/.test(forceNewPassword)) {
+      setForcePasswordError('La contraseña debe contener al menos un número (0-9).');
+      return;
+    }
+    if (forceNewPassword !== forceConfirmPassword) {
+      setForcePasswordError('Las contraseñas no coinciden.');
+      return;
+    }
+
+    setForcePasswordLoading(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const { error: authErr } = await supabase.auth.updateUser({
+        password: forceNewPassword,
+        data: {
+          must_change_password: false,
+          password_updated_at: nowIso,
+          password_policy_version: 'v2_alphanumeric_8'
+        }
+      });
+
+      if (authErr) throw authErr;
+
+      // Actualizar en base de datos pallet_users
+      await supabase
+        .from('pallet_users')
+        .update({
+          must_change_password: false,
+          password_updated_at: nowIso
+        })
+        .eq('email', currentUserEmail);
+
+      setPalletUsers(prev => prev.map(p => (p.email || '').toLowerCase().trim() === currentUserEmail ? { ...p, must_change_password: false, password_updated_at: nowIso } : p));
+      setMustChangePassword(false);
+      setSuccessMsg('🔒 Contraseña actualizada exitosamente bajo la política de seguridad corporativa CIAL.');
+    } catch (err: any) {
+      console.error('Error al actualizar contraseña:', err);
+      setForcePasswordError(err.message || 'Error al actualizar la contraseña');
+    } finally {
+      setForcePasswordLoading(false);
+    }
+  };
+
+  const handleToggleMustChangePassword = async (u: PalletUser) => {
+    const nextVal = !u.must_change_password;
+    try {
+      const { error } = await supabase
+        .from('pallet_users')
+        .update({
+          must_change_password: nextVal
+        })
+        .eq('id', u.id);
+
+      if (error) throw error;
+
+      setPalletUsers(prev => prev.map(p => p.id === u.id ? { ...p, must_change_password: nextVal } : p));
+      setSuccessMsg(`Estado de contraseña para ${u.display_name}: ${nextVal ? 'Deberá cambiar su contraseña en el próximo inicio de sesión' : 'Contraseña marcada como vigente'}.`);
+    } catch (err: any) {
+      console.error('Error al cambiar estado de contraseña:', err);
+      alert('Error: ' + err.message);
+    }
+  };
+
   // Sub-tab dentro del módulo Usuarios
   const [adminSubTab, setAdminSubTab] = useState<'usuarios' | 'almacenamiento'>('usuarios');
 
-  // ═══════════════════════════════════════════════════
-  // SISTEMA DE FIRMA DIGITAL
   // ═══════════════════════════════════════════════════
   // SISTEMA DE FIRMA DIGITAL
   // ═══════════════════════════════════════════════════
@@ -924,7 +1018,7 @@ export default function App({ user }: { user: any }) {
     try {
       const { data } = await supabase
         .from('pallet_users')
-        .select('signature_b64, notes, display_name, role, can_sign, is_active')
+        .select('signature_b64, notes, display_name, role, can_sign, is_active, must_change_password, password_updated_at')
         .eq('email', userEmail)
         .maybeSingle();
 
@@ -938,6 +1032,8 @@ export default function App({ user }: { user: any }) {
         if (data.role) setCurrentUserRole(data.role.toLowerCase());
         if (data.is_active !== undefined) setIsUserActive(data.is_active !== false);
         setUserCanSign(data.can_sign !== false);
+        // Si el usuario tiene activo el requerimiento de cambio de contraseña, activar pantalla bloqueante
+        setMustChangePassword(data.must_change_password === true);
       } else if (userEmail.endsWith('@cial.cl')) {
         // Auto-registra el usuario en pallet_users en estado PENDIENTE DE APROBACIÓN (is_active: false, can_sign: false)
         const isOwner = userEmail === 'ariel.mella@cial.cl';
@@ -4017,6 +4113,127 @@ export default function App({ user }: { user: any }) {
               <span>Cerrar Sesión</span>
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // PANTALLA DE BLOQUEO: ACTUALIZACIÓN OBLIGATORIA DE CONTRASEÑA (POLÍTICA DE SEGURIDAD TI CIAL)
+  if (mustChangePassword) {
+    const hasMinLen = forceNewPassword.length >= 8;
+    const hasLetter = /[a-zA-Z]/.test(forceNewPassword);
+    const hasNumber = /[0-9]/.test(forceNewPassword);
+    const passwordsMatch = forceNewPassword.length > 0 && forceNewPassword === forceConfirmPassword;
+    const isReady = hasMinLen && hasLetter && hasNumber && passwordsMatch;
+
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4 font-sans select-none">
+        <div className="max-w-md w-full bg-slate-800/95 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-5 animate-fade-in">
+          <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto border border-emerald-500/30 shadow-inner">
+            <Lock className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="text-[10px] font-black tracking-widest text-emerald-400 uppercase bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-800/50">
+              Seguridad Corporativa CIAL
+            </span>
+            <h2 className="text-xl font-black text-white uppercase tracking-wider pt-2">
+              Actualización Obligatoria de Contraseña
+            </h2>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Hola, <strong>{userDisplayName || formatSupervisorName(user?.email)}</strong>. Por políticas de seguridad de TI CIAL y cumplimiento de contraseñas seguras, debes actualizar tu contraseña antes de continuar a la plataforma.
+            </p>
+          </div>
+
+          <form onSubmit={handleForcePasswordChange} className="space-y-3.5 text-left">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                Nueva Contraseña
+              </label>
+              <div className="relative">
+                <input
+                  type={showForcePassword ? 'text' : 'password'}
+                  value={forceNewPassword}
+                  onChange={(e) => setForceNewPassword(e.target.value)}
+                  placeholder="Mínimo 8 caracteres alfanuméricos"
+                  required
+                  className="w-full bg-slate-950/80 border border-slate-700 rounded-xl py-2.5 px-3.5 pr-10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-semibold"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowForcePassword(!showForcePassword)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+                >
+                  {showForcePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                Confirmar Nueva Contraseña
+              </label>
+              <input
+                type={showForcePassword ? 'text' : 'password'}
+                value={forceConfirmPassword}
+                onChange={(e) => setForceConfirmPassword(e.target.value)}
+                placeholder="Repite la nueva contraseña"
+                required
+                className="w-full bg-slate-950/80 border border-slate-700 rounded-xl py-2.5 px-3.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-semibold"
+              />
+            </div>
+
+            {/* Checklist de requisitos de seguridad en tiempo real */}
+            <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800 text-[11px] space-y-1.5 font-medium">
+              <div className={`flex items-center gap-2 ${hasMinLen ? 'text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                <Check className="w-3.5 h-3.5" />
+                <span>Mínimo 8 caracteres</span>
+              </div>
+              <div className={`flex items-center gap-2 ${hasLetter ? 'text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                <Check className="w-3.5 h-3.5" />
+                <span>Al menos una letra (A-Z, a-z)</span>
+              </div>
+              <div className={`flex items-center gap-2 ${hasNumber ? 'text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                <Check className="w-3.5 h-3.5" />
+                <span>Al menos un número (0-9)</span>
+              </div>
+              <div className={`flex items-center gap-2 ${passwordsMatch ? 'text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                <Check className="w-3.5 h-3.5" />
+                <span>Las contraseñas coinciden</span>
+              </div>
+            </div>
+
+            {forcePasswordError && (
+              <div className="p-3 bg-rose-500/20 border border-rose-500/40 rounded-xl text-rose-300 text-xs font-semibold flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                <span>{forcePasswordError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={forcePasswordLoading || !isReady}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black py-3 rounded-xl transition-all cursor-pointer text-xs shadow-lg active:scale-95 flex items-center justify-center gap-2 mt-2"
+            >
+              {forcePasswordLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Establecer Contraseña y Continuar</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          <button
+            type="button"
+            onClick={() => supabase.auth.signOut()}
+            className="w-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white font-bold py-2 rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Cerrar Sesión</span>
+          </button>
         </div>
       </div>
     );
@@ -7218,6 +7435,15 @@ export default function App({ user }: { user: any }) {
                             ) : (
                               <p className="text-[10px] text-slate-400 italic mt-0.5">Sin cargo asignado</p>
                             )}
+                            {u.must_change_password ? (
+                              <span className="text-[10px] text-amber-700 bg-amber-100 font-bold px-1.5 py-0.5 rounded flex items-center gap-1 w-fit mt-1">
+                                <KeyRound className="w-2.5 h-2.5" /> Cambio de clave obligatorio pendiente
+                              </span>
+                            ) : u.password_updated_at ? (
+                              <span className="text-[10px] text-emerald-700 bg-emerald-50 font-bold px-1.5 py-0.5 rounded flex items-center gap-1 w-fit mt-1">
+                                <CheckCircle2 className="w-2.5 h-2.5" /> Clave alfanumérica actualizada ({new Date(u.password_updated_at).toLocaleDateString('es-CL')})
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -7241,6 +7467,25 @@ export default function App({ user }: { user: any }) {
                             ) : (
                               <><PenTool className="w-3 h-3 text-slate-400 opacity-50" /> 🚫 Sin Firma</>
                             )}
+                          </button>
+
+                          {/* BOTÓN GOBERNANZA DE CONTRASEÑA */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleMustChangePassword(u)}
+                            className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black cursor-pointer active:scale-95 flex items-center gap-1 border transition-all ${
+                              u.must_change_password
+                                ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                                : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                            }`}
+                            title={
+                              u.must_change_password
+                                ? 'El usuario deberá cambiar su clave en su próximo inicio de sesión. Clic para marcar como vigente.'
+                                : 'Clic para obligar al usuario a cambiar su contraseña en su próximo inicio de sesión.'
+                            }
+                          >
+                            <KeyRound className={`w-3 h-3 ${u.must_change_password ? 'text-amber-600' : 'text-slate-400'}`} />
+                            {u.must_change_password ? 'Cambio Pendiente' : 'Clave Al Día'}
                           </button>
 
                           <button
@@ -10124,19 +10369,15 @@ export default function App({ user }: { user: any }) {
                                       const lingasComment = chk.lingas_comment;
                                       const colchonetasPhotos: string[] = chk.colchonetas_photos || [];
                                       const lingasPhotos: string[] = chk.lingas_photos || [];
-                                      const generalPhotos: string[] = chk.photos || [];
 
                                       const sepStatus = getChecklistStatus(chk.separador_termico);
                                       const lingasStatus = getChecklistStatus(chk.lingas_camion);
-                                      const hasAnyFault = ['postura_anden', 'limpieza_estructura', 'luces_encendidas', 'separador_termico', 'lingas_camion'].some(k => {
-                                        const st = getChecklistStatus(chk[k]);
-                                        return st === 'AMARILLO' || st === 'ROJO';
-                                      });
+                                      const hasEquipmentFault = sepStatus === 'AMARILLO' || sepStatus === 'ROJO' || lingasStatus === 'AMARILLO' || lingasStatus === 'ROJO';
 
                                       const prevZonalInfo = getPreviousZonalForRecord(r, records);
                                       const thisZonals = r.zonals_detail?.map(z => z.zonal_name).filter(Boolean) || [];
 
-                                      // RECOLECTAR TODAS LAS FOTOS (VERDES, AMARILLAS Y ROJAS)
+                                      // RECOLECTAR EXCLUSIVAMENTE FOTOS DE SEPARADOR TÉRMICO Y ESLINGAS
                                       const inspectionPhotos: {
                                         url: string;
                                         category: string;
@@ -10156,29 +10397,9 @@ export default function App({ user }: { user: any }) {
                                       lingasPhotos.forEach((url) => {
                                         inspectionPhotos.push({
                                           url,
-                                          category: 'Lingas de Sujeción',
+                                          category: 'Eslingas de Sujeción',
                                           status: lingasStatus,
                                           comment: lingasComment
-                                        });
-                                      });
-
-                                      generalPhotos.forEach((url) => {
-                                        inspectionPhotos.push({
-                                          url,
-                                          category: 'Inspección General',
-                                          status: hasAnyFault ? 'AMARILLO' : 'VERDE'
-                                        });
-                                      });
-
-                                      // Fotos de Zonales de este despacho
-                                      (r.zonals_detail || []).forEach(z => {
-                                        (z.photos || []).forEach(url => {
-                                          inspectionPhotos.push({
-                                            url,
-                                            category: `Zonal ${z.zonal_name || 'Despacho'}`,
-                                            status: 'VERDE',
-                                            comment: z.sello ? `Sello: ${z.sello}` : undefined
-                                          });
                                         });
                                       });
 
@@ -10292,7 +10513,7 @@ export default function App({ user }: { user: any }) {
                                             <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
                                               <div className="flex items-center justify-between flex-wrap gap-1">
                                                 <span className="text-[10.5px] font-black uppercase text-slate-700 flex items-center gap-1.5">
-                                                  📷 Fotos Registradas ({inspectionPhotos.length} foto{inspectionPhotos.length > 1 ? 's' : ''}):
+                                                  📷 Fotos de Eslingas y Separador Térmico ({inspectionPhotos.length} foto{inspectionPhotos.length > 1 ? 's' : ''}):
                                                 </span>
                                                 <span className="text-[9.5px] text-slate-400 font-semibold">
                                                   Haz clic en una foto para ampliarla
@@ -10350,13 +10571,13 @@ export default function App({ user }: { user: any }) {
                                                 })}
                                               </div>
                                             </div>
-                                          ) : hasAnyFault ? (
+                                          ) : hasEquipmentFault ? (
                                             <div className="text-[10px] text-amber-700 italic bg-amber-50/50 p-2 rounded-xl border border-amber-200">
-                                              ⚠️ Despacho presenta observaciones (🟡 / 🔴) pero no se adjuntaron fotos de respaldo.
+                                              ⚠️ Presenta observaciones en eslingas o separador térmico pero no se adjuntaron fotos de respaldo.
                                             </div>
                                           ) : (
                                             <div className="text-[10px] text-emerald-700 font-semibold bg-emerald-50/50 p-2 rounded-xl border border-emerald-200 flex items-center justify-between">
-                                              <span>✅ Inspección 100% Conforme. Sin fotos adjuntas.</span>
+                                              <span>✅ Sin fotos adjuntas de eslingas ni separador térmico (Conforme).</span>
                                             </div>
                                           )}
                                         </div>
@@ -10805,15 +11026,41 @@ export default function App({ user }: { user: any }) {
                   setPasswordError("La contraseña debe tener al menos 8 caracteres.");
                   return;
                 }
+                if (!/[a-zA-Z]/.test(newPassword)) {
+                  setPasswordError("La contraseña debe contener al menos una letra (A-Z, a-z).");
+                  return;
+                }
+                if (!/[0-9]/.test(newPassword)) {
+                  setPasswordError("La contraseña debe contener al menos un número (0-9).");
+                  return;
+                }
                 if (newPassword !== confirmNewPassword) {
                   setPasswordError("Las contraseñas no coinciden.");
                   return;
                 }
                 setPasswordLoading(true);
                 try {
-                  const { error } = await supabase.auth.updateUser({ password: newPassword });
+                  const nowIso = new Date().toISOString();
+                  const { error } = await supabase.auth.updateUser({ 
+                    password: newPassword,
+                    data: {
+                      must_change_password: false,
+                      password_updated_at: nowIso,
+                      password_policy_version: 'v2_alphanumeric_8'
+                    }
+                  });
                   if (error) throw error;
-                  setPasswordSuccess("¡Contraseña actualizada con éxito!");
+
+                  await supabase
+                    .from('pallet_users')
+                    .update({
+                      must_change_password: false,
+                      password_updated_at: nowIso
+                    })
+                    .eq('email', currentUserEmail);
+
+                  setPalletUsers(prev => prev.map(p => (p.email || '').toLowerCase().trim() === currentUserEmail ? { ...p, must_change_password: false, password_updated_at: nowIso } : p));
+                  setPasswordSuccess("¡Contraseña actualizada con éxito según política CIAL!");
                   setNewPassword('');
                   setConfirmNewPassword('');
                 } catch (err: any) {
@@ -10842,10 +11089,10 @@ export default function App({ user }: { user: any }) {
 
               <div className="space-y-2.5">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nueva Contraseña</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nueva Contraseña (Alfanumérica 8+)</label>
                   <input
                     type="password"
-                    placeholder="Mínimo 8 caracteres"
+                    placeholder="Mínimo 8 caracteres alfanuméricos"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     disabled={passwordLoading}
