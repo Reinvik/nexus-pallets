@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import cialLogo from '../assets/cial-alimentos-logo.png';
 import { Mail, Lock, ArrowRight, CheckCircle2, AlertCircle, Eye, EyeOff, RotateCcw } from 'lucide-react';
@@ -16,6 +16,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (localStorage.getItem('nexus_session_expired') === 'true') {
+      localStorage.removeItem('nexus_session_expired');
+      setError('Tu sesión se cerró automáticamente por inactividad (30 minutos sin uso) según la política de seguridad corporativa CIAL.');
+    }
+  }, []);
 
   const validateDomain = (mail: string): boolean => {
     const domain = mail.split('@')[1]?.toLowerCase();

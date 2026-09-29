@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Truck, 
   Check, 
@@ -566,6 +566,53 @@ export default function App({ user }: { user: any }) {
   const [showForcePassword, setShowForcePassword] = useState<boolean>(false);
   const [forcePasswordLoading, setForcePasswordLoading] = useState<boolean>(false);
   const [forcePasswordError, setForcePasswordError] = useState<string | null>(null);
+
+  // ═══════════════════════════════════════════════════════════════
+  // POLÍTICA DE SEGURIDAD TI CIAL: TIMEOUT DE INACTIVIDAD (30 MIN)
+  // CIS Control 16 — Protección ante terminales desatendidas
+  // ═══════════════════════════════════════════════════════════════
+  const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+  const WARNING_TIMEOUT_MS = 28 * 60 * 1000; // 28 minutos (2 min de aviso previo)
+
+  const [idleRemainingSeconds, setIdleRemainingSeconds] = useState<number | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+
+  const resetIdleTimer = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    setIdleRemainingSeconds(null);
+  }, []);
+
+  useEffect(() => {
+    const handleUserActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityRef.current > 1000) {
+        lastActivityRef.current = now;
+      }
+    };
+
+    const events = ['mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach(ev => window.addEventListener(ev, handleUserActivity, { passive: true }));
+
+    const interval = setInterval(async () => {
+      const elapsed = Date.now() - lastActivityRef.current;
+
+      if (elapsed >= IDLE_TIMEOUT_MS) {
+        clearInterval(interval);
+        localStorage.setItem('nexus_session_expired', 'true');
+        await supabase.auth.signOut();
+      } else if (elapsed >= WARNING_TIMEOUT_MS) {
+        const remaining = Math.max(0, Math.ceil((IDLE_TIMEOUT_MS - elapsed) / 1000));
+        setIdleRemainingSeconds(remaining);
+      } else {
+        setIdleRemainingSeconds(prev => (prev !== null ? null : prev));
+      }
+    }, 1000);
+
+    return () => {
+      events.forEach(ev => window.removeEventListener(ev, handleUserActivity));
+      clearInterval(interval);
+    };
+  }, [IDLE_TIMEOUT_MS, WARNING_TIMEOUT_MS]);
 
   // Determinación de roles 100% dinámica gobernada por la base de datos (pallet_users):
   const currentDbUser = palletUsers.find(u => (u.email || '').toLowerCase().trim() === currentUserEmail);
@@ -12947,6 +12994,61 @@ export default function App({ user }: { user: any }) {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ADVERTENCIA DE EXPIRACIÓN POR INACTIVIDAD (CIS CONTROL 16) */}
+      {idleRemainingSeconds !== null && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-fade-in font-sans">
+          <div className="bg-slate-900 border-2 border-amber-500/80 text-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
+            <div className="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto border border-amber-500/40 animate-pulse">
+              <Clock className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-800/60">
+                Seguridad TI CIAL — CIS Control 16
+              </span>
+              <h3 className="text-base font-black uppercase tracking-wide pt-1">
+                ¿Sigues ahí?
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Tu sesión se cerrará automáticamente en:
+              </p>
+            </div>
+
+            <div className="py-2">
+              <div className="text-4xl font-black font-mono text-amber-400 tracking-wider">
+                {Math.floor(idleRemainingSeconds / 60)}:{(idleRemainingSeconds % 60).toString().padStart(2, '0')}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Protección contra terminales desatendidas en andén y planta.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={resetIdleTimer}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl transition-all cursor-pointer text-xs shadow-lg active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Check className="w-4 h-4" />
+                <span>Continuar Trabajando</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  localStorage.setItem('nexus_session_expired', 'true');
+                  await supabase.auth.signOut();
+                }}
+                className="w-full bg-white/10 hover:bg-white/20 text-slate-300 font-bold py-2 rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Cerrar Sesión Ahora</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
