@@ -623,13 +623,20 @@ export default function App({ user }: { user: any }) {
   const isAdmin = userIsActive && (resolvedRole === 'admin' || resolvedRole === 'superadmin' || currentUserEmail === 'ariel.mella@cial.cl');
   // Jefe de Turno: Rol 'jefe_turno', 'jefe', 'supervisor_jefe' o Administrador
   const isShiftLeader = userIsActive && (isAdmin || ['jefe', 'jefe_turno', 'supervisor_jefe'].includes(resolvedRole));
+  // Supervisor: Rol 'supervisor' o superior en base de datos (o Jefe de Turno / Administrador)
+  const isSupervisor = userIsActive && (isAdmin || isShiftLeader || ['supervisor', 'supervisor_despacho'].includes(resolvedRole));
+  // Rol base: Usuario / Facturador (solo lectura: no crea, no edita, no ve borradores)
+  // Permiso para crear y editar documentos: Exclusivo para supervisores, jefes de turno y administradores
+  const canCreateDispatches = isSupervisor;
   const isSuperAdmin = isAdmin;
 
   // Permiso para editar un despacho guardado en historial:
-  // 1. Días anteriores: ÚNICAMENTE Administrador puede modificar registros históricos
-  // 2. Mismo día (horario Chile): Supervisor creador, supervisor receptor (vía Cambio de Turno), Jefe de Turno o Administrador
+  // 1. Rol Usuario / Facturador: NUNCA puede editar registros (solo lectura)
+  // 2. Días anteriores: ÚNICAMENTE Administrador puede modificar registros históricos
+  // 3. Mismo día (horario Chile): Supervisor creador, supervisor receptor (vía Cambio de Turno), Jefe de Turno o Administrador
   //    (Nota: si el despacho ya fue firmado, al guardar los cambios la firma previa se anula para requerir nueva validación)
   const canUserEditDispatch = (rec: DispatchRecord): boolean => {
+    if (!canCreateDispatches) return false;
     if (isAdmin) return true;
     const today = getChileDateString();
     if (rec.inspection_date !== today) return false;
@@ -653,9 +660,11 @@ export default function App({ user }: { user: any }) {
   };
 
   // Permiso para eliminar un despacho:
-  // 1. Si está firmado: los usuarios y jefes de turno NO PUEDEN eliminarlo. Solo Administrador.
-  // 2. Si no está firmado: solo durante el mismo día por el supervisor creador, jefe de turno o Administrador
+  // 1. Rol Usuario / Facturador: NUNCA puede eliminar registros
+  // 2. Si está firmado: los usuarios y jefes de turno NO PUEDEN eliminarlo. Solo Administrador.
+  // 3. Si no está firmado: solo durante el mismo día por el supervisor creador, jefe de turno o Administrador
   const canUserDeleteDispatch = (rec: DispatchRecord): boolean => {
+    if (!canCreateDispatches) return false;
     if (rec.signed_by) return isAdmin;
     if (isAdmin) return true;
 
@@ -677,6 +686,7 @@ export default function App({ user }: { user: any }) {
   // Permiso para botón "Cambio de Turno" en un despacho del historial:
   // Solo durante el mismo día por el supervisor creador, jefe de turno o Administrador
   const canUserHandoverDispatch = (rec: DispatchRecord): boolean => {
+    if (!canCreateDispatches) return false;
     const today = getChileDateString();
     if (rec.inspection_date !== today && !isAdmin) return false;
     if (isAdmin || isShiftLeader) return true;
@@ -694,6 +704,7 @@ export default function App({ user }: { user: any }) {
   // Permiso para editar un borrador de camión (draft en carga):
   // Solo el supervisor creador, el supervisor receptor vía Cambio de Turno, Jefe de Turno o Administrador
   const canUserEditDraft = (draft: TruckDraft): boolean => {
+    if (!canCreateDispatches) return false;
     if (isAdmin || isShiftLeader) return true;
     const creatorEmail = (draft.createdBy || '').toLowerCase().trim();
     const sharedEmail = (draft.sharedWith || '').toLowerCase().trim();
@@ -714,6 +725,7 @@ export default function App({ user }: { user: any }) {
   // Permiso para realizar cambio de turno sobre un camión en carga:
   // Solo el supervisor creador, Jefe de Turno o Administrador
   const canUserHandoverDraft = (draft: TruckDraft): boolean => {
+    if (!canCreateDispatches) return false;
     if (isAdmin || isShiftLeader) return true;
     const creatorEmail = (draft.createdBy || '').toLowerCase().trim();
     if (!creatorEmail) return true;
@@ -808,9 +820,9 @@ export default function App({ user }: { user: any }) {
   const [showNewUserForm, setShowNewUserForm] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
-  const [newUserRole, setNewUserRole] = useState('supervisor');
-  const [newUserNotes, setNewUserNotes] = useState('');
-  const [newUserCanSign, setNewUserCanSign] = useState(true);
+  const [newUserRole, setNewUserRole] = useState('usuario');
+  const [newUserNotes, setNewUserNotes] = useState('Facturador');
+  const [newUserCanSign, setNewUserCanSign] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [savingUser, setSavingUser] = useState(false);
 
@@ -910,7 +922,7 @@ export default function App({ user }: { user: any }) {
       if (error) throw error;
       setSuccessMsg(`Usuario ${newUserName} creado exitosamente.`);
       setShowNewUserForm(false);
-      setNewUserEmail(''); setNewUserName(''); setNewUserRole('supervisor'); setNewUserNotes(''); setNewUserCanSign(true);
+      setNewUserEmail(''); setNewUserName(''); setNewUserRole('usuario'); setNewUserNotes('Facturador'); setNewUserCanSign(false);
       fetchPalletUsers();
     } catch (err: any) {
       alert('Error: ' + err.message);
@@ -919,23 +931,27 @@ export default function App({ user }: { user: any }) {
     }
   };
 
-  const handleQuickApproveUser = async (u: PalletUser, role: 'supervisor' | 'jefe_turno' | 'admin' = 'supervisor') => {
+  const handleQuickApproveUser = async (u: PalletUser, role: 'usuario' | 'supervisor' | 'jefe_turno' | 'admin' = 'usuario') => {
     try {
+      const isReader = role === 'usuario';
+      const defaultNotes = isReader ? 'Facturador' : role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : 'Supervisor de Despacho';
+      const canSignVal = !isReader;
+
       const { error } = await supabase
         .from('pallet_users')
         .update({
           is_active: true,
           role: role,
-          can_sign: true,
-          notes: role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : 'Supervisor de Despacho',
+          can_sign: canSignVal,
+          notes: defaultNotes,
           updated_at: new Date().toISOString()
         })
         .eq('id', u.id);
 
       if (error) throw error;
 
-      setPalletUsers(prev => prev.map(p => p.id === u.id ? { ...p, is_active: true, role, can_sign: true, notes: role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : 'Supervisor de Despacho' } : p));
-      setSuccessMsg(`✅ Acceso aprobado para ${u.display_name} (${u.email}) con rol ${role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : 'Supervisor'}.`);
+      setPalletUsers(prev => prev.map(p => p.id === u.id ? { ...p, is_active: true, role, can_sign: canSignVal, notes: defaultNotes } : p));
+      setSuccessMsg(`✅ Acceso aprobado para ${u.display_name} (${u.email}) con rol ${role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : role === 'usuario' ? 'Facturador (Solo Lectura)' : 'Supervisor'}.`);
     } catch (err: any) {
       console.error('Error al aprobar usuario:', err);
       alert('Error al aprobar usuario: ' + (err.message || 'Error de conexión'));
@@ -1073,7 +1089,7 @@ export default function App({ user }: { user: any }) {
         if (data.signature_b64) setUserSignature(data.signature_b64);
         if (data.notes && data.notes.trim()) setUserTitle(data.notes.trim());
         else if (data.role) {
-          setUserTitle(data.role === 'admin' ? 'Administrador' : data.role === 'jefe_turno' ? 'Jefe de Turno' : 'Supervisor');
+          setUserTitle(data.role === 'admin' ? 'Administrador' : data.role === 'jefe_turno' ? 'Jefe de Turno' : (data.role === 'usuario' || data.role === 'facturador') ? 'Facturador' : 'Supervisor');
         }
         if (data.display_name) setUserDisplayName(data.display_name);
         if (data.role) setCurrentUserRole(data.role.toLowerCase());
@@ -1082,7 +1098,7 @@ export default function App({ user }: { user: any }) {
         // Si el usuario tiene activo el requerimiento de cambio de contraseña, activar pantalla bloqueante
         setMustChangePassword(data.must_change_password === true);
       } else if (userEmail.endsWith('@cial.cl')) {
-        // Auto-registra el usuario en pallet_users en estado PENDIENTE DE APROBACIÓN (is_active: false, can_sign: false)
+        // Auto-registra el usuario en pallet_users en estado PENDIENTE DE APROBACIÓN (is_active: false, can_sign: false) con rol base 'usuario' (Facturador)
         const isOwner = userEmail === 'ariel.mella@cial.cl';
         const meta = user.user_metadata || {};
         const fallbackName = meta.full_name || meta.name || userEmail.split('@')[0].split('.').map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
@@ -1092,17 +1108,17 @@ export default function App({ user }: { user: any }) {
           .insert({
             email: userEmail,
             display_name: fallbackName,
-            role: isOwner ? 'admin' : 'supervisor',
+            role: isOwner ? 'admin' : 'usuario',
             is_active: isOwner ? true : false,
             can_sign: isOwner ? true : false,
-            notes: isOwner ? 'Administrador' : 'Pendiente de aprobación'
+            notes: isOwner ? 'Administrador' : 'Facturador (Pendiente de Aprobación)'
           })
           .select()
           .single();
 
         if (newUser) {
           setUserDisplayName(newUser.display_name);
-          setUserTitle(isOwner ? 'Administrador' : 'Pendiente de aprobación');
+          setUserTitle(isOwner ? 'Administrador' : 'Facturador (Pendiente de Aprobación)');
           setCurrentUserRole(newUser.role);
           setIsUserActive(newUser.is_active !== false);
           setUserCanSign(newUser.can_sign !== false);
@@ -2246,7 +2262,7 @@ export default function App({ user }: { user: any }) {
 
   // ── C: Guardar sin fotos con reintentos (hasta 3 intentos) ──────────────
   const autoSaveDraftTextOnly = async (retryCount = 0): Promise<boolean> => {
-    if (!activeDraftId) return false;
+    if (!canCreateDispatches || !activeDraftId) return false;
     const MAX_RETRIES = 3;
     const RETRY_DELAY_MS = 8000; // 8s entre reintentos
     try {
@@ -3307,6 +3323,10 @@ export default function App({ user }: { user: any }) {
   // Guardar edición completa de despacho
   const handleSaveEditDispatch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreateDispatches) {
+      alert("⚠️ Acción denegada: El rol Facturador tiene acceso exclusivo de solo lectura.");
+      return;
+    }
     if (!editingDispatchRecord) return;
 
     const today = getChileDateString();
@@ -3441,6 +3461,10 @@ export default function App({ user }: { user: any }) {
   };
 
   const handleSaveCloseTime = async (recordId: string, time: string) => {
+    if (!canCreateDispatches) {
+      alert("⚠️ Acción denegada: El rol Facturador tiene acceso exclusivo de solo lectura.");
+      return;
+    }
     setSavingCloseTimeId(recordId);
     try {
       const { error } = await supabase
@@ -3823,6 +3847,10 @@ export default function App({ user }: { user: any }) {
 
   const handleSubmit = async (e?: React.FormEvent, forceConfirm = false) => {
     if (e) e.preventDefault();
+    if (!canCreateDispatches) {
+      alert("⚠️ Acción denegada: El rol Facturador tiene acceso exclusivo de solo lectura. Los despachos deben ser generados por un Supervisor autorizado.");
+      return;
+    }
     if (!supervisorName) {
       alert("Por favor ingresa el nombre del Supervisor.");
       return;
@@ -4309,9 +4337,21 @@ export default function App({ user }: { user: any }) {
             <div className="text-right text-xs text-emerald-100 hidden lg:block mr-2 select-none">
               <div className="font-semibold flex items-center gap-1 justify-end">
                 {supervisorName}
-                {isAdmin && (
+                {isAdmin ? (
                   <span className="text-[9px] bg-amber-400 text-amber-950 font-extrabold px-1.5 py-0.2 rounded uppercase">
                     ADMIN
+                  </span>
+                ) : isShiftLeader ? (
+                  <span className="text-[9px] bg-amber-200 text-amber-900 font-extrabold px-1.5 py-0.2 rounded uppercase">
+                    JEFE TURNO
+                  </span>
+                ) : isSupervisor ? (
+                  <span className="text-[9px] bg-emerald-400 text-emerald-950 font-extrabold px-1.5 py-0.2 rounded uppercase">
+                    SUPERVISOR
+                  </span>
+                ) : (
+                  <span className="text-[9px] bg-blue-400 text-blue-950 font-extrabold px-1.5 py-0.2 rounded uppercase">
+                    FACTURADOR
                   </span>
                 )}
               </div>
@@ -4335,7 +4375,7 @@ export default function App({ user }: { user: any }) {
               <span className="text-xs font-bold hidden md:inline">Perfil</span>
             </button>
 
-            {user && (
+            {user && canCreateDispatches && userCanSign && (
               <button
                 type="button"
                 onClick={() => setShowSignaturePad(true)}
@@ -4371,15 +4411,17 @@ export default function App({ user }: { user: any }) {
               Salidas a Tiempo
             </span>
           </button>
-          <button 
-            onClick={() => setActiveTab('nuevo')}
-            className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'nuevo' ? 'border-brand-primary text-brand-primary bg-emerald-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-          >
-            <span className="flex items-center justify-center gap-2">
-              <ClipboardList className="w-4.5 h-4.5" />
-              Despacho Camión
-            </span>
-          </button>
+          {canCreateDispatches && (
+            <button 
+              onClick={() => setActiveTab('nuevo')}
+              className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'nuevo' ? 'border-brand-primary text-brand-primary bg-emerald-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+            >
+              <span className="flex items-center justify-center gap-2">
+                <ClipboardList className="w-4.5 h-4.5" />
+                Despacho Camión
+              </span>
+            </button>
+          )}
           <button 
             onClick={() => { setActiveTab('historial'); fetchHistory(); }}
             className={`flex-1 py-3 text-center text-sm font-bold border-b-2 transition-all cursor-pointer ${activeTab === 'historial' ? 'border-brand-primary text-brand-primary bg-emerald-50/20' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
@@ -4480,6 +4522,28 @@ export default function App({ user }: { user: any }) {
         )}
 
         {activeTab === 'nuevo' && (
+          !canCreateDispatches ? (
+            <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4 shadow-sm select-none my-6">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center mx-auto text-2xl">
+                📋
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-slate-800">
+                  Acceso Restringido — Rol Facturador (Solo Lectura)
+                </h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                  Tu cuenta tiene asignado el perfil <strong>Facturador / Usuario</strong> con permisos de consulta y descarga de información operacional. La creación y edición de despachos de camiones está reservada para Supervisores autorizados por el Administrador en la pestaña Usuarios.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('historial'); fetchHistory(); }}
+                className="px-5 py-2.5 bg-brand-primary hover:bg-brand-secondary text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95 inline-flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" /> Ir al Historial de Cargas
+              </button>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             
             {/* BANNER MODO EDICIÓN DE DESPACHO */}
@@ -5878,6 +5942,7 @@ export default function App({ user }: { user: any }) {
             </section>
 
           </form>
+          )
         )}
 
         {activeTab === 'historial' && (
@@ -5985,8 +6050,8 @@ export default function App({ user }: { user: any }) {
             {/* VISTA 1: POR CAMIONES (Tarjeta tradicional) */}
             {historySubTab === 'camiones' && (
               <div className="space-y-4">
-                {/* SECCIÓN DE AVANCES GUARDADOS (BORRADORES EN CARGA) */}
-                {truckDrafts.filter(d => d.truckNumber || d.truckPlate || (d.selectedZonals && d.selectedZonals.length > 0) || (d.photos && d.photos.length > 0)).length > 0 && (
+                {/* SECCIÓN DE AVANCES GUARDADOS (BORRADORES EN CARGA) - Visible solo para Supervisores */}
+                {canCreateDispatches && truckDrafts.filter(d => d.truckNumber || d.truckPlate || (d.selectedZonals && d.selectedZonals.length > 0) || (d.photos && d.photos.length > 0)).length > 0 && (
                   <div className="space-y-3 bg-amber-50/60 p-4 rounded-2xl border-2 border-amber-300 shadow-2xs">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <h3 className="text-xs font-black uppercase text-amber-950 tracking-wider flex items-center gap-2">
@@ -6194,7 +6259,7 @@ export default function App({ user }: { user: any }) {
                                     <span className={`font-mono font-black ${rec.close_time ? 'text-brand-primary' : 'text-slate-400 italic'}`}>
                                       {rec.close_time ? `${rec.close_time} hrs` : 'Pendiente'}
                                     </span>
-                                    {(isAdmin || rec.inspection_date === getChileDateString()) && (
+                                    {canCreateDispatches && (isAdmin || rec.inspection_date === getChileDateString()) && (
                                       <button
                                         type="button"
                                         onClick={() => setEditingCloseTimes(prev => ({ ...prev, [rec.id]: rec.close_time || '' }))}
@@ -7255,9 +7320,10 @@ export default function App({ user }: { user: any }) {
                       onChange={e => setNewUserRole(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400 cursor-pointer"
                     >
-                      <option value="admin">🔴 Administrador</option>
+                      <option value="usuario">🔵 Facturador / Usuario (Solo Lectura)</option>
+                      <option value="supervisor">🟢 Supervisor (Crear y Editar)</option>
                       <option value="jefe_turno">🟡 Jefe de Turno</option>
-                      <option value="supervisor">🟢 Supervisor</option>
+                      <option value="admin">🔴 Administrador</option>
                     </select>
                   </div>
                   <div>
@@ -7339,8 +7405,17 @@ export default function App({ user }: { user: any }) {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <button
                               type="button"
+                              onClick={() => handleQuickApproveUser(pu, 'usuario')}
+                              className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-black cursor-pointer shadow-xs active:scale-95 flex items-center gap-1"
+                              title="Aprobar con rol Facturador (Solo Lectura)"
+                            >
+                              <ShieldCheck className="w-3 h-3" /> Aprobar Facturador
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => handleQuickApproveUser(pu, 'supervisor')}
                               className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black cursor-pointer shadow-xs active:scale-95 flex items-center gap-1"
+                              title="Aprobar con rol Supervisor (Creación y Edición)"
                             >
                               <ShieldCheck className="w-3 h-3" /> Aprobar Supervisor
                             </button>
@@ -7384,6 +7459,7 @@ export default function App({ user }: { user: any }) {
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>Admin</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>Jefe Turno</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>Supervisor</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>Facturador</span>
                     </div>
                     <span>Total: {palletUsers.filter(u => u.display_name.toLowerCase().includes(userSearchQuery.toLowerCase()) || u.email.toLowerCase().includes(userSearchQuery.toLowerCase()) || (u.notes && u.notes.toLowerCase().includes(userSearchQuery.toLowerCase()))).length} usuarios</span>
                   </div>
@@ -7420,9 +7496,10 @@ export default function App({ user }: { user: any }) {
                               onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400 cursor-pointer"
                             >
-                              <option value="admin">🔴 Administrador</option>
+                              <option value="usuario">🔵 Facturador / Usuario (Solo Lectura)</option>
+                              <option value="supervisor">🟢 Supervisor (Crear y Editar)</option>
                               <option value="jefe_turno">🟡 Jefe de Turno</option>
-                              <option value="supervisor">🟢 Supervisor</option>
+                              <option value="admin">🔴 Administrador</option>
                             </select>
                           </div>
                           <div>
@@ -7470,7 +7547,7 @@ export default function App({ user }: { user: any }) {
                       /* MODO VISTA */
                       <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${u.role === 'admin' ? 'bg-rose-500' : u.role === 'jefe_turno' ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${u.role === 'admin' ? 'bg-rose-500' : u.role === 'jefe_turno' ? 'bg-amber-400' : (u.role === 'usuario' || u.role === 'facturador') ? 'bg-blue-500' : 'bg-emerald-500'}`} />
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm font-black text-slate-800">{u.display_name}</span>
@@ -7494,8 +7571,16 @@ export default function App({ user }: { user: any }) {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                          <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase ${u.role === 'admin' ? 'bg-rose-100 text-rose-700' : u.role === 'jefe_turno' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                            {u.role === 'admin' ? 'Admin' : u.role === 'jefe_turno' ? 'Jefe Turno' : 'Supervisor'}
+                          <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase ${
+                            u.role === 'admin' 
+                              ? 'bg-rose-100 text-rose-700' 
+                              : u.role === 'jefe_turno' 
+                              ? 'bg-amber-100 text-amber-700' 
+                              : (u.role === 'usuario' || u.role === 'facturador') 
+                              ? 'bg-blue-100 text-blue-700' 
+                              : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {u.role === 'admin' ? 'Admin' : u.role === 'jefe_turno' ? 'Jefe Turno' : (u.role === 'usuario' || u.role === 'facturador') ? 'Facturador' : 'Supervisor'}
                           </span>
 
                           {/* BOTÓN CONCEDER / QUITAR PERMISO FIRMA */}
@@ -7766,8 +7851,8 @@ export default function App({ user }: { user: any }) {
             });
           });
 
-          // 2. Zonas agregadas en camiones en carga activos (Borradores Abiertos) para el día de hoy
-          if (departuresDate === getChileDateString()) {
+          // 2. Zonas agregadas en camiones en carga activos (Borradores Abiertos) para el día de hoy (Solo para Supervisores)
+          if (departuresDate === getChileDateString() && canCreateDispatches) {
             truckDrafts.forEach(draft => {
               (draft.selectedZonals || []).forEach(sz => {
                 const baseName = getBaseZonalName(sz.zonal_name);
@@ -7960,13 +8045,15 @@ export default function App({ user }: { user: any }) {
                   <p className="text-xs text-slate-500 max-w-md mx-auto font-medium">
                     Las zonales se activarán automáticamente en este monitor con su cuenta regresiva una vez que se agreguen en un despacho en la pestaña <strong>"Despacho Camión"</strong>.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('nuevo')}
-                    className="px-4 py-2 bg-brand-primary hover:bg-brand-secondary text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95 inline-flex items-center gap-1.5"
-                  >
-                    <ClipboardList className="w-4 h-4" /> IR A REGISTRAR DESPACHO
-                  </button>
+                  {canCreateDispatches && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('nuevo')}
+                      className="px-4 py-2 bg-brand-primary hover:bg-brand-secondary text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95 inline-flex items-center gap-1.5"
+                    >
+                      <ClipboardList className="w-4 h-4" /> IR A REGISTRAR DESPACHO
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3 select-none">
@@ -8070,7 +8157,7 @@ export default function App({ user }: { user: any }) {
                                 </div>
                               )}
                             </div>
-                          ) : card.isOpenDraft ? (
+                          ) : (card.isOpenDraft && canCreateDispatches) ? (
                             <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200/90 text-xs text-slate-700 space-y-0.5 shadow-2xs">
                               <div className="flex items-center justify-between font-extrabold text-amber-950">
                                 <span className="flex items-center gap-1">
@@ -12079,8 +12166,8 @@ export default function App({ user }: { user: any }) {
           });
         });
 
-        // 2. Zonas agregadas en camiones en carga activos (Borradores Abiertos) para el día de hoy
-        if (departuresDate === getChileDateString()) {
+        // 2. Zonas agregadas en camiones en carga activos (Borradores Abiertos) para el día de hoy (Solo para Supervisores)
+        if (departuresDate === getChileDateString() && canCreateDispatches) {
           truckDrafts.forEach(draft => {
             (draft.selectedZonals || []).forEach(sz => {
               const baseName = getBaseZonalName(sz.zonal_name);
