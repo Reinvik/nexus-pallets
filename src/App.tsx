@@ -820,8 +820,8 @@ export default function App({ user }: { user: any }) {
   const [showNewUserForm, setShowNewUserForm] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
-  const [newUserRole, setNewUserRole] = useState('usuario');
-  const [newUserNotes, setNewUserNotes] = useState('Facturador');
+  const [newUserRole, setNewUserRole] = useState('administrativo');
+  const [newUserNotes, setNewUserNotes] = useState('Administrativo');
   const [newUserCanSign, setNewUserCanSign] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [savingUser, setSavingUser] = useState(false);
@@ -922,7 +922,7 @@ export default function App({ user }: { user: any }) {
       if (error) throw error;
       setSuccessMsg(`Usuario ${newUserName} creado exitosamente.`);
       setShowNewUserForm(false);
-      setNewUserEmail(''); setNewUserName(''); setNewUserRole('usuario'); setNewUserNotes('Facturador'); setNewUserCanSign(false);
+      setNewUserEmail(''); setNewUserName(''); setNewUserRole('administrativo'); setNewUserNotes('Administrativo'); setNewUserCanSign(false);
       fetchPalletUsers();
     } catch (err: any) {
       alert('Error: ' + err.message);
@@ -931,10 +931,49 @@ export default function App({ user }: { user: any }) {
     }
   };
 
-  const handleQuickApproveUser = async (u: PalletUser, role: 'usuario' | 'supervisor' | 'jefe_turno' | 'admin' = 'usuario') => {
+  // Cambio rápido con un clic entre Supervisor (Crear y Editar) y Administrativo (Solo Lectura)
+  const handleToggleUserRole = async (u: PalletUser) => {
+    const isCurrentlyEditor = ['supervisor', 'jefe_turno', 'admin'].includes((u.role || '').toLowerCase());
+    const newRole = isCurrentlyEditor ? 'administrativo' : 'supervisor';
+    const newCanSign = newRole === 'supervisor';
+    const newNotes = newRole === 'administrativo' ? 'Administrativo' : 'Supervisor de Despacho';
+
     try {
-      const isReader = role === 'usuario';
-      const defaultNotes = isReader ? 'Facturador' : role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : 'Supervisor de Despacho';
+      const { error } = await supabase
+        .from('pallet_users')
+        .update({
+          role: newRole,
+          can_sign: newCanSign,
+          notes: u.notes && !['Administrativo', 'Supervisor de Despacho', 'Facturador'].includes(u.notes) ? u.notes : newNotes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', u.id);
+
+      if (error) throw error;
+
+      setPalletUsers(prev => prev.map(p => p.id === u.id ? { 
+        ...p, 
+        role: newRole, 
+        can_sign: newCanSign, 
+        notes: p.notes && !['Administrativo', 'Supervisor de Despacho', 'Facturador'].includes(p.notes) ? p.notes : newNotes 
+      } : p));
+
+      if (u.email.toLowerCase() === (user?.email || '').toLowerCase()) {
+        setCurrentUserRole(newRole);
+        setUserCanSign(newCanSign);
+        setUserTitle(newNotes);
+      }
+
+      setSuccessMsg(`Rol de ${u.display_name} actualizado a ${newRole === 'supervisor' ? 'Supervisor (Crear y Editar) 🟢' : 'Administrativo (Solo Lectura) 🔵'}.`);
+    } catch (err: any) {
+      alert('Error al cambiar rol: ' + (err.message || 'Error de conexión'));
+    }
+  };
+
+  const handleQuickApproveUser = async (u: PalletUser, role: 'administrativo' | 'supervisor' | 'jefe_turno' | 'admin' = 'administrativo') => {
+    try {
+      const isReader = role === 'administrativo';
+      const defaultNotes = isReader ? 'Administrativo' : role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : 'Supervisor de Despacho';
       const canSignVal = !isReader;
 
       const { error } = await supabase
@@ -951,7 +990,7 @@ export default function App({ user }: { user: any }) {
       if (error) throw error;
 
       setPalletUsers(prev => prev.map(p => p.id === u.id ? { ...p, is_active: true, role, can_sign: canSignVal, notes: defaultNotes } : p));
-      setSuccessMsg(`✅ Acceso aprobado para ${u.display_name} (${u.email}) con rol ${role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : role === 'usuario' ? 'Facturador (Solo Lectura)' : 'Supervisor'}.`);
+      setSuccessMsg(`✅ Acceso aprobado para ${u.display_name} (${u.email}) con rol ${role === 'jefe_turno' ? 'Jefe de Turno' : role === 'admin' ? 'Administrador' : role === 'administrativo' ? 'Administrativo (Solo Lectura)' : 'Supervisor'}.`);
     } catch (err: any) {
       console.error('Error al aprobar usuario:', err);
       alert('Error al aprobar usuario: ' + (err.message || 'Error de conexión'));
@@ -1089,7 +1128,7 @@ export default function App({ user }: { user: any }) {
         if (data.signature_b64) setUserSignature(data.signature_b64);
         if (data.notes && data.notes.trim()) setUserTitle(data.notes.trim());
         else if (data.role) {
-          setUserTitle(data.role === 'admin' ? 'Administrador' : data.role === 'jefe_turno' ? 'Jefe de Turno' : (data.role === 'usuario' || data.role === 'facturador') ? 'Facturador' : 'Supervisor');
+          setUserTitle(data.role === 'admin' ? 'Administrador' : data.role === 'jefe_turno' ? 'Jefe de Turno' : ['administrativo', 'usuario', 'facturador'].includes(data.role) ? 'Administrativo' : 'Supervisor');
         }
         if (data.display_name) setUserDisplayName(data.display_name);
         if (data.role) setCurrentUserRole(data.role.toLowerCase());
@@ -1098,7 +1137,7 @@ export default function App({ user }: { user: any }) {
         // Si el usuario tiene activo el requerimiento de cambio de contraseña, activar pantalla bloqueante
         setMustChangePassword(data.must_change_password === true);
       } else if (userEmail.endsWith('@cial.cl')) {
-        // Auto-registra el usuario en pallet_users en estado PENDIENTE DE APROBACIÓN (is_active: false, can_sign: false) con rol base 'usuario' (Facturador)
+        // Auto-registra el usuario en pallet_users en estado PENDIENTE DE APROBACIÓN (is_active: false, can_sign: false) con rol base 'administrativo' (Solo Lectura)
         const isOwner = userEmail === 'ariel.mella@cial.cl';
         const meta = user.user_metadata || {};
         const fallbackName = meta.full_name || meta.name || userEmail.split('@')[0].split('.').map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
@@ -1108,17 +1147,17 @@ export default function App({ user }: { user: any }) {
           .insert({
             email: userEmail,
             display_name: fallbackName,
-            role: isOwner ? 'admin' : 'usuario',
+            role: isOwner ? 'admin' : 'administrativo',
             is_active: isOwner ? true : false,
             can_sign: isOwner ? true : false,
-            notes: isOwner ? 'Administrador' : 'Facturador (Pendiente de Aprobación)'
+            notes: isOwner ? 'Administrador' : 'Administrativo (Pendiente de Aprobación)'
           })
           .select()
           .single();
 
         if (newUser) {
           setUserDisplayName(newUser.display_name);
-          setUserTitle(isOwner ? 'Administrador' : 'Facturador (Pendiente de Aprobación)');
+          setUserTitle(isOwner ? 'Administrador' : 'Administrativo (Pendiente de Aprobación)');
           setCurrentUserRole(newUser.role);
           setIsUserActive(newUser.is_active !== false);
           setUserCanSign(newUser.can_sign !== false);
@@ -4351,7 +4390,7 @@ export default function App({ user }: { user: any }) {
                   </span>
                 ) : (
                   <span className="text-[9px] bg-blue-400 text-blue-950 font-extrabold px-1.5 py-0.2 rounded uppercase">
-                    FACTURADOR
+                    ADMINISTRATIVO
                   </span>
                 )}
               </div>
@@ -4529,10 +4568,10 @@ export default function App({ user }: { user: any }) {
               </div>
               <div className="space-y-1">
                 <h3 className="text-base font-black text-slate-800">
-                  Acceso Restringido — Rol Facturador (Solo Lectura)
+                  Acceso Restringido — Rol Administrativo (Solo Lectura)
                 </h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                  Tu cuenta tiene asignado el perfil <strong>Facturador / Usuario</strong> con permisos de consulta y descarga de información operacional. La creación y edición de despachos de camiones está reservada para Supervisores autorizados por el Administrador en la pestaña Usuarios.
+                  Tu cuenta tiene asignado el perfil <strong>Administrativo (Solo Lectura / Facturador)</strong> con permisos exclusivos de consulta y descarga de información operacional. La creación y edición de despachos de camiones está reservada para Supervisores autorizados por el Administrador en la pestaña Usuarios.
                 </p>
               </div>
               <button
@@ -7314,16 +7353,32 @@ export default function App({ user }: { user: any }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rol</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rol y Permisos</label>
                     <select
                       value={newUserRole}
-                      onChange={e => setNewUserRole(e.target.value)}
+                      onChange={e => {
+                        const newR = e.target.value;
+                        setNewUserRole(newR);
+                        if (newR === 'administrativo') {
+                          setNewUserNotes('Administrativo');
+                          setNewUserCanSign(false);
+                        } else if (newR === 'supervisor') {
+                          setNewUserNotes('Supervisor de Despacho');
+                          setNewUserCanSign(true);
+                        } else if (newR === 'jefe_turno') {
+                          setNewUserNotes('Jefe de Turno');
+                          setNewUserCanSign(true);
+                        } else if (newR === 'admin') {
+                          setNewUserNotes('Administrador');
+                          setNewUserCanSign(true);
+                        }
+                      }}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400 cursor-pointer"
                     >
-                      <option value="usuario">🔵 Facturador / Usuario (Solo Lectura)</option>
-                      <option value="supervisor">🟢 Supervisor (Crear y Editar)</option>
-                      <option value="jefe_turno">🟡 Jefe de Turno</option>
-                      <option value="admin">🔴 Administrador</option>
+                      <option value="administrativo">🔵 Administrativo (Solo Lectura — No crea ni edita)</option>
+                      <option value="supervisor">🟢 Supervisor (Crear y Editar Despachos)</option>
+                      <option value="jefe_turno">🟡 Jefe de Turno (Crear, Editar y Autorizar)</option>
+                      <option value="admin">🔴 Administrador (Control Total)</option>
                     </select>
                   </div>
                   <div>
@@ -7332,7 +7387,7 @@ export default function App({ user }: { user: any }) {
                       type="text"
                       value={newUserNotes}
                       onChange={e => setNewUserNotes(e.target.value)}
-                      placeholder="Ej: Facturador, Supervisor"
+                      placeholder="Ej: Administrativo, Supervisor"
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400"
                     />
                   </div>
@@ -7405,11 +7460,11 @@ export default function App({ user }: { user: any }) {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <button
                               type="button"
-                              onClick={() => handleQuickApproveUser(pu, 'usuario')}
+                              onClick={() => handleQuickApproveUser(pu, 'administrativo')}
                               className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-black cursor-pointer shadow-xs active:scale-95 flex items-center gap-1"
-                              title="Aprobar con rol Facturador (Solo Lectura)"
+                              title="Aprobar con rol Administrativo (Solo Lectura)"
                             >
-                              <ShieldCheck className="w-3 h-3" /> Aprobar Facturador
+                              <ShieldCheck className="w-3 h-3" /> Aprobar Administrativo (Lectura)
                             </button>
                             <button
                               type="button"
@@ -7455,11 +7510,11 @@ export default function App({ user }: { user: any }) {
                   </div>
 
                   <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase px-1">
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 flex-wrap">
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>Admin</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>Jefe Turno</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>Supervisor</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>Facturador</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>Supervisor (Editar)</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>Administrativo (Solo Lectura)</span>
                     </div>
                     <span>Total: {palletUsers.filter(u => u.display_name.toLowerCase().includes(userSearchQuery.toLowerCase()) || u.email.toLowerCase().includes(userSearchQuery.toLowerCase()) || (u.notes && u.notes.toLowerCase().includes(userSearchQuery.toLowerCase()))).length} usuarios</span>
                   </div>
@@ -7490,16 +7545,26 @@ export default function App({ user }: { user: any }) {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rol</label>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rol y Permisos</label>
                             <select
-                              value={editingUser.role}
-                              onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+                              value={['usuario', 'facturador', 'administrativo'].includes(editingUser.role) ? 'administrativo' : editingUser.role}
+                              onChange={e => {
+                                const newR = e.target.value;
+                                setEditingUser({ 
+                                  ...editingUser, 
+                                  role: newR,
+                                  can_sign: newR === 'administrativo' ? false : editingUser.can_sign,
+                                  notes: (!editingUser.notes || ['Facturador', 'Supervisor de Despacho', 'Administrativo'].includes(editingUser.notes))
+                                    ? (newR === 'administrativo' ? 'Administrativo' : newR === 'supervisor' ? 'Supervisor de Despacho' : newR === 'jefe_turno' ? 'Jefe de Turno' : 'Administrador')
+                                    : editingUser.notes
+                                });
+                              }}
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-amber-400 cursor-pointer"
                             >
-                              <option value="usuario">🔵 Facturador / Usuario (Solo Lectura)</option>
-                              <option value="supervisor">🟢 Supervisor (Crear y Editar)</option>
-                              <option value="jefe_turno">🟡 Jefe de Turno</option>
-                              <option value="admin">🔴 Administrador</option>
+                              <option value="administrativo">🔵 Administrativo (Solo Lectura — No crea ni edita)</option>
+                              <option value="supervisor">🟢 Supervisor (Crear y Editar Despachos)</option>
+                              <option value="jefe_turno">🟡 Jefe de Turno (Crear, Editar y Autorizar)</option>
+                              <option value="admin">🔴 Administrador (Control Total)</option>
                             </select>
                           </div>
                           <div>
@@ -7547,7 +7612,7 @@ export default function App({ user }: { user: any }) {
                       /* MODO VISTA */
                       <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${u.role === 'admin' ? 'bg-rose-500' : u.role === 'jefe_turno' ? 'bg-amber-400' : (u.role === 'usuario' || u.role === 'facturador') ? 'bg-blue-500' : 'bg-emerald-500'}`} />
+                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${u.role === 'admin' ? 'bg-rose-500' : u.role === 'jefe_turno' ? 'bg-amber-400' : ['administrativo', 'facturador', 'usuario'].includes(u.role) ? 'bg-blue-500' : 'bg-emerald-500'}`} />
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm font-black text-slate-800">{u.display_name}</span>
@@ -7571,17 +7636,55 @@ export default function App({ user }: { user: any }) {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                          {/* INDICADOR VISUAL CLARO DE EDICIÓN O SOLO LECTURA */}
+                          {['admin', 'jefe_turno', 'supervisor'].includes(u.role) ? (
+                            <span className="text-[10px] font-black px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              Puede Crear y Editar
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-black px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-300 flex items-center gap-1 shadow-2xs">
+                              <Eye className="w-3 h-3 text-blue-600" />
+                              Solo Lectura
+                            </span>
+                          )}
+
+                          {/* BADGE DEL ROL */}
                           <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase ${
                             u.role === 'admin' 
                               ? 'bg-rose-100 text-rose-700' 
                               : u.role === 'jefe_turno' 
                               ? 'bg-amber-100 text-amber-700' 
-                              : (u.role === 'usuario' || u.role === 'facturador') 
+                              : ['administrativo', 'facturador', 'usuario'].includes(u.role) 
                               ? 'bg-blue-100 text-blue-700' 
                               : 'bg-emerald-100 text-emerald-700'
                           }`}>
-                            {u.role === 'admin' ? 'Admin' : u.role === 'jefe_turno' ? 'Jefe Turno' : (u.role === 'usuario' || u.role === 'facturador') ? 'Facturador' : 'Supervisor'}
+                            {u.role === 'admin' ? 'Admin' : u.role === 'jefe_turno' ? 'Jefe Turno' : ['administrativo', 'facturador', 'usuario'].includes(u.role) ? 'Administrativo' : 'Supervisor'}
                           </span>
+
+                          {/* BOTÓN 1-CLIC PARA ALTERNAR ROL SUPERVISOR (EDITAR) / ADMINISTRATIVO (LECTURA) */}
+                          {u.role !== 'admin' && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleUserRole(u)}
+                              className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black cursor-pointer active:scale-95 flex items-center gap-1 border transition-all ${
+                                ['administrativo', 'facturador', 'usuario'].includes(u.role)
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                                  : 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
+                              }`}
+                              title={
+                                ['administrativo', 'facturador', 'usuario'].includes(u.role)
+                                  ? 'Clic para cambiar a Supervisor (Habilitar Crear y Editar)'
+                                  : 'Clic para cambiar a Administrativo (Solo Lectura)'
+                              }
+                            >
+                              {['administrativo', 'facturador', 'usuario'].includes(u.role) ? (
+                                <><Edit2 className="w-3 h-3 text-emerald-600" /> Cambiar a Supervisor (Editar)</>
+                              ) : (
+                                <><Eye className="w-3 h-3 text-blue-600" /> Cambiar a Solo Lectura</>
+                              )}
+                            </button>
+                          )}
 
                           {/* BOTÓN CONCEDER / QUITAR PERMISO FIRMA */}
                           <button
