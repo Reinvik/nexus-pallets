@@ -5,7 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 3007 --host",
+    "dev:staging": "vite --mode staging --port 3007 --host",
+    "dev:prod": "vite --mode production --port 3007 --host",
     "build": "tsc -b && vite build",
+    "build:staging": "tsc -b && vite build --mode staging",
+    "build:prod": "tsc -b && vite build --mode production",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -28,6 +34,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "vitest": "^5.0.3"
   }
 }

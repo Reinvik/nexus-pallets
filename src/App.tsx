@@ -42,7 +42,8 @@ import {
   Lock,
   EyeOff,
   KeyRound,
-  ArrowRightLeft
+  ArrowRightLeft,
+  HelpCircle
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
@@ -325,6 +326,74 @@ export default function App({ user }: { user: any }) {
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Detección de Ambiente (Staging / Marcha Blanca vs Producción - CIS Control 16.8)
+  const appEnv = import.meta.env.VITE_APP_ENV || (
+    typeof window !== 'undefined' && (
+      window.location.hostname.includes('staging') ||
+      window.location.hostname.includes('qa') ||
+      window.location.hostname.includes('vercel.app') ||
+      window.location.hostname.includes('localhost') ||
+      window.location.hostname.includes('127.0.0.1')
+    ) ? 'staging' : 'production'
+  );
+  const isStagingEnv = appEnv === 'staging';
+
+  // Estados para Modales Corporativos (Reemplazo de window.confirm y window.alert - CIS Control 16)
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: 'danger' | 'warning' | 'primary';
+    onConfirm?: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+  });
+
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type?: 'info' | 'error' | 'warning' | 'success';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+
+  const showCustomAlert = useCallback((message: string, title = 'Atención', type: 'info' | 'error' | 'warning' | 'success' = 'warning') => {
+    setAlertModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+    });
+  }, []);
+
+  const showCustomConfirm = useCallback((
+    title: string,
+    message: string,
+    onConfirm: () => void | Promise<void>,
+    options?: { confirmText?: string; cancelText?: string; variant?: 'danger' | 'warning' | 'primary' }
+  ) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      confirmText: options?.confirmText || 'Confirmar',
+      cancelText: options?.cancelText || 'Cancelar',
+      variant: options?.variant || 'primary',
+      onConfirm,
+    });
+  }, []);
+
+  // Función local alert para interceptar y estilizar cualquier llamado a alert() en el componente
+  const alert = showCustomAlert;
 
   // Estado para Pestaña "KPI Salidas"
   type ZonalDepartureLog = {
@@ -997,22 +1066,28 @@ export default function App({ user }: { user: any }) {
     }
   };
 
-  const handleDeleteUser = async (u: PalletUser) => {
-    if (!window.confirm(`¿Estás seguro de que deseas rechazar/eliminar el registro de ${u.display_name} (${u.email})?`)) return;
-    try {
-      const { error } = await supabase
-        .from('pallet_users')
-        .delete()
-        .eq('id', u.id);
+  const handleDeleteUser = (u: PalletUser) => {
+    showCustomConfirm(
+      'Eliminar Registro de Usuario',
+      `¿Estás seguro de que deseas rechazar/eliminar el registro de ${u.display_name} (${u.email})?\n\nEsta acción eliminará el acceso de forma permanente.`,
+      async () => {
+        try {
+          const { error } = await supabase
+            .from('pallet_users')
+            .delete()
+            .eq('id', u.id);
 
-      if (error) throw error;
+          if (error) throw error;
 
-      setPalletUsers(prev => prev.filter(p => p.id !== u.id));
-      setSuccessMsg(`Registro de ${u.display_name} eliminado.`);
-    } catch (err: any) {
-      console.error('Error al eliminar usuario:', err);
-      alert('Error al eliminar usuario: ' + (err.message || 'Error de conexión'));
-    }
+          setPalletUsers(prev => prev.filter(p => p.id !== u.id));
+          setSuccessMsg(`Registro de ${u.display_name} eliminado.`);
+        } catch (err: any) {
+          console.error('Error al eliminar usuario:', err);
+          showCustomAlert('Error al eliminar usuario: ' + (err.message || 'Error de conexión'), 'Error', 'error');
+        }
+      },
+      { confirmText: 'Eliminar Usuario', variant: 'danger' }
+    );
   };
 
   // Manejo de actualización obligatoria de contraseña (Política de Seguridad TI CIAL)
@@ -1644,27 +1719,33 @@ export default function App({ user }: { user: any }) {
     }
   };
 
-  const handleCleanOldPhotos = async () => {
+  const handleCleanOldPhotos = () => {
     const oldRecords = storageRecords.filter(r => r.isOld);
     if (oldRecords.length === 0) { alert('No hay registros con fotos de más de 30 días.'); return; }
     const totalKB = oldRecords.reduce((sum, r) => sum + r.sizeKB, 0);
-    if (!window.confirm(`¿Eliminar fotos de ${oldRecords.length} despachos con más de 30 días?\n\nSe liberarán aprox. ${(totalKB / 1024).toFixed(1)} MB de base de datos.\nLos registros de pallets, zonales, horas y firmas se conservan al 100%, solo se borran las imágenes antiguas.`)) return;
 
-    setCleanupLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('clean_old_dispatch_photos', { days_threshold: 30 });
-      if (error) throw error;
+    showCustomConfirm(
+      'Limpieza de Evidencias Fotográficas',
+      `¿Deseas eliminar las fotos de ${oldRecords.length} despachos con más de 30 días de antigüedad?\n\nSe liberarán aprox. ${(totalKB / 1024).toFixed(1)} MB de base de datos.\nLos registros de pallets, zonales, horas y firmas se conservan al 100%, solo se purgan las imágenes antiguas.`,
+      async () => {
+        setCleanupLoading(true);
+        try {
+          const { data, error } = await supabase.rpc('clean_old_dispatch_photos', { days_threshold: 30 });
+          if (error) throw error;
 
-      const cleanedCount = data?.cleaned_dispatches || oldRecords.length;
-      setSuccessMsg(`✅ Fotos eliminadas de ${cleanedCount} despachos antiguos. Espacio liberado: ~${(totalKB / 1024).toFixed(1)} MB`);
-      setCleanupDone(true);
-      await analyzeStorage();
-    } catch (err: any) {
-      console.error('Error durante la limpieza:', err);
-      alert('Error durante la limpieza: ' + (err.message || 'Error de conexión'));
-    } finally {
-      setCleanupLoading(false);
-    }
+          const cleanedCount = data?.cleaned_dispatches || oldRecords.length;
+          setSuccessMsg(`✅ Fotos eliminadas de ${cleanedCount} despachos antiguos. Espacio liberado: ~${(totalKB / 1024).toFixed(1)} MB`);
+          setCleanupDone(true);
+          await analyzeStorage();
+        } catch (err: any) {
+          console.error('Error durante la limpieza:', err);
+          showCustomAlert('Error durante la limpieza: ' + (err.message || 'Error de conexión'), 'Error', 'error');
+        } finally {
+          setCleanupLoading(false);
+        }
+      },
+      { confirmText: 'Liberar Espacio', variant: 'warning' }
+    );
   };
 
   // Estados para edición diferida de hora de cierre de camión en historial
@@ -2161,40 +2242,41 @@ export default function App({ user }: { user: any }) {
   };
 
   // Eliminar o descartar un borrador de camión específico SOLO TRAS CONFIRMACIÓN DEL USUARIO
-  const deleteTruckDraft = async (draftId: string) => {
+  const deleteTruckDraft = (draftId: string) => {
     const target = truckDrafts.find(d => d.id === draftId);
     const label = target?.selectedZonals?.length 
       ? target.selectedZonals.map(z => z.zonal_name).join(' - ')
       : (target?.truckNumber ? `Camión #${target.truckNumber}` : 'este camión en proceso');
 
-    if (!window.confirm(`¿Deseas descartar el borrador para ${label}? Se eliminarán los datos de este camión.`)) return;
+    showCustomConfirm(
+      'Descartar Borrador de Camión',
+      `¿Deseas descartar el borrador para ${label}?\n\nSe eliminarán los datos temporales guardados para este camión en el sistema.`,
+      async () => {
+        await deleteDraftFromSupabase(draftId);
 
-    // Ejecutar eliminación en Supabase SOLO si el usuario confirmó explícitamente
-    await deleteDraftFromSupabase(draftId);
-
-    const updated = truckDrafts.filter(d => d.id !== draftId);
-    if (updated.length > 0) {
-      setTruckDrafts(updated);
-      saveBackupDraftsToLocalStorage(updated);
-      if (activeDraftId === draftId) {
-        const nextDraft = updated[0];
-        setActiveDraftId(nextDraft.id);
-        loadDraftIntoState(nextDraft);
-      }
-    } else {
-      const fresh = createEmptyDraft();
-      setTruckDrafts([fresh]);
-      setActiveDraftId(fresh.id);
-      loadDraftIntoState(fresh);
-      syncDraftToSupabase(fresh);
-      saveBackupDraftsToLocalStorage([fresh]);
-    }
+        const updated = truckDrafts.filter(d => d.id !== draftId);
+        if (updated.length > 0) {
+          setTruckDrafts(updated);
+          saveBackupDraftsToLocalStorage(updated);
+          if (activeDraftId === draftId) {
+            const nextDraft = updated[0];
+            setActiveDraftId(nextDraft.id);
+            loadDraftIntoState(nextDraft);
+          }
+        } else {
+          const fresh = createEmptyDraft();
+          setTruckDrafts([fresh]);
+          setActiveDraftId(fresh.id);
+          loadDraftIntoState(fresh);
+          syncDraftToSupabase(fresh);
+          saveBackupDraftsToLocalStorage([fresh]);
+        }
+      },
+      { confirmText: 'Descartar Borrador', variant: 'danger' }
+    );
   };
 
-  const clearDraft = (silent = false) => {
-    if (!silent) {
-      if (!window.confirm('¿Deseas descartar los datos del camión actual y reiniciar su formulario?')) return;
-    }
+  const executeClearDraft = () => {
     setEditingDispatchId(null);
     setTruckNumber('');
     setTruckPlate('');
@@ -2213,6 +2295,21 @@ export default function App({ user }: { user: any }) {
     setColchonetasComment('');
     setSelectedZonals([]);
     setPhotos([]);
+  };
+
+  const clearDraft = (silent = false) => {
+    if (!silent) {
+      showCustomConfirm(
+        'Reiniciar Formulario de Despacho',
+        '¿Deseas descartar los datos del camión actual y reiniciar su formulario?',
+        () => {
+          executeClearDraft();
+        },
+        { confirmText: 'Reiniciar Formulario', variant: 'warning' }
+      );
+      return;
+    }
+    executeClearDraft();
   };
 
   // Función para guardar avance explícitamente sin cerrar el formulario ni despachar
@@ -2575,19 +2672,25 @@ export default function App({ user }: { user: any }) {
     const t = getZonalTotals(zonal);
     const hasData = t.wood > 0 || t.plastic > 0 || t.bandejas > 0 || !!zonal?.sello || (zonal?.photos && zonal.photos.length > 0);
 
-    const confirmMsg = hasData
-      ? `⚠️ ¿Eliminar Zonal "${zName}"?\n\nEste zonal ya tiene datos cargados (${t.wood} madera, ${t.plastic} plástico, ${t.bandejas} bandejas, ${(zonal.photos || []).length} fotos). Si continúas se borrarán.`
-      : `¿Estás seguro de quitar el zonal "${zName}" de la lista de carga?`;
+    const title = hasData ? `Eliminar Zonal "${zName}"` : `Quitar Zonal "${zName}"`;
+    const message = hasData
+      ? `Este zonal ya cuenta con datos cargados:\n• ${t.wood} pallets de madera\n• ${t.plastic} pallets de plástico\n• ${t.bandejas} bandejas\n• ${(zonal.photos || []).length} fotos adjuntas\n\n¿Estás seguro de que deseas eliminarlo de este camión?`
+      : `¿Estás seguro de quitar el zonal "${zName}" de la lista de carga del camión?`;
 
-    if (!window.confirm(confirmMsg)) return;
-
-    const updated = selectedZonals.filter((_, i) => i !== index);
-    setSelectedZonals(updated);
-    if (expandedZonalIndex === index) {
-      setExpandedZonalIndex(updated.length > 0 ? 0 : null);
-    } else if (expandedZonalIndex !== null && expandedZonalIndex > index) {
-      setExpandedZonalIndex(expandedZonalIndex - 1);
-    }
+    showCustomConfirm(
+      title,
+      message,
+      () => {
+        const updated = selectedZonals.filter((_, i) => i !== index);
+        setSelectedZonals(updated);
+        if (expandedZonalIndex === index) {
+          setExpandedZonalIndex(updated.length > 0 ? 0 : null);
+        } else if (expandedZonalIndex !== null && expandedZonalIndex > index) {
+          setExpandedZonalIndex(expandedZonalIndex - 1);
+        }
+      },
+      { confirmText: 'Quitar Zonal', variant: hasData ? 'danger' : 'warning' }
+    );
   };
 
   const handleUpdateZonal = (index: number, field: keyof ZonalDetail, value: any) => {
@@ -3307,51 +3410,61 @@ export default function App({ user }: { user: any }) {
       return;
     }
 
+    const startFormLoad = async () => {
+      let fullRec = rec;
+      const clCheck = (rec.checklist as any) || {};
+      if (!clCheck.photos && !clCheck.colchonetas_photos && !clCheck.lingas_photos) {
+        const detail = await fetchFullDispatchDetail(rec.id);
+        if (detail) fullRec = detail;
+      }
+
+      setEditingDispatchId(fullRec.id);
+      setSupervisorName(fullRec.supervisor_name || formatSupervisorName(user?.email));
+      setTruckNumber(fullRec.truck_number !== 'N/A' ? fullRec.truck_number : '');
+      setTruckPlate(fullRec.truck_plate !== 'N/A' ? fullRec.truck_plate : '');
+      setTruckAnden(fullRec.anden_number || '');
+      setPositionsOccupied(fullRec.positions_occupied || 26);
+      setObservations(fullRec.observations || '');
+      setTemp1er(fullRec.temp_1er ?? 0);
+      setTemp2do(fullRec.temp_2do ?? 0);
+      setTemp3er(fullRec.temp_3er ?? 0);
+      setCloseTime(fullRec.close_time || '');
+      setTruckKilos(fullRec.truck_kilos ? String(fullRec.truck_kilos) : '');
+
+      const cl = (fullRec.checklist as any) || {};
+      setChecklist({
+        postura_anden: cl.postura_anden !== false,
+        limpieza_estructura: cl.limpieza_estructura !== false,
+        luces_encendidas: cl.luces_encendidas !== false,
+        separador_termico: cl.separador_termico !== false,
+        lingas_camion: cl.lingas_camion !== false
+      });
+      setLingasPhotos(cl.lingas_photos || []);
+      setLingasComment(cl.lingas_comment || '');
+      setColchonetasPhotos(cl.colchonetas_photos || []);
+      setColchonetasComment(cl.colchonetas_comment || '');
+      setPhotos(cl.photos || []);
+
+      setSelectedZonals(JSON.parse(JSON.stringify(fullRec.zonals_detail || [])));
+
+      setActiveTab('nuevo');
+    };
+
     // 3. Si ya estaba firmado digitalmente, advertir al usuario que al guardar la firma se anulará para requerir re-validación
     if (rec.signed_by && !isAdmin) {
-      const confirmEdit = window.confirm(
-        `ℹ️ Despacho Previamente Firmado:\n\nEste despacho ya cuenta con la firma del jefe de turno (${getSignerName(rec, palletUsers) || rec.signed_by}).\n\nSi realizas cambios y guardas, la firma anterior quedará anulada automáticamente para solicitar una nueva firma digital de validación.\n\n¿Deseas continuar y editar el despacho?`
+      const signer = getSignerName(rec, palletUsers) || rec.signed_by;
+      showCustomConfirm(
+        'Despacho Previamente Firmado',
+        `Este despacho ya cuenta con la firma del jefe de turno (${signer}).\n\nSi realizas cambios y guardas, la firma anterior quedará anulada automáticamente para solicitar una nueva firma digital de validación.\n\n¿Deseas continuar y editar el despacho?`,
+        async () => {
+          await startFormLoad();
+        },
+        { confirmText: 'Continuar y Editar', variant: 'warning' }
       );
-      if (!confirmEdit) return;
+      return;
     }
 
-    let fullRec = rec;
-    const clCheck = (rec.checklist as any) || {};
-    if (!clCheck.photos && !clCheck.colchonetas_photos && !clCheck.lingas_photos) {
-      const detail = await fetchFullDispatchDetail(rec.id);
-      if (detail) fullRec = detail;
-    }
-
-    setEditingDispatchId(fullRec.id);
-    setSupervisorName(fullRec.supervisor_name || formatSupervisorName(user?.email));
-    setTruckNumber(fullRec.truck_number !== 'N/A' ? fullRec.truck_number : '');
-    setTruckPlate(fullRec.truck_plate !== 'N/A' ? fullRec.truck_plate : '');
-    setTruckAnden(fullRec.anden_number || '');
-    setPositionsOccupied(fullRec.positions_occupied || 26);
-    setObservations(fullRec.observations || '');
-    setTemp1er(fullRec.temp_1er ?? 0);
-    setTemp2do(fullRec.temp_2do ?? 0);
-    setTemp3er(fullRec.temp_3er ?? 0);
-    setCloseTime(fullRec.close_time || '');
-    setTruckKilos(fullRec.truck_kilos ? String(fullRec.truck_kilos) : '');
-
-    const cl = (fullRec.checklist as any) || {};
-    setChecklist({
-      postura_anden: cl.postura_anden !== false,
-      limpieza_estructura: cl.limpieza_estructura !== false,
-      luces_encendidas: cl.luces_encendidas !== false,
-      separador_termico: cl.separador_termico !== false,
-      lingas_camion: cl.lingas_camion !== false
-    });
-    setLingasPhotos(cl.lingas_photos || []);
-    setLingasComment(cl.lingas_comment || '');
-    setColchonetasPhotos(cl.colchonetas_photos || []);
-    setColchonetasComment(cl.colchonetas_comment || '');
-    setPhotos(cl.photos || []);
-
-    setSelectedZonals(JSON.parse(JSON.stringify(fullRec.zonals_detail || [])));
-
-    setActiveTab('nuevo');
+    await startFormLoad();
   };
 
   const cancelEditDispatch = () => {
@@ -3469,34 +3582,40 @@ export default function App({ user }: { user: any }) {
     }
 
     const confirmMsg = `¿Estás seguro de eliminar permanentemente el despacho de ${rec.supervisor_name} (Camión: ${rec.truck_number}, Patente: ${rec.truck_plate})?\n\nEsta acción eliminará el registro y recalculará los saldos y monitores de salida.`;
-    if (!window.confirm(confirmMsg)) return;
 
-    setLoading(true);
-    try {
-      // 1. Eliminar logs de salida asociados
-      await supabase
-        .from('zonal_departure_logs')
-        .delete()
-        .eq('dispatch_id', rec.id);
+    showCustomConfirm(
+      'Eliminar Despacho Permanentemente',
+      confirmMsg,
+      async () => {
+        setLoading(true);
+        try {
+          // 1. Eliminar logs de salida asociados
+          await supabase
+            .from('zonal_departure_logs')
+            .delete()
+            .eq('dispatch_id', rec.id);
 
-      // 2. Eliminar el despacho
-      const { error } = await supabase
-        .from('pallet_dispatches')
-        .delete()
-        .eq('id', rec.id);
+          // 2. Eliminar el despacho
+          const { error } = await supabase
+            .from('pallet_dispatches')
+            .delete()
+            .eq('id', rec.id);
 
-      if (error) throw error;
+          if (error) throw error;
 
-      setSuccessMsg('Despacho y registros asociados eliminados correctamente.');
-      fetchHistory();
-      fetchReturns();
-      fetchZonalDepartureLogs();
-    } catch (err: any) {
-      console.error('Error eliminando despacho:', err);
-      setErrorMsg(err.message || 'Error al eliminar el despacho.');
-    } finally {
-      setLoading(false);
-    }
+          setSuccessMsg('Despacho y registros asociados eliminados correctamente.');
+          fetchHistory();
+          fetchReturns();
+          fetchZonalDepartureLogs();
+        } catch (err: any) {
+          console.error('Error eliminando despacho:', err);
+          setErrorMsg(err.message || 'Error al eliminar el despacho.');
+        } finally {
+          setLoading(false);
+        }
+      },
+      { confirmText: 'Eliminar Despacho', variant: 'danger' }
+    );
   };
 
   const handleSaveCloseTime = async (recordId: string, time: string) => {
@@ -4366,7 +4485,24 @@ export default function App({ user }: { user: any }) {
               className="w-12 h-12 object-contain bg-white rounded-lg p-0.5 shadow-sm" 
             />
             <div>
-              <h1 className="text-lg font-black tracking-wider leading-none">CONTROL OUTBOUND</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-black tracking-wider leading-none">CONTROL OUTBOUND</h1>
+                {isStagingEnv ? (
+                  <span 
+                    className="text-[9px] font-black bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full border border-amber-300 shadow-2xs flex items-center gap-1 animate-pulse" 
+                    title="Ambiente de Marcha Blanca / QA (Base Staging). Los datos de prueba aquí no impactan Producción."
+                  >
+                    🟡 QA / MARCHA BLANCA
+                  </span>
+                ) : (
+                  <span 
+                    className="text-[9px] font-black bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 px-2 py-0.5 rounded-full shadow-2xs" 
+                    title="Ambiente Oficial de Producción CIAL"
+                  >
+                    🟢 PRODUCCIÓN
+                  </span>
+                )}
+              </div>
               <span className="text-[10px] text-emerald-300 font-bold tracking-widest uppercase">
                 Control de Despacho Táctil — Outbound
               </span>
@@ -13237,6 +13373,115 @@ export default function App({ user }: { user: any }) {
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Cerrar Sesión Ahora</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN CORPORATIVO (REEMPLAZO WINDOW.CONFIRM - CIS CONTROL 16) */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-fade-in font-sans">
+          <div className="bg-white border border-slate-200 text-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                confirmModal.variant === 'danger' 
+                  ? 'bg-rose-50 border border-rose-200 text-rose-600' 
+                  : confirmModal.variant === 'warning'
+                  ? 'bg-amber-50 border border-amber-200 text-amber-600'
+                  : 'bg-emerald-50 border border-emerald-200 text-emerald-600'
+              }`}>
+                {confirmModal.variant === 'danger' ? (
+                  <Trash2 className="w-6 h-6" />
+                ) : confirmModal.variant === 'warning' ? (
+                  <AlertTriangle className="w-6 h-6" />
+                ) : (
+                  <HelpCircle className="w-6 h-6" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  Confirmación de Acción
+                </span>
+                <h3 className="text-base font-black text-slate-900 leading-tight">
+                  {confirmModal.title}
+                </h3>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+              {confirmModal.message}
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-all cursor-pointer text-xs active:scale-95"
+              >
+                {confirmModal.cancelText || 'Cancelar'}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const action = confirmModal.onConfirm;
+                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                  if (action) await action();
+                }}
+                className={`flex-1 font-black py-2.5 rounded-xl transition-all cursor-pointer text-xs shadow-sm active:scale-95 text-white ${
+                  confirmModal.variant === 'danger'
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : confirmModal.variant === 'warning'
+                    ? 'bg-amber-500 hover:bg-amber-600'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                {confirmModal.confirmText || 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ALERTA CORPORATIVA (REEMPLAZO WINDOW.ALERT - CIS CONTROL 16) */}
+      {alertModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-fade-in font-sans">
+          <div className="bg-white border border-slate-200 text-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${
+              alertModal.type === 'error'
+                ? 'bg-rose-50 border border-rose-200 text-rose-600'
+                : alertModal.type === 'warning'
+                ? 'bg-amber-50 border border-amber-200 text-amber-600'
+                : 'bg-blue-50 border border-blue-200 text-blue-600'
+            }`}>
+              {alertModal.type === 'error' ? (
+                <AlertTriangle className="w-7 h-7" />
+              ) : alertModal.type === 'warning' ? (
+                <AlertTriangle className="w-7 h-7 text-amber-500" />
+              ) : (
+                <ShieldCheck className="w-7 h-7" />
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                Control Outbound CIAL
+              </span>
+              <h3 className="text-base font-black text-slate-900">
+                {alertModal.title}
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line pt-1">
+                {alertModal.message}
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-2.5 rounded-xl transition-all cursor-pointer text-xs active:scale-95"
+              >
+                Entendido
               </button>
             </div>
           </div>
