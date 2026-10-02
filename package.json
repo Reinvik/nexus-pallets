@@ -12,6 +12,7 @@
     "build:prod": "tsc -b && vite build --mode production",
     "test": "vitest run",
     "test:watch": "vitest",
+    "sbom": "node scripts/generate_sbom.cjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

@@ -1,0 +1,67 @@
+name: 🛡️ Análisis de Seguridad SAST & Pruebas Unitarias (CIS Control 16)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Escaneo semanal programado todos los lunes a las 08:00 UTC
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  security-audit-and-test:
+    name: 🔒 Auditoría de Dependencias y Pruebas Unitarias
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Clonar Repositorio
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: 📦 Instalar Dependencias
+        run: npm ci
+
+      - name: 🧪 Ejecutar Pruebas Automatizadas Unitarias (CIS Control 16.12)
+        run: npm test
+
+      - name: 🛡️ Auditoría de Seguridad de Dependencias (CVEs)
+        run: npm audit --audit-level=high
+
+      - name: 🔍 Verificación Estricta de Tipos TypeScript y Build
+        run: npm run build
+
+      - name: 📋 Generación y Verificación de SBOM (CycloneDX)
+        run: npm run sbom
+
+  semgrep-sast:
+    name: 🔎 Escaneo Estático de Seguridad de Código (SAST)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Clonar Repositorio
+        uses: actions/checkout@v4
+
+      - name: 🔎 Ejecutar Escaneo SAST con Semgrep (OWASP Top 10)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/owasp-top-ten
+            p/javascript
+            p/typescript
+            p/react
+        env:
+          SEMGREP_RULES: >-
+            p/security-audit
+            p/owasp-top-ten
+            p/typescript
+            p/react

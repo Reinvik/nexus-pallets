@@ -1,0 +1,313 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.5.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:082e93a5-f91c-4e05-8ac1-f49ae9c36d42",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-10-02T11:58:45.270Z",
+    "tools": [
+      {
+        "vendor": "Nexus Outbound Security Tools",
+        "name": "nexus-sbom-generator",
+        "version": "1.0.0"
+      }
+    ],
+    "component": {
+      "type": "application",
+      "name": "nexus-pallets",
+      "version": "0.0.0",
+      "description": "Control de Despacho Táctil Outbound - CIAL Alimentos"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "@supabase/supabase-js",
+      "version": "2.110.7",
+      "description": "Dependencia directa de producción para @supabase/supabase-js",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@supabase/supabase-js@2.110.7",
+      "integrity": "sha512-AnfO3A230Shy6RMO7cya3Wl1OcXnABJrzH8vP+fY7/RFjhzcchB7DjKkkTIAntlwekD+GkSFzEvt2tC+D4Fp8w=="
+    },
+    {
+      "type": "library",
+      "name": "@tailwindcss/postcss",
+      "version": "4.3.3",
+      "description": "Dependencia directa de producción para @tailwindcss/postcss",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@tailwindcss/postcss@4.3.3",
+      "integrity": "sha512-JTSZZGQi1AyKirbLN3azmjVzef92tcX7h+iSqPdaeStyFpGpDlKvvpxeOE8njhbUanbRwr3z8DyzhICWnMtQeg=="
+    },
+    {
+      "type": "library",
+      "name": "html2canvas",
+      "version": "1.4.1",
+      "description": "Dependencia directa de producción para html2canvas",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/html2canvas@1.4.1",
+      "integrity": "sha512-fPU6BHNpsyIhr8yyMpTLLxAbkaK8ArIBcmZIRiBLiDhjeqvXolaEmDGmELFuX9I4xDcaKKcJl+TKZLqruBbmWA=="
+    },
+    {
+      "type": "library",
+      "name": "jspdf",
+      "version": "4.2.1",
+      "description": "Dependencia directa de producción para jspdf",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/jspdf@4.2.1",
+      "integrity": "sha512-YyAXyvnmjTbR4bHQRLzex3CuINCDlQnBqoSYyjJwTP2x9jDLuKDzy7aKUl0hgx3uhcl7xzg32agn5vlie6HIlQ=="
+    },
+    {
+      "type": "library",
+      "name": "lucide-react",
+      "version": "1.24.0",
+      "description": "Dependencia directa de producción para lucide-react",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
+          }
+        }
+      ],
+      "purl": "pkg:npm/lucide-react@1.24.0",
+      "integrity": "sha512-YT6mBD8lGKkg4nM39enlm94/sfJIiW0YKUT60fBy4YK8tai31ylg1VhGNWxkpSKHo9UagfnZqwIff3HTDQwXeA=="
+    },
+    {
+      "type": "library",
+      "name": "pg",
+      "version": "8.22.0",
+      "description": "Dependencia directa de producción para pg",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/pg@8.22.0",
+      "integrity": "sha512-8wih1vVIBMxoUM2oB4soJsD9tDnDpLv4OXBJ+EJzFsvycD+lfyIreC2gGHq78f8jbLLt+bvlPTFdFZfJkOuzAA=="
+    },
+    {
+      "type": "library",
+      "name": "postcss",
+      "version": "8.5.28",
+      "description": "Dependencia directa de producción para postcss",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/postcss@8.5.28",
+      "integrity": "sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A=="
+    },
+    {
+      "type": "library",
+      "name": "react",
+      "version": "19.2.7",
+      "description": "Dependencia directa de producción para react",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/react@19.2.7",
+      "integrity": "sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ=="
+    },
+    {
+      "type": "library",
+      "name": "react-dom",
+      "version": "19.2.7",
+      "description": "Dependencia directa de producción para react-dom",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/react-dom@19.2.7",
+      "integrity": "sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ=="
+    },
+    {
+      "type": "library",
+      "name": "tailwindcss",
+      "version": "4.3.3",
+      "description": "Dependencia directa de producción para tailwindcss",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/tailwindcss@4.3.3",
+      "integrity": "sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ=="
+    },
+    {
+      "type": "library",
+      "name": "@types/node",
+      "version": "24.13.3",
+      "description": "Dependencia de desarrollo, testing y compilación (@types/node)",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@types/node@24.13.3",
+      "integrity": "sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q=="
+    },
+    {
+      "type": "library",
+      "name": "@types/react",
+      "version": "19.2.17",
+      "description": "Dependencia de desarrollo, testing y compilación (@types/react)",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@types/react@19.2.17",
+      "integrity": "sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw=="
+    },
+    {
+      "type": "library",
+      "name": "@types/react-dom",
+      "version": "19.2.3",
+      "description": "Dependencia de desarrollo, testing y compilación (@types/react-dom)",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@types/react-dom@19.2.3",
+      "integrity": "sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ=="
+    },
+    {
+      "type": "library",
+      "name": "@vitejs/plugin-react",
+      "version": "6.0.3",
+      "description": "Dependencia de desarrollo, testing y compilación (@vitejs/plugin-react)",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@vitejs/plugin-react@6.0.3",
+      "integrity": "sha512-vmFvco5/QuC2f9Oj+wTk0+9XeDFkHxSamwZKYc7MxYwKICfvUvlMhqKI0VuICPltGqh1neqBKDvO4kes1ya8vg=="
+    },
+    {
+      "type": "library",
+      "name": "oxlint",
+      "version": "1.74.0",
+      "description": "Dependencia de desarrollo, testing y compilación (oxlint)",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/oxlint@1.74.0",
+      "integrity": "sha512-odGl2s2x5IOJoj3A0v1k0PGBXVFBZeZ2+AK/+K2MJur7Ghi3bkyX5NuLUWHKqa4js1wjep3hJeuTQJOlr+4+dA=="
+    },
+    {
+      "type": "library",
+      "name": "typescript",
+      "version": "6.0.3",
+      "description": "Dependencia de desarrollo, testing y compilación (typescript)",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/typescript@6.0.3",
+      "integrity": "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="
+    },
+    {
+      "type": "library",
+      "name": "vite",
+      "version": "8.1.5",
+      "description": "Dependencia de desarrollo, testing y compilación (vite)",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/vite@8.1.5",
+      "integrity": "sha512-7ULLwsCdYx/nRyrpiEwvqb5TFHrMVZyBt+rg/OAXT7rgj/z+DtTDyKFeLAdDkubDVDKD8jOsndmy7m55XcfUsw=="
+    },
+    {
+      "type": "library",
+      "name": "vitest",
+      "version": "5.0.3",
+      "description": "Dependencia de desarrollo, testing y compilación (vitest)",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/vitest@5.0.3",
+      "integrity": "sha512-xMw97S3rjdtj5dkVat7jCsqWBpvchs3RlpQctUqwJD0KkERk40vz2fJ77lDwW/Vzh/pk18eItYAzkodhSes3jQ=="
+    }
+  ]
+}
