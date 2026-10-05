@@ -636,6 +636,16 @@ export default function App({ user }: { user: any }) {
   const [forcePasswordLoading, setForcePasswordLoading] = useState<boolean>(false);
   const [forcePasswordError, setForcePasswordError] = useState<string | null>(null);
 
+  // Estados para Modal Admin de Restauración de Contraseña
+  const [selectedUserForPassword, setSelectedUserForPassword] = useState<PalletUser | null>(null);
+  const [adminResetPassword, setAdminResetPassword] = useState<string>('Cial2026');
+  const [adminResetMustChange, setAdminResetMustChange] = useState<boolean>(true);
+  const [adminResetLoading, setAdminResetLoading] = useState<boolean>(false);
+  const [adminResetError, setAdminResetError] = useState<string | null>(null);
+  const [adminResetSuccess, setAdminResetSuccess] = useState<string | null>(null);
+  const [showAdminResetPlain, setShowAdminResetPlain] = useState<boolean>(false);
+  const [copiedCredentials, setCopiedCredentials] = useState<boolean>(false);
+
   // ═══════════════════════════════════════════════════════════════
   // POLÍTICA DE SEGURIDAD TI CIAL: TIMEOUT DE INACTIVIDAD (30 MIN)
   // CIS Control 16 — Protección ante terminales desatendidas
@@ -1163,6 +1173,60 @@ export default function App({ user }: { user: any }) {
     } catch (err: any) {
       console.error('Error al cambiar estado de contraseña:', err);
       alert('Error: ' + err.message);
+    }
+  };
+
+  const handleAdminResetUserPassword = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedUserForPassword) return;
+    const targetEmail = selectedUserForPassword.email.toLowerCase().trim();
+    const newPass = adminResetPassword.trim() || 'Cial2026';
+
+    if (newPass.length < 6) {
+      setAdminResetError('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
+    setAdminResetLoading(true);
+    setAdminResetError(null);
+    setAdminResetSuccess(null);
+
+    try {
+      // Llamar al RPC en Supabase
+      const { data, error } = await supabase.rpc('admin_set_user_password_by_email', {
+        target_email: targetEmail,
+        new_password: newPass
+      });
+
+      if (error) throw error;
+      if (data && data.success === false) {
+        throw new Error(data.error || 'Error al restablecer contraseña');
+      }
+
+      const nowIso = new Date().toISOString();
+      // Actualizar estado en pallet_users
+      await supabase
+        .from('pallet_users')
+        .update({
+          must_change_password: adminResetMustChange,
+          password_updated_at: nowIso,
+          updated_at: nowIso
+        })
+        .eq('id', selectedUserForPassword.id);
+
+      setPalletUsers(prev => prev.map(p => p.id === selectedUserForPassword.id ? {
+        ...p,
+        must_change_password: adminResetMustChange,
+        password_updated_at: nowIso
+      } : p));
+
+      setAdminResetSuccess(`✅ Contraseña actualizada exitosamente para ${targetEmail}`);
+      setSuccessMsg(`Contraseña de ${selectedUserForPassword.display_name} restablecida a "${newPass}".`);
+    } catch (err: any) {
+      console.error('Error al restablecer contraseña:', err);
+      setAdminResetError(err.message || 'Error al restablecer contraseña');
+    } finally {
+      setAdminResetLoading(false);
     }
   };
 
@@ -7859,6 +7923,27 @@ export default function App({ user }: { user: any }) {
                             {u.must_change_password ? 'Cambio Pendiente' : 'Clave Al Día'}
                           </button>
 
+                          {/* BOTÓN RESTAURAR CONTRASEÑA (ADMINISTRADOR) */}
+                          {resolvedRole === 'admin' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedUserForPassword(u);
+                                setAdminResetPassword('Cial2026');
+                                setAdminResetMustChange(true);
+                                setAdminResetError(null);
+                                setAdminResetSuccess(null);
+                                setShowAdminResetPlain(false);
+                                setCopiedCredentials(false);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl text-[10px] font-black cursor-pointer active:scale-95 flex items-center gap-1 border transition-all bg-sky-50 border-sky-300 text-sky-800 hover:bg-sky-100 shadow-2xs"
+                              title="Restaurar o cambiar la contraseña de este usuario para que pueda iniciar sesión"
+                            >
+                              <KeyRound className="w-3 h-3 text-sky-600" />
+                              <span>Restaurar Clave</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => setEditingUser({ ...u })}
@@ -13485,6 +13570,188 @@ export default function App({ user }: { user: any }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* MODAL ADMIN: RESTAURAR CONTRASEÑA DE USUARIO */}
+      {selectedUserForPassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none animate-fade-in font-sans">
+          <div 
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs" 
+            onClick={() => {
+              if (!adminResetLoading) {
+                setSelectedUserForPassword(null);
+                setAdminResetSuccess(null);
+                setAdminResetError(null);
+              }
+            }}
+          />
+          
+          <form 
+            onSubmit={handleAdminResetUserPassword}
+            className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 w-full max-w-md relative z-10 space-y-4 shadow-2xl text-slate-800"
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-2xl bg-sky-100 text-sky-800">
+                  <KeyRound className="w-5 h-5 text-sky-700" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-900">Restaurar Contraseña</h3>
+                  <p className="text-xs text-slate-500 font-semibold">{selectedUserForPassword.display_name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!adminResetLoading) {
+                    setSelectedUserForPassword(null);
+                    setAdminResetSuccess(null);
+                    setAdminResetError(null);
+                  }
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors font-bold text-sm cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* User Info Box */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase text-slate-400 block">Correo del usuario</span>
+                <span className="text-xs font-mono font-bold text-slate-800">{selectedUserForPassword.email}</span>
+              </div>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg uppercase ${
+                selectedUserForPassword.role === 'admin' 
+                  ? 'bg-rose-100 text-rose-700' 
+                  : selectedUserForPassword.role === 'jefe_turno' 
+                  ? 'bg-amber-100 text-amber-700' 
+                  : ['administrativo', 'facturador', 'usuario'].includes(selectedUserForPassword.role) 
+                  ? 'bg-blue-100 text-blue-700' 
+                  : 'bg-emerald-100 text-emerald-700'
+              }`}>
+                {selectedUserForPassword.role}
+              </span>
+            </div>
+
+            {/* Error Message */}
+            {adminResetError && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{adminResetError}</span>
+              </div>
+            )}
+
+            {/* Success Message & Quick Copy */}
+            {adminResetSuccess && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3.5 rounded-2xl text-xs space-y-2.5">
+                <div className="flex items-center gap-2 font-black">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{adminResetSuccess}</span>
+                </div>
+                <div className="bg-white/80 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-mono text-slate-700 truncate">
+                    <strong>Clave:</strong> {adminResetPassword}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const textToCopy = `Acceso Pallet Nexus:\nUsuario: ${selectedUserForPassword.email}\nContraseña: ${adminResetPassword}\nEnlace: https://pallet.nexusnetwork.cl`;
+                      navigator.clipboard.writeText(textToCopy);
+                      setCopiedCredentials(true);
+                      setTimeout(() => setCopiedCredentials(false), 2500);
+                    }}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] rounded-lg cursor-pointer flex items-center gap-1 shrink-0 active:scale-95 transition-all"
+                  >
+                    {copiedCredentials ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedCredentials ? '¡Copiado!' : 'Copiar Credenciales'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Password input & presets */}
+            <div className="space-y-3">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase">
+                    Nueva Contraseña
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAdminResetPassword('Cial2026')}
+                    className="text-[10px] text-sky-700 hover:text-sky-900 font-bold underline cursor-pointer"
+                  >
+                    Usar por defecto (Cial2026)
+                  </button>
+                </div>
+                <div className="relative">
+                  <input 
+                    type={showAdminResetPlain ? "text" : "password"}
+                    value={adminResetPassword}
+                    onChange={(e) => setAdminResetPassword(e.target.value)}
+                    placeholder="Ej: Cial2026"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminResetPlain(!showAdminResetPlain)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showAdminResetPlain ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Checkbox: Exigir cambio en próximo inicio */}
+              <label className="flex items-start gap-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200/80 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={adminResetMustChange}
+                  onChange={(e) => setAdminResetMustChange(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-sky-600 rounded cursor-pointer"
+                />
+                <div className="text-[11px] leading-tight">
+                  <span className="font-bold text-slate-800 block">Exigir cambio de clave al iniciar sesión</span>
+                  <span className="text-slate-500 text-[10px]">El usuario deberá ingresar una nueva clave personal en su próximo acceso.</span>
+                </div>
+              </label>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex gap-2.5 border-t border-slate-100">
+              <button 
+                type="button"
+                onClick={() => {
+                  setSelectedUserForPassword(null);
+                  setAdminResetSuccess(null);
+                  setAdminResetError(null);
+                }}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-xs font-bold flex-1 transition-colors cursor-pointer active:scale-95"
+              >
+                Cerrar
+              </button>
+              <button 
+                type="submit"
+                disabled={adminResetLoading}
+                className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 rounded-xl text-xs font-black flex-1 transition-all cursor-pointer shadow-md shadow-sky-600/20 active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {adminResetLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Aplicar Clave</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
