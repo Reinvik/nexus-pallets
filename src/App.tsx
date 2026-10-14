@@ -45,7 +45,7 @@ import {
   ArrowRightLeft,
   HelpCircle
 } from 'lucide-react';
-import { supabase } from './lib/supabase';
+import { supabase, syncUnifiedPasswordAcrossNexus } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -1135,6 +1135,9 @@ export default function App({ user }: { user: any }) {
       });
 
       if (authErr) throw authErr;
+
+      // Sincronizar contraseña unificada en todo el ecosistema Nexus
+      syncUnifiedPasswordAcrossNexus(currentUserEmail, forceNewPassword).catch(() => {});
 
       // Actualizar en base de datos pallet_users
       await supabase
@@ -11508,6 +11511,9 @@ export default function App({ user }: { user: any }) {
                     }
                   });
                   if (error) throw error;
+
+                  // Sincronizar contraseña unificada en todo el ecosistema Nexus
+                  syncUnifiedPasswordAcrossNexus(currentUserEmail, newPassword).catch(() => {});
 
                   await supabase
                     .from('pallet_users')

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseProd } from '../lib/supabase';
 import cialLogo from '../assets/cial-alimentos-logo.png';
 import { Mail, Lock, ArrowRight, CheckCircle2, AlertCircle, Eye, EyeOff, RotateCcw } from 'lucide-react';
 
@@ -40,10 +40,32 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      const cleanEmail = email.trim().toLowerCase();
+      let { error: authError } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+
+      // Verificación de contraseña unificada en PROD si falla en MAIN
+      if (authError && (authError.message.includes('Invalid login credentials') || authError.message.includes('User not found'))) {
+        try {
+          const { data: prodData, error: prodError } = await supabaseProd.auth.signInWithPassword({
+            email: cleanEmail,
+            password
+          });
+          if (!prodError && prodData?.user) {
+            await supabase.rpc('sync_user_credentials', {
+              target_email: cleanEmail,
+              new_password: password
+            });
+            const retry = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+            authError = retry.error;
+          }
+        } catch (syncErr) {
+          console.warn('Error en sincronización automática con Nexus PROD:', syncErr);
+        }
+      }
+
       if (authError) {
         if (authError.message.includes('Invalid login credentials')) {
-          setError('Correo o contraseña incorrectos. Verifica tus datos o crea tu cuenta.');
+          setError('Correo o contraseña incorrectos. Recuerda que tu contraseña es la misma de Nexus Lean / CIAL.');
         } else {
           setError(authError.message);
         }
