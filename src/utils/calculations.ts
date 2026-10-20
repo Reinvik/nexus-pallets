@@ -1,5 +1,5 @@
 /**
- * NEXUS PALLETS - MÓDULO CENTRAL DE CÁLCULOS Y REGLAS DE NEGOCIO
+ * NEXUS OUTBOUND - MÓDULO CENTRAL DE CÁLCULOS Y REGLAS DE NEGOCIO
  * Cumplimiento CIS Control 16.12 (Automated Application Testing)
  * 
  * Centraliza la lógica matemática crítica:

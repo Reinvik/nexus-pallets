@@ -223,13 +223,13 @@ export default function LoginPage() {
                 className="w-16 h-18 object-contain drop-shadow-md bg-white rounded-xl p-1"
               />
               <div className="text-left">
-                <h1 className="text-white font-extrabold text-lg leading-none tracking-tight">Control</h1>
-                <span className="text-emerald-200 font-bold text-xs tracking-widest uppercase leading-none">Despacho CIAL</span>
+                <h1 className="text-white font-extrabold text-lg leading-none tracking-tight">NEXUS</h1>
+                <span className="text-emerald-200 font-bold text-xs tracking-widest uppercase leading-none">OUTBOUND</span>
               </div>
             </div>
             
             <p className="text-emerald-100/80 text-xs font-semibold tracking-wide">
-              Sistema de Despacho y Retorno de Pallets
+              Sistema de Despacho y Control de Carga — CIAL Alimentos
             </p>
           </div>
 
@@ -446,7 +446,7 @@ export default function LoginPage() {
 
         {/* Versión */}
         <p className="text-center text-white/40 text-[10px] font-bold tracking-wider mt-4 uppercase">
-          Control Despacho v1.1.0 · Control Rampas
+          Nexus Outbound v1.2.0 · CIAL Alimentos
         </p>
       </div>
     </div>

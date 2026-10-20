@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+// describe, it, expect provistos globalmente por vitest (globals: true)
 import {
   calculatePalletTotals,
   calculateZonalBalances,
@@ -7,7 +7,7 @@ import {
   validateDispatchRequirements,
 } from '../utils/calculations';
 
-describe('CIS Control 16.12: Pruebas Unitarias de Cálculos Críticos - Nexus Pallets', () => {
+describe('CIS Control 16.12: Pruebas Unitarias de Cálculos Críticos - Nexus Outbound', () => {
 
   describe('1. Suma Aritmética de Pallets (calculatePalletTotals)', () => {
     it('debe retornar 0 para listas vacías o inválidas', () => {

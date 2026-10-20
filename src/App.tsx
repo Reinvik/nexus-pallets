@@ -4368,7 +4368,7 @@ export default function App({ user }: { user: any }) {
               Acceso Pendiente de Aprobación
             </h2>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Hola, <strong>{userDisplayName || formatSupervisorName(user?.email)}</strong>. Tu cuenta corporativa ha sido registrada, pero requiere la autorización previa del <strong>Administrador de Nexus Pallets</strong> para poder operar en la planta.
+              Hola, <strong>{userDisplayName || formatSupervisorName(user?.email)}</strong>. Tu cuenta corporativa ha sido registrada, pero requiere la autorización previa del <strong>Administrador de Nexus Outbound</strong> para poder operar en la planta.
             </p>
           </div>
           <div className="bg-slate-950/70 rounded-2xl p-4 text-xs text-slate-400 border border-slate-800 text-left space-y-2 font-mono shadow-inner">
@@ -4553,7 +4553,7 @@ export default function App({ user }: { user: any }) {
             />
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-black tracking-wider leading-none">CONTROL OUTBOUND</h1>
+                <h1 className="text-lg font-black tracking-wider leading-none">NEXUS OUTBOUND</h1>
                 {isStagingEnv ? (
                   <span 
                     className="text-[9px] font-black bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full border border-amber-300 shadow-2xs flex items-center gap-1 animate-pulse" 
@@ -4571,7 +4571,7 @@ export default function App({ user }: { user: any }) {
                 )}
               </div>
               <span className="text-[10px] text-emerald-300 font-bold tracking-widest uppercase">
-                Control de Despacho Táctil — Outbound
+                Control de Despacho Táctil — CIAL Alimentos
               </span>
             </div>
           </div>
@@ -13556,7 +13556,7 @@ export default function App({ user }: { user: any }) {
 
             <div className="space-y-1">
               <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                Control Outbound CIAL
+                Nexus Outbound — CIAL Alimentos
               </span>
               <h3 className="text-base font-black text-slate-900">
                 {alertModal.title}
@@ -13762,7 +13762,7 @@ export default function App({ user }: { user: any }) {
       )}
 
       <footer className="bg-slate-100 border-t border-slate-200 text-slate-400 py-4 text-center text-[10px] font-semibold uppercase tracking-wider shrink-0 mt-auto">
-        CIAL Alimentos — Control Outbound v1.1.0 (2026)
+        CIAL Alimentos — Nexus Outbound v1.2.0 (2026)
       </footer>
 
     </div>
