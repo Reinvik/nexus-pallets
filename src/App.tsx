@@ -23,6 +23,7 @@ import {
   LogOut,
   Edit2,
   FileDown,
+  Download,
   Camera,
   Image as ImageIcon,
   Thermometer,
@@ -49,6 +50,7 @@ import { supabase, syncUnifiedPasswordAcrossNexus } from './lib/supabase';
 import cialLogo from './assets/cial-alimentos-logo.png';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { exportKpiToExcel } from './utils/excelExport';
 
 // Lista oficial de Zonales CIAL proporcionada por el usuario
 const ZONALES_LIST = [
@@ -421,6 +423,7 @@ export default function App({ user }: { user: any }) {
   });
   const [kpiEndDate, setKpiEndDate] = useState<string>(() => getChileDateString());
   const [kpiActiveSubTab, setKpiActiveSubTab] = useState<'supervisores' | 'responsables' | 'zonales' | 'detalle'>('supervisores');
+  const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false);
 
   // Estado para modal de detalle de KPI (Salidas A Tiempo vs Retrasadas)
   type KpiDetailModalData = {
@@ -8572,6 +8575,54 @@ export default function App({ user }: { user: any }) {
             filteredLogs = filteredLogs.filter(l => l.inspection_date >= kpiStartDate && l.inspection_date <= kpiEndDate);
           }
 
+          // Filtrar despachos (records) con el mismo criterio de período para el reporte Excel
+          let filteredDispatches = [...records];
+          if (kpiFilterPeriod === '7days') {
+            const minDate = new Date();
+            minDate.setDate(minDate.getDate() - 7);
+            const minDateStr = getChileDateString(minDate);
+            filteredDispatches = filteredDispatches.filter(r => (r.inspection_date || '') >= minDateStr);
+          } else if (kpiFilterPeriod === '30days') {
+            const minDate = new Date();
+            minDate.setDate(minDate.getDate() - 30);
+            const minDateStr = getChileDateString(minDate);
+            filteredDispatches = filteredDispatches.filter(r => (r.inspection_date || '') >= minDateStr);
+          } else if (kpiFilterPeriod === 'month') {
+            const currentMonthStr = getChileDateString().slice(0, 7);
+            filteredDispatches = filteredDispatches.filter(r => (r.inspection_date || '').startsWith(currentMonthStr));
+          } else if (kpiFilterPeriod === 'custom') {
+            filteredDispatches = filteredDispatches.filter(r => (r.inspection_date || '') >= kpiStartDate && (r.inspection_date || '') <= kpiEndDate);
+          }
+          filteredDispatches.sort((a, b) => (b.inspection_date || '').localeCompare(a.inspection_date || '') || (b.inspection_time || '').localeCompare(a.inspection_time || ''));
+
+          const currentPeriodLabel = 
+            kpiFilterPeriod === '7days' ? 'Últimos 7 Días' :
+            kpiFilterPeriod === '30days' ? 'Últimos 30 Días' :
+            kpiFilterPeriod === 'month' ? `Mes Actual (${getChileDateString().slice(0, 7)})` :
+            kpiFilterPeriod === 'custom' ? `${kpiStartDate} al ${kpiEndDate}` :
+            'Historial Completo';
+
+          const handleDownloadKpiExcel = async () => {
+            try {
+              setIsExportingExcel(true);
+              await exportKpiToExcel(filteredDispatches as any, filteredLogs, {
+                periodLabel: currentPeriodLabel,
+                startDate: kpiStartDate,
+                endDate: kpiEndDate
+              });
+              showCustomAlert(
+                `Reporte Excel generado exitosamente.\n\nContenido:\n• ${filteredDispatches.length} camiones despachados (pallets, kilos, hora de cierre, sellos).\n• ${filteredLogs.length} salidas de zonales y cumplimiento SLA.\n• Resumen analítico por supervisor y zonal.\n\nPeríodo: ${currentPeriodLabel}`,
+                'Excel Descargado',
+                'success'
+              );
+            } catch (err: any) {
+              console.error('Error al generar Excel:', err);
+              showCustomAlert(`Ocurrió un error al generar el archivo Excel: ${err?.message || err}`, 'Error al Exportar', 'error');
+            } finally {
+              setIsExportingExcel(false);
+            }
+          };
+
           // Métricas Generales KPI
           const totalLogs = filteredLogs.length;
           const onTimeLogs = filteredLogs.filter(l => l.is_on_time);
@@ -8658,13 +8709,26 @@ export default function App({ user }: { user: any }) {
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => fetchZonalDepartureLogs()}
-                    className="p-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-all active:scale-95 text-slate-700 cursor-pointer shadow-2xs flex items-center gap-1.5 text-xs font-bold shrink-0"
-                    title="Actualizar KPIs desde Supabase"
-                  >
-                    <RefreshCw className="w-4 h-4" /> Actualizar Datos
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleDownloadKpiExcel}
+                      disabled={isExportingExcel}
+                      className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                      title="Descargar libro Excel oficial (.xlsx) con cantidad de pallets, kilos, hora de cierre de camiones y cumplimiento"
+                    >
+                      <Download className={`w-4 h-4 ${isExportingExcel ? 'animate-bounce' : ''}`} />
+                      <span>{isExportingExcel ? 'Generando Excel...' : 'Descargar Excel (.xlsx)'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => fetchZonalDepartureLogs()}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-all active:scale-95 text-slate-700 cursor-pointer shadow-2xs flex items-center gap-1.5 text-xs font-bold shrink-0"
+                      title="Actualizar KPIs desde Supabase"
+                    >
+                      <RefreshCw className="w-4 h-4" /> Actualizar Datos
+                    </button>
+                  </div>
                 </div>
 
                 {/* BOTONES DE FILTRO DE PERÍODO */}
