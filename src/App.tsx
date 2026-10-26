@@ -2680,7 +2680,7 @@ export default function App({ user }: { user: any }) {
     const fileArray = Array.from(files);
     const updated = [...selectedZonals];
     const currentPhotos = [...(updated[zonalIndex].photos || [])];
-    const remaining = 10 - currentPhotos.length;
+    const remaining = 20 - currentPhotos.length;
     const toProcess = fileArray.slice(0, remaining);
 
     for (const f of toProcess) {
@@ -2697,6 +2697,37 @@ export default function App({ user }: { user: any }) {
       photos: currentPhotos
     };
     setSelectedZonals(updated);
+  };
+
+  const handlePasteZonalPhotos = (zonalIndex: number) => async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          const updated = [...selectedZonals];
+          const currentPhotos = [...(updated[zonalIndex].photos || [])];
+          if (currentPhotos.length >= 20) {
+            alert('Máximo 20 fotos de respaldo por zonal.');
+            break;
+          }
+          try {
+            const compressed = await compressImage(file);
+            currentPhotos.push(compressed);
+            updated[zonalIndex] = {
+              ...updated[zonalIndex],
+              photos: currentPhotos
+            };
+            setSelectedZonals(updated);
+          } catch (err) {
+            console.error('Error comprimiendo foto pegada en zonal:', err);
+          }
+        }
+      }
+    }
   };
 
   const handleRemoveZonalPhoto = (zonalIndex: number, photoIndex: number) => {
@@ -5568,6 +5599,7 @@ export default function App({ user }: { user: any }) {
                       <div 
                         key={zonalIndex}
                         className={`border rounded-2xl overflow-hidden shadow-sm transition-all ${isExpanded ? 'border-brand-primary bg-white' : 'border-slate-200 bg-slate-50/30'}`}
+                        onPaste={handlePasteZonalPhotos(zonalIndex)}
                       >
                         {/* Cabecera del Acordeón del Zonal */}
                         <div 
@@ -5923,9 +5955,9 @@ export default function App({ user }: { user: any }) {
 
                                 <div>
                                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-                                    Fotos de Respaldo Zonal ({(zonal.photos || []).length}/10)
+                                    Fotos de Respaldo Zonal ({(zonal.photos || []).length}/20)
                                   </label>
-                                  {(!zonal.photos || zonal.photos.length < 10) && (
+                                  {(!zonal.photos || zonal.photos.length < 20) && (
                                     <div className="flex items-center gap-2 select-none">
                                       <label className="flex-1 bg-white hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs active:scale-95" title="Tomar foto directa con la cámara">
                                         <Camera className="w-4 h-4 text-brand-primary shrink-0" />
@@ -5956,7 +5988,7 @@ export default function App({ user }: { user: any }) {
 
                               {/* FOTOS EN MINIATURA DEL ZONAL */}
                               {zonal.photos && zonal.photos.length > 0 && (
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200/60">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200/60">
                                   {zonal.photos.map((imgSrc, pIdx) => (
                                     <div key={pIdx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100 shadow-sm">
                                       <img
